@@ -17,6 +17,7 @@ import {
   CalendarCheck,
   Download,
   Target,
+  IdCard,
 } from 'lucide-react'
 import type { AppUser, ClassRoom, Student } from '@/lib/types'
 import { apiGet, apiSend } from '@/lib/api-client'
@@ -71,6 +72,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { statusBadgeClass, csvDate, csvFileStamp, downloadCsv } from './overview'
+import { StudentDetailDrawer } from './student-detail-drawer'
 
 interface StudentFormState {
   fullName: string
@@ -126,6 +128,8 @@ export function StudentsAdmin() {
   const [editing, setEditing] = useState<Student | null>(null)
   const [form, setForm] = useState<StudentFormState>(EMPTY_FORM)
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null)
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -391,6 +395,14 @@ export function StudentsAdmin() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDetailStudent(s)
+                              setDetailOpen(true)
+                            }}
+                          >
+                            <IdCard className="size-4 text-emerald-700" /> Detail
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEdit(s)}>
                             <Pencil className="size-4 text-emerald-700" /> Edit
                           </DropdownMenuItem>
@@ -528,6 +540,9 @@ export function StudentsAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Drawer Detail Santri (Tab: Hafalan / Absensi / Tagihan) */}
+      <StudentDetailDrawer student={detailStudent} open={detailOpen} onOpenChange={setDetailOpen} />
 
       {/* AlertDialog Hapus */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

@@ -15,71 +15,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import type { Hafalan } from '@/lib/types'
-
-// ==== Juz 30 coverage map — Al-Fatihah + 37 surah pendek Juz 30 ====
-// Juz 30 = surah 78 (An-Naba) hingga 114 (An-Nas), total 37 surah.
-// Names use Indonesian transliteration; matching normalizes away
-// apostrophes/hyphens so "An-Naba'" and "An-Naba" both resolve.
-
-const JUZ30_SURAHS: ReadonlyArray<{ no: number; name: string }> = [
-  { no: 1, name: 'Al-Fatihah' },
-  { no: 78, name: 'An-Naba' },
-  { no: 79, name: 'An-Naziat' },
-  { no: 80, name: 'Abasa' },
-  { no: 81, name: 'At-Takwir' },
-  { no: 82, name: 'Al-Infitar' },
-  { no: 83, name: 'Al-Mutaffifin' },
-  { no: 84, name: 'Al-Insyiqaq' },
-  { no: 85, name: 'Al-Buruj' },
-  { no: 86, name: 'At-Tariq' },
-  { no: 87, name: "Al-A'la" },
-  { no: 88, name: 'Al-Ghasyiyah' },
-  { no: 89, name: 'Al-Fajr' },
-  { no: 90, name: 'Al-Balad' },
-  { no: 91, name: 'Asy-Syams' },
-  { no: 92, name: 'Al-Lail' },
-  { no: 93, name: 'Ad-Duha' },
-  { no: 94, name: 'Al-Insyirah' },
-  { no: 95, name: 'At-Tin' },
-  { no: 96, name: "Al-'Alaq" },
-  { no: 97, name: 'Al-Qadr' },
-  { no: 98, name: 'Al-Bayyinah' },
-  { no: 99, name: 'Az-Zalzalah' },
-  { no: 100, name: "Al-'Adiyat" },
-  { no: 101, name: "Al-Qari'ah" },
-  { no: 102, name: 'At-Takatsur' },
-  { no: 103, name: "Al-'Asr" },
-  { no: 104, name: 'Al-Humazah' },
-  { no: 105, name: 'Al-Fil' },
-  { no: 106, name: 'Quraisy' },
-  { no: 107, name: "Al-Ma'un" },
-  { no: 108, name: 'Al-Kautsar' },
-  { no: 109, name: 'Al-Kafirun' },
-  { no: 110, name: 'An-Nasr' },
-  { no: 111, name: 'Al-Masad' },
-  { no: 112, name: 'Al-Ikhlas' },
-  { no: 113, name: 'Al-Falaq' },
-  { no: 114, name: 'An-Nas' },
-]
-
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-// Varian ejaan surah yang dipakai modul lain (datalist hafalan / Select target)
-// namun dinormalisasi berbeda dari nama kanonik JUZ30_SURAHS di atas.
-const NORM_ALIASES: ReadonlyMap<string, string> = new Map([
-  ['alkausar', 'alkautsar'], // "Al-Kausar" (pilihan target) -> Al-Kautsar
-  ['allahab', 'almasad'], // "Al-Lahab" -> Al-Masad
-  ['aththariq', 'attariq'], // "Ath-Thariq" (datalist) -> At-Tariq
-])
-
-const resolveNorm = (s: string) => {
-  const key = norm(s)
-  return NORM_ALIASES.get(key) ?? key
-}
-
-const JUZ30_NORM: ReadonlyMap<string, { no: number; name: string }> = new Map(
-  JUZ30_SURAHS.map((s) => [norm(s.name), s]),
-)
+// Juz-30 map + normalizer dipindah ke lib bersama (Task 13-a) supaya modul
+// guru/admin menghitung target dengan logika yang sama persis.
+import { JUZ30_NORM, JUZ30_SURAHS, norm, resolveNorm } from '@/lib/hafalan-utils'
 
 const KKM = 70
 

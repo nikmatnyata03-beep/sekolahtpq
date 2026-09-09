@@ -3,20 +3,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   BookMarked,
+  CheckCircle2,
   Download,
   RefreshCw,
   AlertCircle,
   Inbox,
   Plus,
+  Sparkles,
+  Target,
   Trash2,
   Loader2,
 } from 'lucide-react'
 import { csvDate, csvFileStamp, downloadCsv } from './overview'
 import type { Hafalan, Student } from '@/lib/types'
+import { resolveNorm, targetProgress } from '@/lib/hafalan-utils'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -204,6 +209,23 @@ export function HafalanAdmin() {
 
   const selectedStudent = students.find((s) => s.id === studentId)
 
+  // ==== Target hafalan (Task 13-a) — logika bersama via lib/hafalan-utils ====
+  // Progres santri terpilih terhadap targetnya (setoran difilter per santri).
+  const studentHafalans = studentId === 'none' ? [] : hafalans.filter((h) => h.studentId === studentId)
+  const tp = selectedStudent ? targetProgress(studentHafalans, selectedStudent.hafalanTarget) : null
+  // Surah yang sedang diketik/dipilih == target santri terpilih?
+  const surahIsTarget = !!tp && !!surahName.trim() && resolveNorm(surahName) === resolveNorm(tp.targetName)
+  // Penanda "target tercapai" pada tabel riwayat: surah setoran == target santri pemilik catatan.
+  const targetByStudent = new Map(students.map((s) => [s.id, s.hafalanTarget] as const))
+  const targetHitIds = new Set(
+    hafalans
+      .filter((h) => {
+        const t = targetByStudent.get(h.studentId)
+        return !!t && resolveNorm(h.surahName) === resolveNorm(t)
+      })
+      .map((h) => h.id),
+  )
+
   return (
     <div className="space-y-4">
       {error && (
@@ -250,6 +272,48 @@ export function HafalanAdmin() {
                 </p>
               )}
             </div>
+            {selectedStudent?.hafalanTarget && (
+              <div
+                role="status"
+                aria-label={
+                  tp
+                    ? `Target santri ${tp.targetName}: ${tp.reached} dari ${tp.position} surah tercapai (${tp.percent}%).`
+                    : `Target santri: ${selectedStudent.hafalanTarget}.`
+                }
+                className="rounded-xl border border-amber-200 bg-amber-50 p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Target className="size-4 shrink-0 text-amber-600" aria-hidden="true" />
+                    <p className="text-sm font-semibold text-amber-900">
+                      Target santri: <span className="font-bold">{tp?.targetName ?? selectedStudent.hafalanTarget}</span>
+                    </p>
+                    {tp?.targetReached && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                        <CheckCircle2 className="size-3" strokeWidth={2.5} aria-hidden="true" />
+                        Target sudah tercapai — pertahankan!
+                      </span>
+                    )}
+                  </div>
+                  {tp && (
+                    <span className="text-xs font-bold tabular-nums text-amber-800">
+                      {tp.reached}/{tp.position} surah ({tp.percent}%)
+                    </span>
+                  )}
+                </div>
+                {tp ? (
+                  <Progress
+                    value={tp.percent}
+                    aria-label={`Progres menuju target ${tp.targetName}: ${tp.percent}%`}
+                    className="mt-2 h-1.5 bg-amber-200 [&>div]:bg-amber-500"
+                  />
+                ) : (
+                  <p className="mt-1 text-[11px] font-medium text-amber-700">
+                    Target di luar peta Juz 30 — progres tidak dihitung.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="grid gap-1.5">
               <Label htmlFor="h-surah">Nama Surah *</Label>
               <Input
@@ -264,6 +328,20 @@ export function HafalanAdmin() {
                   <option key={s} value={s} />
                 ))}
               </datalist>
+              <div id="surah-target-hint" aria-live="polite">
+                {surahIsTarget && tp &&
+                  (tp.targetReached ? (
+                    <p className="flex items-start gap-1.5 text-xs font-medium text-amber-700">
+                      <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                      Surat target sudah tercapai sebelumnya.
+                    </p>
+                  ) : (
+                    <p className="flex items-start gap-1.5 text-xs font-medium text-emerald-700">
+                      <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                      Surat ini adalah target santri — setoran ini akan menyelesaikan target!
+                    </p>
+                  ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
@@ -364,6 +442,15 @@ export function HafalanAdmin() {
                         </TableCell>
                         <TableCell className="text-sm text-stone-700">
                           {h.surahName} <span className="text-xs text-stone-400">{h.ayatRange}</span>
+                          {targetHitIds.has(h.id) && (
+                            <span
+                              title="Target tercapai"
+                              aria-label="Target tercapai"
+                              className="ml-1 inline-flex align-middle"
+                            >
+                              <Target className="size-3.5 text-amber-500" aria-hidden="true" />
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell><Badge className={typeBadgeClass(h.type)}>{h.type}</Badge></TableCell>
                         <TableCell><span className={gradeClass(h.grade)}>{h.grade ?? '—'}</span></TableCell>

@@ -11,7 +11,9 @@ import {
   BookMarked,
   BookOpen,
   CalendarCheck,
+  CheckCircle2,
   Copy,
+  Crosshair,
   GraduationCap,
   Inbox,
   QrCode,
@@ -22,6 +24,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import type { AuthUser, ClassRoom, Hafalan, SessionItem, Student } from '@/lib/types'
 import { apiGet, formatShortDate } from '@/lib/api-client'
+import { targetProgress } from '@/lib/hafalan-utils'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -50,6 +53,12 @@ function gradeBadgeClass(grade: number): string {
   if (grade >= 85) return 'border-emerald-200 bg-emerald-100 text-emerald-800'
   if (grade >= 70) return 'border-amber-200 bg-amber-100 text-amber-800'
   return 'border-red-200 bg-red-100 text-red-700'
+}
+
+// Inisial nama untuk avatar (maks 2 huruf) — pola avatar inisial portal lain.
+function initialsOf(name: string): string {
+  const parts = name.split(' ').filter(Boolean).slice(0, 2)
+  return parts.map((w) => w[0]?.toUpperCase() ?? '').join('') || '?'
 }
 
 // Relative time in Indonesian — same helper pattern as whatsapp-log.tsx / parent-portal.tsx.
@@ -230,6 +239,24 @@ export function GuruOverview({ user, onNavigate }: {
   const ownHafalan = data.hafalans.filter((h) => ownStudentIds.has(h.studentId))
   const hafalanCapped = data.hafalans.length >= 100
   const recentHafalan = ownHafalan.slice(0, 8)
+
+  // ==== Progres target santri (Task 13-a) — murni dari state yang sudah dimuat ====
+  const hafalanByStudent = new Map<string, Hafalan[]>()
+  for (const h of ownHafalan) {
+    const list = hafalanByStudent.get(h.studentId)
+    if (list) list.push(h)
+    else hafalanByStudent.set(h.studentId, [h])
+  }
+  // Satu baris per santri kelas sendiri yang PUNYA target valid di peta Juz 30.
+  const targetRows = ownStudents
+    .flatMap((st) => {
+      const tp = targetProgress(hafalanByStudent.get(st.id) ?? [], st.hafalanTarget)
+      return tp ? [{ st, tp }] : []
+    })
+    .sort(
+      (a, b) =>
+        Number(b.tp.targetReached) - Number(a.tp.targetReached) || b.tp.percent - a.tp.percent,
+    )
 
   // Belum ada penugasan kelas → hero saja + kartu sapaan kosong.
   if (!user.teacherId || ownClasses.length === 0) {
@@ -417,6 +444,93 @@ export function GuruOverview({ user, onNavigate }: {
 
       {/* Jadwal mengajar mingguan — visual timetable from class schedules (Task 11-b) */}
       <WeeklySchedule classes={ownClasses} />
+
+      {/* Progres Target Santri — nudge card (Task 13-a). Data memakai students+hafalans yang sudah dimuat. */}
+      <Card className="rounded-2xl border-stone-200 bg-white shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2.5 text-base">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700"
+              aria-hidden="true"
+            >
+              <Crosshair className="size-5" />
+            </span>
+            Progres Target Santri
+          </CardTitle>
+          <CardDescription>Ketekunan setoran dibanding target hafalan tiap santri.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {targetRows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-stone-200 px-4 py-6 text-center">
+              <p className="text-sm text-stone-500">
+                Belum ada santri dengan target hafalan. Atur melalui menu Santri.
+              </p>
+            </div>
+          ) : (
+            <ul
+              role="list"
+              aria-label="Progres target hafalan santri"
+              className={cn(
+                'space-y-2.5',
+                targetRows.length > 4 && 'max-h-64 overflow-y-auto',
+                SCROLL_AREA,
+              )}
+            >
+              {targetRows.map(({ st, tp }) => (
+                <li
+                  key={st.id}
+                  role="listitem"
+                  title={`${st.fullName} — target ${tp.targetName}, ${tp.reached}/${tp.position} surah`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-stone-100 bg-stone-50/60 p-3"
+                >
+                  <span
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800"
+                    aria-hidden="true"
+                  >
+                    {initialsOf(st.fullName)}
+                  </span>
+                  <div className="min-w-0 basis-36 flex-1">
+                    <p className="truncate text-sm font-semibold text-stone-800">{st.fullName}</p>
+                    <p className="truncate text-xs text-stone-500">
+                      {st.class?.name ?? 'Tanpa kelas'} · Target: {tp.targetName}
+                    </p>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-valuenow={tp.percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`Progres menuju target ${tp.targetName}: ${tp.percent}%`}
+                    className="h-1.5 min-w-24 basis-28 flex-1 self-center rounded-full bg-stone-100"
+                  >
+                    <div
+                      className="h-full rounded-full bg-amber-500 transition-[width]"
+                      style={{ width: `${tp.percent}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-stone-600">
+                    {tp.reached}/{tp.position}
+                  </span>
+                  {tp.targetReached || tp.percent >= 100 ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                      <CheckCircle2 className="size-3" strokeWidth={2.5} aria-hidden="true" />
+                      {tp.targetReached ? 'Target tercapai' : 'Tercapai'}
+                    </span>
+                  ) : tp.percent >= 60 ? (
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                      Mendekati
+                    </span>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Progres {tp.percent}%
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
