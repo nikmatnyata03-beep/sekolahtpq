@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== USERS & AUTH =====================
+
+model User {
+  id        String         @id @default(cuid())
+  email     String         @unique
+  name      String
+  phone     String?
+  password  String
+  role      String // ADMIN | GURU | ORANG_TUA
+  avatar    String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  teacherProfile Teacher?  @relation(fields: [teacherId], references: [id])
+  teacherId      String?   @unique
+  students       Student[] @relation("ParentOfStudent")
+  notifications  Notification[]
+}
+
+// ===================== TEACHERS (Biodata Kemenag-style) =====================
+
+model Teacher {
+  id                 String   @id @default(cuid())
+  fullName           String
+  gender             String // L | P
+  birthPlace         String
+  birthDate          DateTime
+  address            String
+  phone              String?
+  photoUrl           String?
+  formalEducation    String // JSON array [{level,institution,year}]
+  nonFormalEducation String? // JSON array
+  certifications     String? // JSON array
+  expertise          String // keahlian spesifik
+  philosophy         String? // filosofi mengajar
+  bio                String
+  joinDate           DateTime
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user      User?
+  classes   Class[]
+  materials Material[]
+  posts     Post[]
+}
+
+// ===================== CLASSES & STUDENTS =====================
+
+model Class {
+  id       String  @id @default(cuid())
+  name     String // e.g. "Iqra 1", "Al-Qur'an A", "Tahfidz B"
+  level    String // IQRA | TAHFIDZ | AL_QURAN | Diniyah
+  schedule String
+  room     String?
+  isActive Boolean @default(true)
+  teacherId String?
+  teacher  Teacher? @relation(fields: [teacherId], references: [id])
+
+  students   Student[]
+  sessions   Session[]
+  materials  Material[]
+  curricula  Curriculum[]
+  createdAt  DateTime     @default(now())
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  nis       String   @unique
+  fullName  String
+  gender    String // L | P
+  birthDate DateTime
+  address   String
+  status    String   @default("AKTIF") // AKTIF | NONAKTIF | LULUS
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parentId String?
+  parent   User?   @relation("ParentOfStudent", fields: [parentId], references: [id])
+
+  classId     String?
+  class       Class?     @relation(fields: [classId], references: [id])
+  attendances Attendance[]
+  hafalans    Hafalan[]
+  payments    Payment[]
+}
+
+// ===================== PPDB REGISTRATION =====================
+
+model Registration {
+  id          String   @id @default(cuid())
+  regNumber   String   @unique
+  childName   String
+  gender      String
+  birthDate   DateTime
+  parentName  String
+  phone       String
+  email       String?
+  address     String
+  documents   String // JSON array of uploaded doc names
+  note        String?
+  status      String   @default("PENDING") // PENDING | VERIFIKASI | DITERIMA | DITOLAK
+  reviewNote  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ===================== ATTENDANCE (QR session based) =====================
+
+model Session {
+  id        String   @id @default(cuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  date      DateTime
+  topic     String?
+  code      String   @unique // check-in code shown as QR
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  attendances Attendance[]
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  status    String // HADIR | IZIN | SAKIT | ALPA
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, studentId])
+}
+
+// ===================== HAFALAN PROGRESS =====================
+
+model Hafalan {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  surahName   String
+  ayatRange   String
+  type        String   @default("TAHFIDZ") // TAHFIDZ | TAHSHIN | MURAJAAH
+  grade       Int? // 0-100
+  teacherNote String?
+  createdAt   DateTime @default(now())
+}
+
+// ===================== TEACHING MATERIALS =====================
+
+model Material {
+  id          String   @id @default(cuid())
+  title       String
+  type        String // PDF | SLIDE | VIDEO | AUDIO
+  url         String
+  description String?
+  category    String // TAJWID | HAFALAN | IBADAH | AKHLAK
+  classId     String?
+  class       Class?   @relation(fields: [classId], references: [id])
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// ===================== BILLING & PAYMENTS =====================
+
+model Payment {
+  id        String    @id @default(cuid())
+  invoiceNo String    @unique
+  studentId String
+  student   Student   @relation(fields: [studentId], references: [id])
+  title     String // "Iuran Bulan Ramadhan", "Uang Pangkal"
+  amount    Float
+  method    String? // QRIS | GOPAY | VA_BCA ...
+  status    String    @default("PENDING") // PENDING | SUCCESS | FAILED
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ===================== PUBLIC CONTENT =====================
+
+model Post {
+  id         String   @id @default(cuid())
+  title      String
+  slug       String   @unique
+  content    String
+  category   String   @default("BERITA") // BERITA | ARTIKEL | KEGIATAN
+  coverImage String?
+  published  Boolean  @default(false)
+  authorId   String?
+  author     Teacher? @relation(fields: [authorId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  priority  String   @default("NORMAL") // NORMAL | PENTING
+  createdAt DateTime @default(now())
+}
+
+model Curriculum {
+  id          String @id @default(cuid())
+  classId     String?
+  class       Class?  @relation(fields: [classId], references: [id])
+  level       String // e.g. "Iqra 1-3"
+  subject     String // TAJWID | HAFALAN | IBADAH | AKHLAK
+  description String
+  target      String // capaian pembelajaran
+  order       Int     @default(0)
+}
+
+// ===================== WHATSAPP NOTIFICATION LOG =====================
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
+  channel   String    @default("WHATSAPP")
+  phone     String
+  message   String
+  status    String    @default("SENT") // SENT | FAILED
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}
