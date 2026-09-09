@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   BookMarked,
+  Download,
   RefreshCw,
   AlertCircle,
   Inbox,
@@ -10,6 +11,7 @@ import {
   Trash2,
   Loader2,
 } from 'lucide-react'
+import { csvDate, csvFileStamp, downloadCsv } from './overview'
 import type { Hafalan, Student } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
@@ -61,6 +63,13 @@ const TYPES = [
   { value: 'MURAJAAH', label: 'Murajaah (Pengulangan)' },
 ]
 
+// Label jenis setoran untuk badge CSV (huruf title-case, konsisten dengan UI).
+const TYPE_LABELS: Record<string, string> = {
+  TAHFIDZ: 'Tahfidz',
+  TAHSHIN: 'Tahshin',
+  MURAJAAH: 'Murajaah',
+}
+
 function typeBadgeClass(type: string): string {
   if (type === 'TAHFIDZ') return 'border-emerald-200 bg-emerald-100 text-emerald-800'
   if (type === 'TAHSHIN') return 'border-amber-200 bg-amber-100 text-amber-800'
@@ -81,6 +90,7 @@ export function HafalanAdmin() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Hafalan | null>(null)
 
   const [studentId, setStudentId] = useState('none')
@@ -159,6 +169,36 @@ export function HafalanAdmin() {
       setDeleteTarget(null)
     } finally {
       setIsPending(false)
+    }
+  }
+
+  // Ekspor CSV (pola round-9, sama dengan Students/Payments admin): memakai helper
+  // bersama di overview.tsx — BOM UTF-8, pemisah ';' ramah Excel id-ID, tanggal
+  // dd/mm/yyyy, kutip/escape otomatis per sel. Mengekspor baris yang sedang
+  // tampil pada tabel Riwayat (state `hafalans`).
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const filename = `data-hafalan-${csvFileStamp()}.csv`
+      const rows: string[][] = [
+        ['Tanggal', 'Santri', 'NIS', 'Kelas', 'Surat', 'Ayat', 'Jenis', 'Nilai', 'Catatan Ustadz'],
+        ...hafalans.map((h) => [
+          csvDate(h.createdAt),
+          h.student?.fullName ?? '',
+          h.student?.nis ?? '',
+          h.student?.className ?? '',
+          h.surahName,
+          h.ayatRange,
+          TYPE_LABELS[h.type] ?? h.type,
+          h.grade === null ? '' : String(h.grade),
+          h.teacherNote ?? '',
+        ]),
+      ]
+      await new Promise((r) => setTimeout(r, 200))
+      downloadCsv(filename, rows)
+      toast({ title: 'Ekspor CSV berhasil', description: `${hafalans.length} data hafalan tersimpan di ${filename}.` })
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -277,9 +317,20 @@ export function HafalanAdmin() {
               <h3 className="font-semibold text-stone-900">Riwayat Setoran</h3>
               <p className="text-xs text-stone-500">{hafalans.length} catatan hafalan</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} /> Muat Ulang
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void exportCsv()}
+                disabled={loading || exporting || hafalans.length === 0}
+              >
+                {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                Ekspor CSV
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+                <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} /> Muat Ulang
+              </Button>
+            </div>
           </div>
           {loading ? (
             <div className="p-4"><Skeleton className="h-72 rounded-xl" /></div>

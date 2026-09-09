@@ -17,8 +17,11 @@ import {
   TrendingDown,
   BellRing,
   Download,
+  Layers,
+  Users,
+  Info,
 } from 'lucide-react'
-import type { Payment, Student } from '@/lib/types'
+import type { ClassRoom, Payment, Student } from '@/lib/types'
 import { apiGet, apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -81,6 +84,17 @@ function buildReminderMessage(p: Payment): string {
   return `Pengingat: Tagihan *${p.title}* sebesar Rp ${p.amount.toLocaleString('id-ID')} (${p.invoiceNo}) untuk ${studentName} masih menunggu pembayaran. Bayar mudah via Portal Wali SIMADJI (QRIS/GoPay/VA). Terima kasih. — TPQ Darul Jinan`
 }
 
+const ID_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+]
+
+interface BatchInvoiceResult {
+  created: number
+  skipped: number
+  invoices: Payment[]
+}
+
 export function PaymentsAdmin() {
   const { toast } = useToast()
   const [payments, setPayments] = useState<Payment[]>([])
@@ -100,6 +114,15 @@ export function PaymentsAdmin() {
   const [newTitle, setNewTitle] = useState('')
   const [newAmount, setNewAmount] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Payment | null>(null)
+
+  // Tagihan Massal (batch invoice per kelas)
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchClassId, setBatchClassId] = useState('none')
+  const [batchTitle, setBatchTitle] = useState('')
+  const [batchAmount, setBatchAmount] = useState('75000')
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
+  const [classes, setClasses] = useState<ClassRoom[]>([])
+  const [classesLoading, setClassesLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,11 +169,72 @@ export function PaymentsAdmin() {
     })
   }, [payments, search, statusFilter])
 
+  const batchAktifCount = useMemo(
+    () => students.filter((s) => s.classId === batchClassId && s.status === 'AKTIF').length,
+    [students, batchClassId],
+  )
+  const batchAmountNum = Number(batchAmount)
+  const batchEstTotal = Number.isFinite(batchAmountNum) && batchAmountNum > 0 ? batchAmountNum * batchAktifCount : 0
+
   const pendingPayments = useMemo(() => payments.filter((p) => p.status === 'PENDING'), [payments])
   const remindableCount = useMemo(
     () => pendingPayments.filter((p) => p.student?.parent?.phone).length,
     [pendingPayments],
   )
+
+  async function loadClasses() {
+    setClassesLoading(true)
+    try {
+      const c = await apiGet<ClassRoom[]>('/api/classes')
+      setClasses(c)
+    } catch (e) {
+      toast({ title: 'Gagal memuat daftar kelas', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setClassesLoading(false)
+    }
+  }
+
+  function openBatchDialog() {
+    const now = new Date()
+    setBatchTitle(`Iuran SPP ${ID_MONTHS[now.getMonth()]} ${now.getFullYear()}`)
+    setBatchAmount('75000')
+    setBatchClassId('none')
+    setBatchOpen(true)
+    if (classes.length === 0) void loadClasses()
+  }
+
+  async function submitBatchInvoices() {
+    if (batchClassId === 'none') {
+      toast({ title: 'Pilih kelas', description: 'Tagihan massal harus terkait dengan satu kelas.' })
+      return
+    }
+    const amount = Number(batchAmount)
+    if (!batchTitle.trim() || !Number.isFinite(amount) || amount <= 0) {
+      toast({ title: 'Data belum lengkap', description: 'Isi keterangan tagihan dan nominal (angka bulat > 0).' })
+      return
+    }
+    setBatchSubmitting(true)
+    try {
+      const res = await apiSend<BatchInvoiceResult>('/api/payments/batch', 'POST', {
+        classId: batchClassId,
+        title: batchTitle.trim(),
+        amount,
+      })
+      toast({
+        title: `${res.created} tagihan dibuat, ${res.skipped} dilewati (sudah ada)`,
+        description:
+          res.created > 0
+            ? `Invoice terbit dan notifikasi WhatsApp terkirim ke wali ${res.created} santri.`
+            : 'Semua santri sudah memiliki tagihan dengan keterangan yang sama.',
+      })
+      setBatchOpen(false)
+      await load()
+    } catch (e) {
+      toast({ title: 'Gagal membuat tagihan massal', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setBatchSubmitting(false)
+    }
+  }
 
   async function createInvoice() {
     if (newStudentId === 'none') {
@@ -369,6 +453,13 @@ export function PaymentsAdmin() {
         </Button>
         <Button
           variant="outline"
+          onClick={openBatchDialog}
+          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+        >
+          <Layers className="size-4" /> Tagihan Massal
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => setBulkOpen(true)}
           disabled={loading || bulkSending || remindableCount === 0}
           className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
@@ -526,6 +617,93 @@ export function PaymentsAdmin() {
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={isPending}>Batal</Button>
             <Button onClick={() => void createInvoice()} disabled={isPending} className="bg-emerald-700 hover:bg-emerald-800">
               {isPending && <Loader2 className="size-4 animate-spin" />} Terbitkan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Tagihan Massal */}
+      <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="size-4 text-emerald-700" /> Tagihan Massal
+            </DialogTitle>
+            <DialogDescription>
+              Terbitkan invoice untuk seluruh santri AKTIF di satu kelas sekaligus. Notifikasi WhatsApp dikirim ke wali setiap santri.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="batch-class">Kelas *</Label>
+              <Select value={batchClassId} onValueChange={setBatchClassId}>
+                <SelectTrigger id="batch-class" className="h-11 w-full">
+                  <SelectValue placeholder={classesLoading ? 'Memuat kelas…' : 'Pilih kelas'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-64 overflow-y-auto">
+                  <SelectItem value="none">— Pilih kelas —</SelectItem>
+                  {classes.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}{typeof c.studentCount === 'number' ? ` · ${c.studentCount} santri` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="batch-title">Keterangan Tagihan *</Label>
+              <Input
+                id="batch-title"
+                value={batchTitle}
+                onChange={(e) => setBatchTitle(e.target.value)}
+                placeholder="Iuran SPP Januari 2025"
+                className="h-11"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="batch-amount">Nominal (Rp) *</Label>
+              <Input
+                id="batch-amount"
+                type="number"
+                min={0}
+                step={1}
+                value={batchAmount}
+                onChange={(e) => setBatchAmount(e.target.value)}
+                placeholder="75000"
+                className="h-11"
+                aria-describedby="batch-amount-hint"
+              />
+              <p id="batch-amount-hint" className="text-xs text-stone-500">
+                {Number.isFinite(batchAmountNum) && batchAmountNum > 0
+                  ? `Akan tertulis sebagai ${formatRupiah(batchAmountNum)} per santri.`
+                  : 'Masukkan angka bulat lebih dari 0, contoh: 75000.'}
+              </p>
+            </div>
+            {batchClassId !== 'none' && (
+              <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+                <Users className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                <span role="status">
+                  Tagihan akan dibuat untuk <strong>{batchAktifCount} santri AKTIF</strong> · est. total{' '}
+                  <strong>{formatRupiah(batchEstTotal)}</strong>
+                </span>
+              </div>
+            )}
+            <Alert className="border-amber-200 bg-amber-50">
+              <Info className="size-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                Santri yang sudah memiliki tagihan dengan keterangan sama akan dilewati otomatis.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setBatchOpen(false)} disabled={batchSubmitting}>Batal</Button>
+            <Button
+              onClick={() => void submitBatchInvoices()}
+              disabled={batchSubmitting || batchClassId === 'none' || classesLoading}
+              className="h-11 bg-emerald-700 hover:bg-emerald-800"
+            >
+              {batchSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Layers className="size-4" />}
+              Terbitkan Semua
             </Button>
           </DialogFooter>
         </DialogContent>

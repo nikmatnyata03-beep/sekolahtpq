@@ -192,7 +192,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
       </div>
       <div className="min-w-0">
         <p className="text-sm font-bold tracking-wide text-stone-900">SIMADJI</p>
-        <p className="truncate text-xs text-stone-500">TPQ Darul Jinan · Admin</p>
+        <p className="truncate text-xs text-stone-500">TPQ Darul Jinan · {roleLabel(user.role)}</p>
       </div>
     </div>
   )

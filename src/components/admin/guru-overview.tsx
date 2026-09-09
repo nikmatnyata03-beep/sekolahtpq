@@ -29,6 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { WeeklySchedule } from './weekly-schedule'
 
 export type GuruOverviewSection = 'attendance' | 'hafalan' | 'classes'
 
@@ -413,6 +414,9 @@ export function GuruOverview({ user, onNavigate }: {
           </CardContent>
         </Card>
       </div>
+
+      {/* Jadwal mengajar mingguan — visual timetable from class schedules (Task 11-b) */}
+      <WeeklySchedule classes={ownClasses} />
     </div>
   )
 }
