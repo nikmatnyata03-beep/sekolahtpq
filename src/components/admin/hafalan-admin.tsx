@@ -5,6 +5,7 @@ import {
   BookMarked,
   CheckCircle2,
   Download,
+  PartyPopper,
   RefreshCw,
   AlertCircle,
   Inbox,
@@ -46,6 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -81,6 +83,17 @@ function typeBadgeClass(type: string): string {
   return 'border-teal-200 bg-teal-100 text-teal-800'
 }
 
+// Respons POST /api/hafalan (Task 14-a): baris hafalan baru + status perayaan target.
+type HafalanResponse = Hafalan & { targetJustReached?: boolean; targetName?: string | null }
+
+// Snapshot momen "target tercapai pertama kali" untuk dialog perayaan.
+interface Celebration {
+  studentName: string
+  targetName: string
+  reached: number
+  position: number
+}
+
 function gradeClass(grade: number | null): string {
   if (grade === null) return 'text-stone-400'
   if (grade >= 85) return 'font-bold text-emerald-700'
@@ -97,6 +110,7 @@ export function HafalanAdmin() {
   const [isPending, setIsPending] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Hafalan | null>(null)
+  const [celebration, setCelebration] = useState<Celebration | null>(null)
 
   const [studentId, setStudentId] = useState('none')
   const [surahName, setSurahName] = useState('')
@@ -135,9 +149,15 @@ export function HafalanAdmin() {
       toast({ title: 'Nama surah wajib diisi', description: 'Masukkan nama surah yang disetor.' })
       return
     }
+    // Proyeksi progres SESUDAH setoran (mirror logika server via targetProgress):
+    // dipakai untuk dialog perayaan bila API melaporkan targetJustReached.
+    const afterProg = targetProgress(
+      [...studentHafalans, { surahName: surahName.trim() }],
+      selectedStudent?.hafalanTarget,
+    )
     setIsPending(true)
     try {
-      await apiSend('/api/hafalan', 'POST', {
+      const created = await apiSend<HafalanResponse>('/api/hafalan', 'POST', {
         studentId,
         surahName: surahName.trim(),
         ayatRange: ayatRange.trim() || undefined,
@@ -145,10 +165,25 @@ export function HafalanAdmin() {
         grade: grade === '' ? undefined : Number(grade),
         teacherNote: teacherNote.trim() || undefined,
       })
-      toast({
-        title: 'Setoran hafalan dicatat',
-        description: 'Progres hafalan santri diperbarui dan notifikasi WhatsApp terkirim ke wali.',
-      })
+      if (created.targetJustReached && created.targetName && selectedStudent) {
+        // Momen perayaan: setoran ini MENYEMPURNAKAN target santri untuk pertama kali.
+        const studentName = selectedStudent.fullName
+        setCelebration({
+          studentName,
+          targetName: created.targetName,
+          reached: afterProg?.reached ?? 0,
+          position: afterProg?.position ?? 1,
+        })
+        toast({
+          title: '🎉 Target tercapai!',
+          description: `MasyaAllah! ${studentName} menyempurnakan target ${created.targetName}. WhatsApp ucapan terkirim ke wali.`,
+        })
+      } else {
+        toast({
+          title: 'Setoran hafalan dicatat',
+          description: 'Progres hafalan santri diperbarui dan notifikasi WhatsApp terkirim ke wali.',
+        })
+      }
       setSurahName('')
       setAyatRange('')
       setGrade('')
@@ -498,6 +533,35 @@ export function HafalanAdmin() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog perayaan "Target tercapai" (Task 14-a) — muncul sekali saat
+          setoran menyempurnakan target hafalan santri untuk pertama kali. */}
+      <Dialog open={!!celebration} onOpenChange={(open) => { if (!open) setCelebration(null) }}>
+        <DialogContent className="max-w-sm rounded-2xl text-center sm:rounded-2xl" role="status" aria-live="polite">
+          <DialogHeader className="items-center space-y-3 text-center sm:text-center">
+            <div
+              className="mx-auto flex size-20 items-center justify-center rounded-full bg-emerald-100"
+              aria-hidden="true"
+            >
+              <PartyPopper className="size-10 text-emerald-700" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-stone-900">
+              MasyaAllah, {celebration?.studentName}!
+            </DialogTitle>
+            <DialogDescription className="text-center text-sm leading-relaxed text-stone-600">
+              Target hafalan <strong className="text-emerald-700">{celebration?.targetName}</strong> berhasil
+              disempurnakan ({celebration?.reached}/{celebration?.position} surah).
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-xs font-medium text-amber-600">Orang tua telah menerima ucapan via WhatsApp.</p>
+          <Button
+            onClick={() => setCelebration(null)}
+            className="h-11 min-h-11 w-full rounded-2xl bg-emerald-700 text-base font-semibold hover:bg-emerald-800"
+          >
+            Alhamdulillah
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

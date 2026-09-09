@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import {
   Newspaper,
   Megaphone,
@@ -12,6 +12,8 @@ import {
   Trash2,
   Loader2,
   MessageCircle,
+  MoonStar,
+  CheckCheck,
 } from 'lucide-react'
 import type { Announcement, Post, Teacher } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
@@ -60,6 +62,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 
 const CATEGORIES = [
   { value: 'BERITA', label: 'Berita' },
@@ -91,6 +94,108 @@ const EMPTY_POST: PostFormState = {
   authorId: 'none',
 }
 
+const WA_SIGNATURE = '— TPQ Darul Jinan'
+
+/**
+ * Replika persis komposisi pesan broadcast WhatsApp pada
+ * src/app/api/announcements/route.ts:
+ *   sendWhatsApp({ message: `*${b.title}*\n${b.content}\n— TPQ Darul Jinan` })
+ * Hanya dikirim saat priority === 'PENTING' && broadcast.
+ */
+function composeBroadcastMessage(title: string, content: string): string {
+  return `*${title}*\n${content}\n${WA_SIGNATURE}`
+}
+
+// Jam "HH.MM" khusus klien: server merender kosong (aman hydration), lalu ikut berjalan.
+// Snapshot di-cache per menit agar stabil untuk useSyncExternalStore.
+const waClockStore = { key: '', value: '' }
+function getWaClock(): string {
+  const now = new Date()
+  const key = `${now.getHours()}:${now.getMinutes()}`
+  if (waClockStore.key !== key) {
+    waClockStore.key = key
+    waClockStore.value = `${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`
+  }
+  return waClockStore.value
+}
+
+function WaBroadcastPreview({
+  title,
+  content,
+  willBroadcast,
+}: {
+  title: string
+  content: string
+  willBroadcast: boolean
+}) {
+  // Jam hanya tampil setelah hidrasi (SSR = kosong) agar tidak hydration mismatch.
+  const clock = useSyncExternalStore(
+    (onChange) => {
+      const id = window.setInterval(onChange, 15_000)
+      return () => window.clearInterval(id)
+    },
+    getWaClock,
+    () => '',
+  )
+
+  const trimmedTitle = title.trim()
+  const trimmedContent = content.trim()
+  const titleText = trimmedTitle || 'Judul pengumuman…'
+  const contentText = trimmedContent || 'Isi pengumuman…'
+
+  // Pesan disusun persis seperti API, lalu tanda * diparse menjadi tebal
+  // (idiom split('*') yang sama dengan whatsapp-log & portal wali):
+  // ['', '<judul>', '\n<isi>\n— TPQ Darul Jinan']
+  const segments = composeBroadcastMessage(titleText, contentText).split('*')
+  const boldTitle = segments[1] ?? ''
+  const body = (segments[2] ?? '').replace(`\n${WA_SIGNATURE}`, '')
+
+  return (
+    <section aria-label="Pratinjau pesan WhatsApp" aria-live="polite" className="grid gap-2.5">
+      {willBroadcast ? (
+        <p className="flex flex-wrap items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+          <Megaphone className="size-3.5 shrink-0" aria-hidden="true" />
+          <span>Pesan ini akan disiarkan ke semua wali via WhatsApp.</span>
+          <Badge className="border-amber-200 bg-amber-100 text-amber-800">PENTING</Badge>
+        </p>
+      ) : (
+        <p className="flex flex-wrap items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-2 text-xs text-stone-500">
+          <MessageCircle className="size-3.5 shrink-0" aria-hidden="true" />
+          <span>Disimpan sebagai pengumuman portal (tanpa broadcast WhatsApp).</span>
+        </p>
+      )}
+
+      <div className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+        {/* Baris kontak ala WhatsApp */}
+        <div className="flex items-center gap-2.5 border-b border-stone-100 bg-white px-3 py-2.5">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white">
+            <MoonStar className="size-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-stone-800">TPQ Darul Jinan</p>
+            <p className="text-[11px] text-stone-400">notifikasi simulasi</p>
+          </div>
+        </div>
+        {/* Latar area chat */}
+        <div className="bg-stone-200 px-3 py-4 [background-image:radial-gradient(rgba(87,83,78,0.14)_1px,transparent_1px)] [background-size:14px_14px]">
+          <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white p-2.5 shadow-sm">
+            <p className="whitespace-pre-line text-sm leading-relaxed text-stone-800">
+              <strong className={!trimmedTitle ? 'text-stone-400' : undefined}>{boldTitle}</strong>
+              <span className={!trimmedContent ? 'text-stone-400' : undefined}>{body}</span>
+              {'\n'}
+              {WA_SIGNATURE}
+            </p>
+            <div className="mt-1 flex items-center justify-end gap-1">
+              <span className="text-[11px] text-stone-400">{clock}</span>
+              <CheckCheck className="size-3.5 text-emerald-500" aria-hidden="true" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function ContentAdmin() {
   const { toast } = useToast()
   const [posts, setPosts] = useState<Post[]>([])
@@ -112,6 +217,9 @@ export function ContentAdmin() {
   const [annPriority, setAnnPriority] = useState('NORMAL')
   const [annBroadcast, setAnnBroadcast] = useState(false)
   const [deleteAnn, setDeleteAnn] = useState<Announcement | null>(null)
+  // Satu sumber kebenaran: API hanya broadcast saat priority 'PENTING' && broadcast
+  // (src/app/api/announcements/route.ts) — dipakai payload submit & pratinjau.
+  const annWillBroadcast = annPriority === 'PENTING' && annBroadcast
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -226,14 +334,13 @@ export function ContentAdmin() {
         title: annTitle.trim(),
         content: annContent.trim(),
         priority: annPriority,
-        broadcast: annPriority === 'PENTING' && annBroadcast,
+        broadcast: annWillBroadcast,
       })
       toast({
         title: 'Pengumuman diterbitkan',
-        description:
-          annPriority === 'PENTING' && annBroadcast
-            ? 'Pengumuman penting juga di-broadcast ke WhatsApp seluruh wali santri.'
-            : 'Pengumuman kini tampil di portal wali santri.',
+        description: annWillBroadcast
+          ? 'Pengumuman penting juga di-broadcast ke WhatsApp seluruh wali santri.'
+          : 'Pengumuman kini tampil di portal wali santri.',
       })
       setAnnOpen(false)
       setAnnTitle('')
@@ -494,7 +601,7 @@ export function ContentAdmin() {
 
       {/* Dialog Buat Pengumuman */}
       <Dialog open={annOpen} onOpenChange={setAnnOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-lg">
+        <DialogContent className="max-h-[88vh] overflow-y-auto rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Megaphone className="size-4 text-emerald-700" /> Buat Pengumuman
@@ -537,6 +644,13 @@ export function ContentAdmin() {
                 </span>
               </label>
             )}
+            <Separator className="bg-stone-200" />
+            <p className="text-xs font-semibold text-stone-500">Pratinjau WhatsApp</p>
+            <WaBroadcastPreview
+              title={annTitle}
+              content={annContent}
+              willBroadcast={annWillBroadcast}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAnnOpen(false)} disabled={isPending}>Batal</Button>
