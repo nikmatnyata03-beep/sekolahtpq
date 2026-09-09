@@ -56,6 +56,7 @@ export interface Student {
   status: string // AKTIF | NONAKTIF | LULUS
   parentId: string | null
   classId: string | null
+  hafalanTarget: string | null
   parent?: { id: string; name: string; phone: string | null; email: string } | null
   class?: { id: string; name: string; level: string; schedule: string } | null
   _count?: { hafalans: number; payments: number; attendances: number }
@@ -214,11 +215,12 @@ export interface ParentPortalData {
     nis: string
     fullName: string
     gender: string
+    hafalanTarget: string | null
     className: string
     classSchedule: string
     teacherName: string
     attendanceSummary: { hadir: number; izin: number; sakit: number; alpa: number; total: number }
-    attendances: { id: string; status: string; date: string; topic: string | null; className: string }[]
+    attendances: { id: string; status: 'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA'; date: string; topic: string | null; className: string }[]
     hafalans: Hafalan[]
     payments: Payment[]
     billing: { outstanding: number; pendingCount: number }

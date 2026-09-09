@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       nis: s.nis,
       fullName: s.fullName,
       gender: s.gender,
+      hafalanTarget: s.hafalanTarget,
       className: s.class?.name || 'Belum ada kelas',
       classSchedule: s.class?.schedule || '-',
       teacherName: s.class?.teacher?.fullName || '-',

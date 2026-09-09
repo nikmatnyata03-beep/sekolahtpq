@@ -41,6 +41,7 @@ import { useToast } from '@/hooks/use-toast'
 import { apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
 import type { Hafalan, Payment, ParentPortalData, SessionItem } from '@/lib/types'
 import { HafalanProgress } from './hafalan-chart'
+import { AttendanceRecap } from './attendance-recap'
 
 export type ParentStudent = ParentPortalData['students'][number]
 
@@ -793,6 +794,9 @@ export function ChildPanel({
         </CardContent>
       </Card>
 
+      {/* b2. Monthly attendance recap (renders nothing when there is no data) */}
+      <AttendanceRecap attendances={child.attendances} />
+
       {/* c. Hafalan progress */}
       <Card className="rounded-2xl">
         <CardHeader>
@@ -847,7 +851,7 @@ export function ChildPanel({
       {/* c2. Hafalan analytics (juz-30 map + grade trend) — only with data */}
       {child.hafalans.length > 0 && (
         <div className="lg:col-span-2">
-          <HafalanProgress hafalans={child.hafalans} />
+          <HafalanProgress hafalans={child.hafalans} target={child.hafalanTarget} />
         </div>
       )}
 

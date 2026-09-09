@@ -1,7 +1,8 @@
 'use client'
 
 // PPDB Online — formulir pendaftaran santri baru (POST /api/registrations)
-// + widget cek status pendaftaran berdasarkan nomor registrasi.
+// + cek status pendaftaran via GET /api/registrations/check
+//   (butuh nomor pendaftaran + 5 digit terakhir no. HP — anti-enumeration).
 
 import { useState, type FormEvent } from 'react'
 import {
@@ -14,12 +15,15 @@ import {
   ClipboardList,
   Copy,
   FileCheck2,
+  FileSearch,
   Loader2,
   MessageCircle,
   Phone,
-  SearchCheck,
+  Quote,
+  RotateCcw,
+  Search,
   ShieldAlert,
-  UserRound,
+  ShieldCheck,
   XCircle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -83,6 +87,19 @@ type FormState = {
 }
 
 type FieldError = Partial<Record<'childName' | 'birthDate' | 'parentName' | 'phone' | 'email' | 'address', string>>
+
+// Respons aman dari GET /api/registrations/check (tanpa data sensitif)
+type CheckResult = {
+  regNumber: string
+  childName: string
+  parentName: string
+  status: string
+  reviewNote: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+const CHECK_STEPS = ['Diajukan', 'Verifikasi', 'Keputusan'] as const
 
 const EMPTY_FORM: FormState = {
   childName: '',
@@ -193,56 +210,53 @@ export function PpdbSection() {
     }
   }
 
-  // ==== Cek status ====
-  const [searchNumber, setSearchNumber] = useState('')
-  const [searching, setSearching] = useState(false)
-  const [searched, setSearched] = useState(false)
-  const [found, setFound] = useState<Registration | null>(null)
+  // ==== Cek status (GET /api/registrations/check — butuh nomor pendaftaran + no. HP) ====
+  const [checkOpen, setCheckOpen] = useState(false)
+  const [checkNumber, setCheckNumber] = useState('')
+  const [checkPhone, setCheckPhone] = useState('')
+  const [checkLoading, setCheckLoading] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null)
 
-  const handleCheckStatus = async () => {
-    const q = searchNumber.trim()
-    if (!q) {
-      toast({
-        title: 'Nomor Kosong',
-        description: 'Masukkan nomor pendaftaran terlebih dahulu, contoh: PPDB-2025-0001.',
-        variant: 'destructive',
-      })
+  const handleCheckStatus = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!checkNumber.trim() || !checkPhone.trim()) {
+      setCheckResult(null)
+      setCheckError('Nomor pendaftaran dan nomor HP wajib diisi.')
       return
     }
-    setSearching(true)
+    setCheckLoading(true)
+    setCheckError(null)
     try {
-      const regs = await apiGet<Registration[]>('/api/registrations')
-      const match = (Array.isArray(regs) ? regs : []).find(
-        (r) => r?.regNumber?.toLowerCase() === q.toLowerCase(),
-      )
-      setFound(match ?? null)
-      setSearched(true)
-      if (!match) {
-        toast({
-          title: 'Tidak Ditemukan',
-          description: `Nomor "${q}" tidak terdaftar. Periksa kembali penulisannya.`,
-          variant: 'destructive',
-        })
-      }
+      const params = new URLSearchParams({ regNumber: checkNumber.trim(), phone: checkPhone.trim() })
+      const data = await apiGet<CheckResult>(`/api/registrations/check?${params.toString()}`)
+      setCheckResult(data)
     } catch (err) {
-      toast({
-        title: 'Gagal Mengecek Status',
-        description: err instanceof Error ? err.message : 'Terjadi kesalahan, silakan coba lagi.',
-        variant: 'destructive',
-      })
+      setCheckResult(null)
+      setCheckError(err instanceof Error ? err.message : 'Terjadi kesalahan, silakan coba lagi.')
     } finally {
-      setSearching(false)
+      setCheckLoading(false)
     }
   }
 
-  const statusMeta = found ? STATUS_STYLES[found.status] ?? STATUS_STYLES.PENDING : null
-  const stepIndex = found ? (found.status === 'PENDING' ? 0 : found.status === 'VERIFIKASI' ? 1 : 2) : -1
+  const resetCheck = () => {
+    setCheckNumber('')
+    setCheckPhone('')
+    setCheckResult(null)
+    setCheckError(null)
+  }
+
+  const resultMeta = checkResult
+    ? STATUS_STYLES[checkResult.status as Registration['status']] ?? STATUS_STYLES.PENDING
+    : null
+  // Timeline mini hanya untuk PENDING (0) / VERIFIKASI (1); DITERIMA & DITOLAK di luar timeline
+  const checkStepIndex = checkResult ? (checkResult.status === 'PENDING' ? 0 : checkResult.status === 'VERIFIKASI' ? 1 : -1) : -1
 
   return (
     <section id="ppdb" className="scroll-mt-20 bg-stone-50 py-16">
       <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <div className="mx-auto mb-12 max-w-2xl text-center">
+        {/* Heading + affordance cek status */}
+        <div className="mx-auto mb-8 max-w-2xl text-center">
           <span className="mb-3 inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-700">
             PPDB Online
           </span>
@@ -251,7 +265,226 @@ export function PpdbSection() {
             Tahun Ajaran 2025/2026 telah dibuka. Isi formulir daring berikut — tanpa perlu datang
             langsung, konfirmasi dikirim lewat WhatsApp.
           </p>
+          <div className="mt-5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCheckOpen((v) => !v)}
+              aria-expanded={checkOpen}
+              aria-controls="ppdb-status-check"
+              className="min-h-11 gap-2 rounded-full border-emerald-300 bg-white px-5 text-sm font-semibold text-emerald-700 shadow-xs transition-colors hover:bg-emerald-50 hover:text-emerald-800"
+            >
+              <FileSearch className="size-4" />
+              Sudah mendaftar? Cek Status
+            </Button>
+          </div>
         </div>
+
+        {/* ================= PANEL CEK STATUS (collapsible) ================= */}
+        {checkOpen && (
+          <div
+            id="ppdb-status-check"
+            className="mx-auto mb-12 max-w-3xl rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm md:p-8"
+          >
+            <h3 className="flex items-center gap-2 text-base font-bold text-stone-800">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                <FileSearch className="size-4.5" />
+              </span>
+              Cek Status Pendaftaran
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-stone-500">
+              Lacak proses pendaftaran tanpa perlu masuk akun. Status diperbarui oleh sekretariat
+              setiap tahap seleksi.
+            </p>
+
+            <form onSubmit={handleCheckStatus} noValidate className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="ppdb-check-number">Nomor Pendaftaran</Label>
+                <Input
+                  id="ppdb-check-number"
+                  placeholder="PPDB-2025-0001"
+                  autoComplete="off"
+                  className="font-mono uppercase"
+                  value={checkNumber}
+                  onChange={(e) => {
+                    setCheckNumber(e.target.value)
+                    if (checkError) setCheckError(null)
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ppdb-check-phone">No. HP</Label>
+                <Input
+                  id="ppdb-check-phone"
+                  type="tel"
+                  inputMode="tel"
+                  maxLength={20}
+                  autoComplete="off"
+                  placeholder="5 digit terakhir nomor HP"
+                  value={checkPhone}
+                  onChange={(e) => {
+                    setCheckPhone(e.target.value)
+                    if (checkError) setCheckError(null)
+                  }}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={checkLoading}
+                className="min-h-11 bg-emerald-700 font-semibold shadow-md hover:bg-emerald-800 sm:col-span-2"
+              >
+                {checkLoading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Memeriksa Status…
+                  </>
+                ) : (
+                  <>
+                    <Search className="size-4" />
+                    Periksa Status
+                  </>
+                )}
+              </Button>
+            </form>
+
+            <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-stone-500">
+              <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
+              Masukkan nomor pendaftaran dan 5 digit terakhir nomor HP yang digunakan saat mendaftar.
+            </p>
+
+            {/* Hasil pemeriksaan — diumumkan ke pembaca layar */}
+            <div aria-live="polite">
+              {checkError && (
+                <p
+                  role="alert"
+                  className="mt-4 flex items-start gap-1.5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700"
+                >
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                  {checkError}
+                </p>
+              )}
+
+              {checkResult && resultMeta && (
+                <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 md:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-stone-500">Calon Santri</p>
+                      <p className="text-sm font-bold text-stone-800">An. {checkResult.childName}</p>
+                      <p className="mt-0.5 text-xs text-stone-500">Wali: {checkResult.parentName}</p>
+                    </div>
+                    <Badge variant="outline" className={resultMeta.badge}>
+                      <resultMeta.icon className="size-3" />
+                      {STATUS_LABELS[checkResult.status as Registration['status']] ?? checkResult.status}
+                    </Badge>
+                  </div>
+
+                  <Separator className="my-3 bg-emerald-100" />
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div className="col-span-2 sm:col-span-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Nomor</p>
+                      <p className="font-mono text-sm font-bold text-emerald-900">{checkResult.regNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Diajukan</p>
+                      <p className="text-xs font-medium text-stone-600">{formatShortDate(checkResult.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Diperbarui</p>
+                      <p className="text-xs font-medium text-stone-600">{formatShortDate(checkResult.updatedAt)}</p>
+                    </div>
+                  </div>
+
+                  {/* Catatan pengurus (ditolak = merah menonjol, lainnya kutipan amber) */}
+                  {checkResult.status === 'DITOLAK' && checkResult.reviewNote && (
+                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3.5">
+                      <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-red-700">
+                        <ShieldAlert className="size-3.5 shrink-0" />
+                        Pendaftaran Belum Dapat Kami Terima
+                      </p>
+                      <blockquote className="mt-1.5 flex items-start gap-1.5 text-sm italic leading-relaxed text-red-800">
+                        <Quote className="mt-0.5 size-3.5 shrink-0" />
+                        “{checkResult.reviewNote}”
+                      </blockquote>
+                    </div>
+                  )}
+                  {checkResult.status !== 'DITOLAK' && checkResult.reviewNote && (
+                    <figure className="mt-4 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-3">
+                      <figcaption className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">
+                        <Quote className="size-3" />
+                        Catatan Pengurus
+                      </figcaption>
+                      <blockquote className="mt-1 text-xs italic leading-relaxed text-amber-900">
+                        “{checkResult.reviewNote}”
+                      </blockquote>
+                    </figure>
+                  )}
+
+                  {/* Diterima — ajakan langkah berikutnya */}
+                  {checkResult.status === 'DITERIMA' && (
+                    <p className="mt-4 flex items-start gap-1.5 rounded-lg bg-emerald-100/80 p-2.5 text-xs font-medium leading-relaxed text-emerald-800">
+                      <MessageCircle className="mt-0.5 size-3.5 shrink-0" />
+                      Alhamdulillah! Silakan menunggu informasi kelas dan akun Portal Wali via WhatsApp.
+                    </p>
+                  )}
+
+                  {/* Menunggu / diverifikasi — timeline 3 tahap */}
+                  {checkStepIndex >= 0 && (
+                    <ol className="mt-4 flex items-center" aria-label="Tahapan pendaftaran">
+                      {CHECK_STEPS.map((label, i) => {
+                        const done = i < checkStepIndex
+                        const current = i === checkStepIndex
+                        return (
+                          <li key={label} className="flex flex-1 items-center last:flex-none">
+                            <div className="flex flex-col items-center gap-1">
+                              <span
+                                className={`flex size-4 items-center justify-center rounded-full ${
+                                  done
+                                    ? 'bg-emerald-600 text-white'
+                                    : current
+                                      ? 'bg-emerald-600 ring-4 ring-emerald-200/70'
+                                      : 'border-2 border-stone-300 bg-white'
+                                }`}
+                              >
+                                {done && <Check className="size-2.5" strokeWidth={3.5} />}
+                              </span>
+                              <span
+                                className={`text-[10px] font-medium ${
+                                  done || current ? 'text-emerald-800' : 'text-stone-400'
+                                }`}
+                              >
+                                {label}
+                              </span>
+                            </div>
+                            {i < CHECK_STEPS.length - 1 && (
+                              <span
+                                aria-hidden="true"
+                                className={`mx-1 -mt-2 h-0.5 flex-1 ${i < checkStepIndex ? 'bg-emerald-500' : 'bg-stone-200'}`}
+                              />
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  )}
+
+                  <div className="mt-4 flex justify-end border-t border-emerald-100 pt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={resetCheck}
+                      className="h-11 gap-1.5 border-emerald-200 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Periksa Lagi
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-8 lg:grid-cols-5">
           {/* ================= FORMULIR ================= */}
@@ -436,116 +669,7 @@ export function PpdbSection() {
 
           {/* ================= KOLOM KANAN ================= */}
           <div className="flex flex-col gap-6 lg:col-span-2">
-            {/* Cek status pendaftaran */}
-            <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-              <h3 className="flex items-center gap-2 text-base font-bold text-stone-800">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                  <SearchCheck className="size-4.5" />
-                </span>
-                Cek Status Pendaftaran
-              </h3>
-              <p className="mt-2 text-xs leading-relaxed text-stone-500">
-                Masukkan nomor pendaftaran yang Anda terima setelah mengirim formulir.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Input
-                  value={searchNumber}
-                  onChange={(e) => setSearchNumber(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void handleCheckStatus()
-                    }
-                  }}
-                  placeholder="PPDB-2025-0001"
-                  className="font-mono uppercase"
-                  aria-label="Nomor pendaftaran"
-                />
-                <Button
-                  type="button"
-                  className="shrink-0 bg-emerald-700 hover:bg-emerald-800"
-                  disabled={searching}
-                  onClick={() => void handleCheckStatus()}
-                >
-                  {searching ? <Loader2 className="size-4 animate-spin" /> : 'Cek'}
-                </Button>
-              </div>
-
-              {searched && found && statusMeta && (
-                <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-stone-500">Nomor</p>
-                      <p className="font-mono text-sm font-bold text-emerald-900">{found.regNumber}</p>
-                    </div>
-                    <Badge variant="outline" className={statusMeta.badge}>
-                      <statusMeta.icon className="size-3" />
-                      {STATUS_LABELS[found.status] ?? found.status}
-                    </Badge>
-                  </div>
-                  <Separator className="my-3 bg-emerald-100" />
-                  <p className="flex items-center gap-1.5 text-sm font-semibold text-stone-700">
-                    <UserRound className="size-3.5 text-emerald-700" />
-                    {found.childName}
-                  </p>
-                  <p className="mt-1 text-xs text-stone-500">
-                    Mendaftar pada {formatShortDate(found.createdAt)} • Wali: {found.parentName}
-                  </p>
-
-                  {/* Timeline status */}
-                  <div className="mt-4 flex items-center">
-                    {['Formulir', 'Verifikasi', 'Keputusan'].map((label, i) => {
-                      const done = i < stepIndex
-                      const active = i === stepIndex
-                      const rejected = found.status === 'DITOLAK' && i === 2
-                      return (
-                        <div key={label} className="flex flex-1 items-center last:flex-none">
-                          <div className="flex flex-col items-center gap-1">
-                            <span
-                              className={`flex size-7 items-center justify-center rounded-full border-2 text-[10px] font-bold ${
-                                rejected
-                                  ? 'border-red-500 bg-red-500 text-white'
-                                  : done || active
-                                    ? 'border-emerald-600 bg-emerald-600 text-white'
-                                    : 'border-stone-200 bg-white text-stone-400'
-                              }`}
-                            >
-                              {rejected ? <XCircle className="size-3.5" /> : done || active ? <Check className="size-3.5" /> : i + 1}
-                            </span>
-                            <span className={`text-[10px] font-medium ${done || active || rejected ? 'text-emerald-800' : 'text-stone-400'}`}>
-                              {label}
-                            </span>
-                          </div>
-                          {i < 2 && (
-                            <span className={`mx-1 -mt-4 h-0.5 flex-1 ${i < stepIndex ? 'bg-emerald-500' : 'bg-stone-200'}`} aria-hidden="true" />
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {found.status === 'DITOLAK' && found.reviewNote && (
-                    <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-red-50 p-2.5 text-xs text-red-700">
-                      <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
-                      {found.reviewNote}
-                    </p>
-                  )}
-                  {found.status === 'PENDING' && (
-                    <p className="mt-3 text-xs italic text-stone-500">
-                      Pendaftaran Anda masuk antrean verifikasi administrasi. Tim kami menghubungi
-                      maksimal 2×24 jam kerja.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {searched && !found && (
-                <div className="mt-5 rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-4 text-center text-sm text-stone-500">
-                  Nomor pendaftaran tidak ditemukan. Pastikan penulisan sesuai pesan WhatsApp
-                  konfirmasi (cth. <span className="font-mono">PPDB-2025-0001</span>).
-                </div>
-              )}
-            </div>
+            {/* Cek status kini berupa panel collapsible di bawah judul seksi (aman via /api/registrations/check) */}
 
             {/* Bantuan */}
             <div className="rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-6 shadow-sm">

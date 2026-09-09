@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         address: b.address || '-',
         classId: b.classId || null,
         parentId: b.parentId || null,
+        hafalanTarget: b.hafalanTarget || null,
       },
       include: { class: { select: { name: true } }, parent: { select: { name: true, phone: true } } },
     })
@@ -62,6 +63,7 @@ export async function PUT(req: NextRequest) {
         ...(b.status && { status: b.status }),
         ...(b.classId !== undefined && { classId: b.classId || null }),
         ...(b.parentId !== undefined && { parentId: b.parentId || null }),
+        ...(b.hafalanTarget !== undefined && { hafalanTarget: b.hafalanTarget || null }),
       },
       include: { class: { select: { name: true } }, parent: { select: { name: true, phone: true } } },
     })

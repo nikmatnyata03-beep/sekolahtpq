@@ -82,6 +82,7 @@ model Student {
   address   String
   status    String   @default("AKTIF") // AKTIF | NONAKTIF | LULUS
   photoUrl  String?
+  hafalanTarget String? // target surah Juz 30 yang ditetapkan ustadz, mis. "An-Naba"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

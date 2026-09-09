@@ -16,6 +16,7 @@ import {
   Wallet,
   CalendarCheck,
   Download,
+  Target,
 } from 'lucide-react'
 import type { AppUser, ClassRoom, Student } from '@/lib/types'
 import { apiGet, apiSend } from '@/lib/api-client'
@@ -78,6 +79,7 @@ interface StudentFormState {
   address: string
   classId: string
   parentId: string
+  hafalanTarget: string
 }
 
 const EMPTY_FORM: StudentFormState = {
@@ -87,7 +89,19 @@ const EMPTY_FORM: StudentFormState = {
   address: '',
   classId: 'none',
   parentId: 'none',
+  hafalanTarget: 'none',
 }
+
+// Opsi target hafalan Juz 30: Al-Fatihah + 37 surah pendek (78–114).
+const JUZ30_TARGET_OPTIONS: ReadonlyArray<string> = [
+  'Al-Fatihah', 'An-Naba', "An-Nazi'at", 'Abasa', 'At-Takwir', 'Al-Infitar',
+  'Al-Mutaffifin', 'Al-Insyiqaq', 'Al-Buruj', 'At-Tariq', "Al-A'la", 'Al-Ghasyiyah',
+  'Al-Fajr', 'Al-Balad', 'Asy-Syams', 'Al-Lail', 'Ad-Duha', 'Al-Insyirah',
+  'At-Tin', "Al-'Alaq", 'Al-Qadr', 'Al-Bayyinah', 'Az-Zalzalah', "Al-'Adiyat",
+  "Al-Qari'ah", 'At-Takatsur', "Al-'Asr", 'Al-Humazah', 'Al-Fil', 'Quraisy',
+  "Al-Ma'un", 'Al-Kausar', 'Al-Kafirun', 'An-Nasr', 'Al-Lahab', 'Al-Ikhlas',
+  'Al-Falaq', 'An-Nas',
+]
 
 function studentStatusBadge(status: string): string {
   if (status === 'AKTIF') return 'border-emerald-200 bg-emerald-100 text-emerald-800'
@@ -160,6 +174,7 @@ export function StudentsAdmin() {
       address: s.address,
       classId: s.classId ?? 'none',
       parentId: s.parentId ?? 'none',
+      hafalanTarget: s.hafalanTarget ?? 'none',
     })
     setFormOpen(true)
   }
@@ -177,6 +192,7 @@ export function StudentsAdmin() {
       address: form.address.trim() || undefined,
       classId: form.classId === 'none' ? null : form.classId,
       parentId: form.parentId === 'none' ? null : form.parentId,
+      hafalanTarget: form.hafalanTarget === 'none' ? null : form.hafalanTarget,
     }
     try {
       if (editing) {
@@ -229,7 +245,7 @@ export function StudentsAdmin() {
     try {
       const filename = `santri-darul-jinan-${csvFileStamp()}.csv`
       const rows: string[][] = [
-        ['NIS', 'Nama Lengkap', 'Jenis Kelamin', 'Tanggal Lahir', 'Kelas', 'Wali', 'No HP Wali', 'Status', 'Alamat'],
+        ['NIS', 'Nama Lengkap', 'Jenis Kelamin', 'Tanggal Lahir', 'Kelas', 'Wali', 'No HP Wali', 'Status', 'Alamat', 'Target Hafalan'],
         ...filtered.map((s) => [
           s.nis,
           s.fullName,
@@ -240,6 +256,7 @@ export function StudentsAdmin() {
           s.parent?.phone ?? '',
           s.status,
           s.address,
+          s.hafalanTarget ?? '',
         ]),
       ]
       await new Promise((r) => setTimeout(r, 200))
@@ -347,6 +364,14 @@ export function StudentsAdmin() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
+                        {s.hafalanTarget && (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-amber-200 bg-amber-100 text-[10px] text-amber-800 transition-colors hover:bg-amber-200"
+                          >
+                            <Target className="size-2.5" /> Target: {s.hafalanTarget}
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-[10px] text-emerald-800">
                           <BookMarked className="size-2.5" /> {s._count?.hafalans ?? 0} hafalan
                         </Badge>
@@ -466,6 +491,23 @@ export function StudentsAdmin() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="stu-target">Target Hafalan</Label>
+              <Select value={form.hafalanTarget} onValueChange={(v) => setForm({ ...form, hafalanTarget: v })}>
+                <SelectTrigger id="stu-target" aria-label="Target hafalan surah Juz 30" className="h-11 w-full">
+                  <SelectValue placeholder="Pilih surah target" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Tidak ada target —</SelectItem>
+                  {JUZ30_TARGET_OPTIONS.map((name) => (
+                    <SelectItem key={name} value={name}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-stone-400">
+                Surah Juz 30 yang ditargetkan — progresnya tampil di Portal Wali.
+              </p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="stu-address">Alamat</Label>

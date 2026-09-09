@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Check, Inbox } from 'lucide-react'
+import { Check, CheckCircle2, Inbox, Target } from 'lucide-react'
 import {
   CartesianGrid,
   Line,
@@ -64,6 +64,19 @@ const JUZ30_SURAHS: ReadonlyArray<{ no: number; name: string }> = [
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
+// Varian ejaan surah yang dipakai modul lain (datalist hafalan / Select target)
+// namun dinormalisasi berbeda dari nama kanonik JUZ30_SURAHS di atas.
+const NORM_ALIASES: ReadonlyMap<string, string> = new Map([
+  ['alkausar', 'alkautsar'], // "Al-Kausar" (pilihan target) -> Al-Kautsar
+  ['allahab', 'almasad'], // "Al-Lahab" -> Al-Masad
+  ['aththariq', 'attariq'], // "Ath-Thariq" (datalist) -> At-Tariq
+])
+
+const resolveNorm = (s: string) => {
+  const key = norm(s)
+  return NORM_ALIASES.get(key) ?? key
+}
+
 const JUZ30_NORM: ReadonlyMap<string, { no: number; name: string }> = new Map(
   JUZ30_SURAHS.map((s) => [norm(s.name), s]),
 )
@@ -72,17 +85,37 @@ const KKM = 70
 
 type GradedHafalan = Hafalan & { grade: number }
 type TrendPoint = { date: string; nilai: number; surah: string }
+type TargetInfo = { surah: { no: number; name: string }; position: number }
 
-export function HafalanProgress({ hafalans }: { hafalans: Hafalan[] }) {
+export function HafalanProgress({ hafalans, target }: { hafalans: Hafalan[]; target?: string | null }) {
   // setoran count per matched Juz-30 surah (any record type counts as tercapai)
   const setoranCount = useMemo(() => {
     const count = new Map<string, number>()
     for (const h of hafalans) {
-      const key = norm(h.surahName)
+      const key = resolveNorm(h.surahName)
       if (JUZ30_NORM.has(key)) count.set(key, (count.get(key) ?? 0) + 1)
     }
     return count
   }, [hafalans])
+
+  // target hafalan (opsional): posisi surah target dalam urutan peta Juz 30
+  const targetInfo = useMemo<TargetInfo | null>(() => {
+    if (!target || !target.trim()) return null
+    const idx = JUZ30_SURAHS.findIndex((s) => norm(s.name) === resolveNorm(target))
+    if (idx === -1) return null // target di luar Juz 30 — strip sengaja disembunyikan
+    return { surah: JUZ30_SURAHS[idx], position: idx + 1 }
+  }, [target])
+
+  // surah sebelum/sama dengan target yang sudah disetorkan
+  const targetReached = useMemo(
+    () =>
+      targetInfo
+        ? JUZ30_SURAHS.slice(0, targetInfo.position).filter((s) => (setoranCount.get(norm(s.name)) ?? 0) > 0).length
+        : 0,
+    [targetInfo, setoranCount],
+  )
+  const targetPercent = targetInfo ? Math.round((targetReached / targetInfo.position) * 100) : 0
+  const targetDone = targetInfo ? (setoranCount.get(norm(targetInfo.surah.name)) ?? 0) > 0 : false
 
   const tercapai = JUZ30_SURAHS.filter((s) => (setoranCount.get(norm(s.name)) ?? 0) > 0).length
   const percent = Math.round((tercapai / JUZ30_SURAHS.length) * 100)
@@ -125,6 +158,40 @@ export function HafalanProgress({ hafalans }: { hafalans: Hafalan[] }) {
           <CardDescription>Cakupan setoran surat pendek, Al-Fatihah hingga An-Nas.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* strip target hafalan (hanya bila ustadz menetapkan target Juz 30) */}
+          {targetInfo && (
+            <div
+              role="status"
+              aria-label={`Target hafalan ${targetInfo.surah.name}: ${targetReached} dari ${targetInfo.position} surah tercapai (${targetPercent}%).`}
+              className="rounded-xl border border-amber-200 bg-amber-50 p-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                    <Target className="size-4" aria-hidden="true" />
+                  </span>
+                  <p className="text-sm font-semibold text-amber-900">Target: {targetInfo.surah.name}</p>
+                  {targetDone && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                      <CheckCircle2 className="size-3" strokeWidth={2.5} aria-hidden="true" /> Tercapai
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-bold tabular-nums text-amber-800">
+                  {targetReached}/{targetInfo.position} surah
+                </span>
+              </div>
+              <Progress
+                value={targetPercent}
+                aria-label={`Progres menuju target ${targetInfo.surah.name}: ${targetPercent}%`}
+                className="mt-2 h-1.5 bg-amber-200 [&>div]:bg-amber-500"
+              />
+              <p className="mt-1.5 text-[11px] font-medium text-amber-700">
+                {targetPercent}% progres menuju target
+              </p>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2 text-sm">
               <p className="font-medium text-stone-700">
@@ -148,17 +215,21 @@ export function HafalanProgress({ hafalans }: { hafalans: Hafalan[] }) {
               {JUZ30_SURAHS.map((s) => {
                 const count = setoranCount.get(norm(s.name)) ?? 0
                 const done = count > 0
+                const isTarget = targetInfo?.surah.no === s.no
                 return (
                   <span
                     key={s.no}
-                    title={done ? `QS ${s.name} — sudah disetorkan ${count}x` : `QS ${s.name} — belum disetorkan`}
+                    title={
+                      (done ? `QS ${s.name} — sudah disetorkan ${count}x` : `QS ${s.name} — belum disetorkan`) +
+                      (isTarget ? ' · TARGET hafalan' : '')
+                    }
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium transition-colors ${
                       done
                         ? count > 1
                           ? 'border border-emerald-400 bg-emerald-100 text-emerald-900'
                           : 'bg-emerald-600 text-white'
                         : 'border border-stone-200 bg-stone-50 text-stone-400'
-                    }`}
+                    } ${isTarget ? 'ring-2 ring-amber-400' : ''}`}
                   >
                     <span className={done ? 'opacity-70' : 'opacity-60'}>{s.no}</span>
                     {s.name}
@@ -166,6 +237,7 @@ export function HafalanProgress({ hafalans }: { hafalans: Hafalan[] }) {
                       <span className="rounded-full bg-emerald-700/15 px-1 font-semibold">×{count}</span>
                     )}
                     {done && count === 1 && <Check className="size-3" strokeWidth={3} />}
+                    {isTarget && <Target className="size-3 text-amber-500" aria-hidden="true" />}
                   </span>
                 )
               })}
@@ -179,6 +251,11 @@ export function HafalanProgress({ hafalans }: { hafalans: Hafalan[] }) {
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2 rounded-full border border-stone-300 bg-stone-100" /> Belum
             </span>
+            {targetInfo && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2 rounded-full ring-2 ring-amber-400" /> Target hafalan
+              </span>
+            )}
             <span className="text-stone-400">Peta mengikuti cakupan Juz 30 (hafalan surat pendek).</span>
           </div>
         </CardContent>
