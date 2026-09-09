@@ -128,17 +128,20 @@ const PAY_METHODS: { value: PayMethod; label: string; desc: string; icon: Lucide
 function PaymentDialog({
   payment,
   studentName,
+  studentNis,
   onDismiss,
   onPaid,
 }: {
   payment: Payment | null
   studentName: string
+  studentNis: string
   onDismiss: () => void
   onPaid: () => void
 }) {
   const [method, setMethod] = useState<PayMethod | null>(null)
   const [step, setStep] = useState<PayStep>('form')
   const [error, setError] = useState<string | null>(null)
+  const [receiptOpen, setReceiptOpen] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -267,14 +270,204 @@ function PaymentDialog({
                   <CheckCircle2 className="size-4 shrink-0" />
                   WhatsApp konfirmasi terkirim ke wali.
                 </div>
-                <Button
-                  onClick={onDismiss}
-                  className="mt-1 h-9 w-full rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
-                >
-                  Selesai
-                </Button>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setReceiptOpen(true)}
+                    className="min-h-11 rounded-xl"
+                  >
+                    <Printer className="size-4" />
+                    Cetak Struk
+                  </Button>
+                  <Button
+                    onClick={onDismiss}
+                    className="min-h-11 rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+                  >
+                    Selesai
+                  </Button>
+                </div>
               </div>
             )}
+          </>
+        )}
+
+        {/* Printable struk — a sibling portal dialog. The payment object here is
+        stale after the simulated gateway round-trip (the PUT writes method +
+        paidAt server-side), so the receipt patches in the locally chosen method
+        and falls back to "now" for paidAt. */}
+        <ReceiptDialog
+          payment={payment ? { ...payment, method: method ?? payment.method } : null}
+          studentName={studentName}
+          studentNis={studentNis}
+          open={receiptOpen}
+          onOpenChange={setReceiptOpen}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ==== printable payment receipt (Struk Pembayaran) ====
+
+/** "9 September 2026 · 14.30 WIB" — module-level formatter; a captured date is passed in, never Date.now() during render. */
+function formatPaidTimestamp(date: Date): string {
+  return `${date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} · ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`
+}
+
+/**
+ * Scoped print rules, mounted only while the Struk dialog is open — mirrors
+ * RAPOR_PRINT_CSS mechanics exactly with its own anchor id.
+ */
+const STRUK_PRINT_CSS = `
+@media print {
+  body > *:not(:has(#struk-pembayaran-print)) { display: none !important; }
+  html, body { overflow: visible !important; height: auto !important; }
+  body * { visibility: hidden !important; }
+  #struk-pembayaran-print, #struk-pembayaran-print * { visibility: visible !important; }
+  [data-slot='dialog-overlay'],
+  [data-slot='dialog-close'],
+  .no-print { display: none !important; }
+  [data-slot='dialog-content'] {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    animation: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+  #struk-pembayaran-print { border-radius: 0 !important; box-shadow: none !important; }
+  #struk-pembayaran-print, #struk-pembayaran-print * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+`
+
+function ReceiptContent({
+  payment,
+  studentName,
+  studentNis,
+}: {
+  payment: Payment
+  studentName: string
+  studentNis: string
+}) {
+  // paidAt can be stale-null right after the simulated payment (the dialog's
+  // payment copy predates the server write) → capture "now" ONCE per mount via
+  // the lazy initializer; never construct a Date inline in the render body.
+  const [paidDate] = useState(() => (payment.paidAt ? new Date(payment.paidAt) : new Date()))
+  const paidLabel = formatPaidTimestamp(paidDate)
+  // Seed SUCCESS rows may carry method: null → fall back to 'QRIS' (the
+  // portal's primary channel); raw method strings outside PAY_METHODS pass through.
+  const methodLabel = PAY_METHODS.find((m) => m.value === payment.method)?.label ?? (payment.method || 'QRIS')
+
+  const rows: { label: string; value: ReactNode }[] = [
+    { label: 'No. Invoice', value: <span className="font-mono">{payment.invoiceNo}</span> },
+    {
+      label: 'Santri',
+      value: (
+        <span>
+          {studentName}
+          <span className="ml-1.5 font-mono text-[11px] font-normal text-stone-500">NIS {studentNis}</span>
+        </span>
+      ),
+    },
+    { label: 'Keterangan', value: payment.title },
+    { label: 'Metode', value: methodLabel },
+    { label: 'Tanggal Bayar', value: paidLabel },
+  ]
+
+  return (
+    <div id="struk-pembayaran-print" className="rounded-2xl border border-stone-200 bg-white p-5">
+      {/* Letterhead */}
+      <div className="flex items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
+          <Landmark className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-stone-800">TPQ Darul Jinan</p>
+          <p className="text-[11px] leading-tight text-stone-500">Sistem Informasi Manajemen — Struk Pembayaran</p>
+        </div>
+      </div>
+
+      <div className="my-4 border-t border-dashed border-stone-200" />
+
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-500">Struk Pembayaran</p>
+        <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800">LUNAS</Badge>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-start justify-between gap-3">
+            <span className="shrink-0 text-xs text-stone-500">{row.label}</span>
+            <span className="text-right text-sm font-semibold text-stone-800">{row.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Prominent total */}
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-dashed border-stone-200 pt-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-stone-500">Total Bayar</p>
+        <p className="text-lg font-bold text-emerald-700">{formatRupiah(payment.amount)}</p>
+      </div>
+
+      <p className="mt-5 text-center text-[11px] leading-relaxed text-stone-400">
+        Terima kasih — jazakumullahu khairan. Bukti pembayaran simulasi (demo).
+      </p>
+    </div>
+  )
+}
+
+function ReceiptDialog({
+  payment,
+  studentName,
+  studentNis,
+  open,
+  onOpenChange,
+}: {
+  payment: Payment | null
+  studentName: string
+  studentNis: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-2xl sm:max-w-md">
+        <style dangerouslySetInnerHTML={{ __html: STRUK_PRINT_CSS }} />
+
+        <DialogHeader className="no-print">
+          <DialogTitle className="flex items-center gap-2">
+            <ReceiptText className="size-5 text-emerald-700" />
+            Struk Pembayaran
+          </DialogTitle>
+          <DialogDescription>Bukti pembayaran (demo) — siap dicetak atau disimpan sebagai PDF.</DialogDescription>
+        </DialogHeader>
+
+        {payment && (
+          <>
+            <ReceiptContent key={payment.id} payment={payment} studentName={studentName} studentNis={studentNis} />
+
+            <div className="no-print grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => window.print()} className="min-h-11 rounded-xl">
+                <Printer className="size-4" />
+                Cetak
+              </Button>
+              <Button
+                onClick={() => onOpenChange(false)}
+                className="min-h-11 rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+              >
+                Tutup
+              </Button>
+            </div>
           </>
         )}
       </DialogContent>
@@ -674,6 +867,7 @@ export function ChildPanel({
   onRefresh: () => void
 }) {
   const [payTarget, setPayTarget] = useState<Payment | null>(null)
+  const [receiptTarget, setReceiptTarget] = useState<Payment | null>(null)
   const [raporOpen, setRaporOpen] = useState(false)
   const summary = child.attendanceSummary
   const rate = attendanceRate(child)
@@ -934,7 +1128,22 @@ export function ChildPanel({
                             Coba Bayar Lagi
                           </Button>
                         )}
-                        {p.status === 'SUCCESS' && <CheckCircle2 className="ml-auto size-4 text-emerald-600" />}
+                        {p.status === 'SUCCESS' && (
+                          <span className="flex items-center justify-end gap-1.5">
+                            <CheckCircle2 className="size-4 text-emerald-600" />
+                            {/* Re-print entry point — seed SUCCESS rows may carry method: null; the receipt falls back to 'QRIS'. */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setReceiptTarget(p)}
+                              aria-label={`Struk ${p.invoiceNo}`}
+                              title={`Cetak struk ${p.invoiceNo}`}
+                              className="size-9 rounded-lg text-stone-400 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                            >
+                              <Printer className="size-4" />
+                            </Button>
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -952,8 +1161,20 @@ export function ChildPanel({
         key={payTarget?.id ?? 'none'}
         payment={payTarget}
         studentName={child.fullName}
+        studentNis={child.nis}
         onDismiss={() => setPayTarget(null)}
         onPaid={onRefresh}
+      />
+
+      {/* Re-printable struk from the riwayat pembayaran table. */}
+      <ReceiptDialog
+        payment={receiptTarget}
+        studentName={child.fullName}
+        studentNis={child.nis}
+        open={!!receiptTarget}
+        onOpenChange={(open) => {
+          if (!open) setReceiptTarget(null)
+        }}
       />
 
       <RaporDialog child={child} open={raporOpen} onOpenChange={setRaporOpen} />

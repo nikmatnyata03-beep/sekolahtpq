@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BookOpen,
   RefreshCw,
@@ -14,9 +14,12 @@ import {
   MapPin,
   Users,
   UserCheck,
+  Eye,
+  QrCode,
+  Target,
 } from 'lucide-react'
-import type { ClassRoom, Teacher } from '@/lib/types'
-import { apiGet, apiSend } from '@/lib/api-client'
+import type { AttendanceRecord, ClassRoom, Hafalan, SessionItem, Student, Teacher } from '@/lib/types'
+import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -50,6 +53,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { statusBadgeClass } from './overview'
 
 const LEVELS = [
   { value: 'IQRA', label: 'Iqra' },
@@ -66,6 +71,16 @@ function levelBadgeClass(level: string): string {
 
 function levelLabel(level: string): string {
   return LEVELS.find((l) => l.value === level)?.label ?? level.replace('_', ' ')
+}
+
+// Inisial avatar — salinan initials() di student-detail-drawer (tidak diekspor di sana).
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('')
 }
 
 interface ClassFormState {
@@ -89,6 +104,11 @@ export function ClassesAdmin() {
   const [editing, setEditing] = useState<ClassRoom | null>(null)
   const [form, setForm] = useState<ClassFormState>(EMPTY_FORM)
   const [deleteTarget, setDeleteTarget] = useState<ClassRoom | null>(null)
+  const [detailClassId, setDetailClassId] = useState<string | null>(null)
+
+  // Kelas pada Sheet "Detail Kelas" dicari ulang dari array classes — bila reload menghapus
+  // kelas tersebut, detailKlass menjadi null dan sheet tertutup secara alami.
+  const detailKlass = classes.find((c) => c.id === detailClassId) ?? null
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -250,6 +270,15 @@ export function ClassesAdmin() {
                 </div>
 
                 <div className="mt-auto flex justify-end gap-1 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-stone-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                    onClick={() => setDetailClassId(c.id)}
+                    aria-label={`Detail kelas ${c.name}`}
+                  >
+                    <Eye className="size-3.5" /> Detail
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => openEdit(c)}>
                     <Pencil className="size-3.5" /> Edit
                   </Button>
@@ -347,6 +376,262 @@ export function ClassesAdmin() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sheet Detail Kelas (Task 17-b): roster + statistik + sesi terbaru per kelas */}
+      <ClassDetailSheet
+        klass={detailKlass}
+        open={!!detailKlass}
+        onOpenChange={(o) => {
+          if (!o) setDetailClassId(null)
+        }}
+      />
     </div>
+  )
+}
+
+// ==== Sheet Detail Kelas (Task 17-b) ====
+// Satu Promise.all (students + attendance per classId, sessions + hafalan global) saat sheet
+// terbuka; statistik dihitung klien via useMemo atas data hasil fetch — jendela 30 hari
+// memakai new Date() di dalam useMemo, sehingga render awal tetap bebas dari ketidakmurnian hidrasi.
+
+const DETAIL_SCROLLBAR_CLASS =
+  '[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300'
+
+type ClassDetailData = {
+  students: Student[]
+  attendance: AttendanceRecord[]
+  sessions: SessionItem[]
+  hafalans: Hafalan[]
+}
+
+function ClassDetailSheet({
+  klass,
+  open,
+  onOpenChange,
+}: {
+  klass: ClassRoom | null
+  open: boolean
+  onOpenChange: (o: boolean) => void
+}) {
+  const [data, setData] = useState<ClassDetailData | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const classId = klass?.id ?? null
+
+  useEffect(() => {
+    if (!open || !classId) return
+    let cancelled = false
+    async function loadDetail() {
+      setLoading(true)
+      setError(null)
+      setData(null)
+      try {
+        const [students, attendance, sessions, hafalans] = await Promise.all([
+          apiGet<Student[]>(`/api/students?classId=${classId}`),
+          apiGet<AttendanceRecord[]>(`/api/attendance?classId=${classId}`),
+          apiGet<SessionItem[]>('/api/sessions'),
+          apiGet<Hafalan[]>('/api/hafalan'),
+        ])
+        if (cancelled) return
+        setData({ students, attendance, sessions, hafalans })
+      } catch (e) {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : 'Gagal memuat detail kelas')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void loadDetail()
+    return () => {
+      cancelled = true
+    }
+  }, [open, classId, reloadKey])
+
+  // Turunan data — murni dari hasil fetch; filter kelas + agregat statistik di sini.
+  const derived = useMemo(() => {
+    if (!data || !classId) return null
+    const rosterIds = new Set(data.students.map((s) => s.id))
+    const aktifCount = data.students.filter((s) => s.status === 'AKTIF').length
+    // Jendela 30 hari dihitung di dalam useMemo atas data hasil fetch (aman untuk hidrasi).
+    const now = new Date()
+    const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const recent = data.attendance.filter((a) => new Date(a.createdAt) >= cutoff)
+    const hadirRecent = recent.filter((a) => a.status === 'HADIR').length
+    const attendanceRate = recent.length > 0 ? Math.round((hadirRecent / recent.length) * 100) : null
+    const setoranCount = data.hafalans.filter((h) => rosterIds.has(h.studentId)).length
+    const recentSessions = data.sessions
+      .filter((s) => s.classId === classId)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5)
+    const hadirBySession = new Map<string, number>()
+    for (const a of data.attendance) {
+      if (a.status === 'HADIR') hadirBySession.set(a.sessionId, (hadirBySession.get(a.sessionId) ?? 0) + 1)
+    }
+    return { aktifCount, attendanceRate, setoranCount, recentSessions, hadirBySession }
+  }, [data, classId])
+
+  const roster = data?.students ?? []
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b border-stone-100 bg-stone-50/60 p-4 text-left">
+          <div className="flex items-start gap-3 pr-6">
+            <div
+              aria-hidden="true"
+              className={`grid size-9 shrink-0 place-items-center rounded-xl ${levelBadgeClass(klass?.level ?? '')}`}
+            >
+              <BookOpen className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle className="truncate text-base leading-snug text-stone-800">
+                {klass?.name ?? 'Kelas'}
+              </SheetTitle>
+              <SheetDescription className="sr-only">
+                Detail kelas: daftar santri, statistik kehadiran, setoran hafalan, dan sesi terbaru.
+              </SheetDescription>
+              <p className="mt-1 truncate text-xs text-stone-500">
+                {klass?.schedule || 'Jadwal belum diatur'} · {klass?.room || 'Tanpa ruang'}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-stone-500">
+                {klass?.teacher ? klass.teacher.fullName : 'Belum ada pengajar'}
+              </p>
+              <Badge variant="outline" className={`mt-1.5 text-[10px] ${levelBadgeClass(klass?.level ?? '')}`}>
+                {klass ? levelLabel(klass.level) : '—'}
+              </Badge>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className={`min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 ${DETAIL_SCROLLBAR_CLASS}`}>
+          {loading && !data ? (
+            <div className="space-y-2" aria-hidden="true">
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-12 rounded-xl" />
+            </div>
+          ) : error && !data ? (
+            <Alert variant="destructive" className="rounded-xl">
+              <AlertCircle className="size-4" />
+              <AlertTitle className="text-sm">Gagal memuat detail kelas</AlertTitle>
+              <AlertDescription className="text-xs">
+                {error}
+                <div className="mt-2">
+                  <Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
+                    <RefreshCw className="size-4" /> Coba Lagi
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : derived ? (
+            <>
+              {/* Strip statistik ringkas */}
+              <div aria-live="polite" className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-3 py-2">
+                  <p className="text-[11px] text-stone-500">Santri AKTIF</p>
+                  <p className="text-sm font-semibold text-stone-800">{derived.aktifCount}</p>
+                </div>
+                <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-3 py-2">
+                  <p className="text-[11px] text-stone-500">Kehadiran 30 Hari</p>
+                  <p className="text-sm font-semibold text-stone-800">
+                    {derived.attendanceRate === null ? '—' : `${derived.attendanceRate}%`}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-3 py-2">
+                  <p className="text-[11px] text-stone-500">Setoran Hafalan</p>
+                  <p className="text-sm font-semibold text-stone-800">{derived.setoranCount}</p>
+                </div>
+              </div>
+
+              {/* Roster santri */}
+              <section className="space-y-2">
+                <p className="text-xs font-medium text-stone-500">Santri ({roster.length})</p>
+                {roster.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-200 py-8 text-center">
+                    <Users className="size-8 text-stone-300" />
+                    <p className="text-sm text-stone-500">Belum ada santri di kelas ini</p>
+                  </div>
+                ) : (
+                  <ul
+                    role="list"
+                    className={`max-h-72 divide-y divide-stone-100 overflow-y-auto pr-1 ${DETAIL_SCROLLBAR_CLASS}`}
+                  >
+                    {roster.map((s) => (
+                      <li key={s.id} role="listitem" className="flex items-center gap-2.5 py-2.5">
+                        <div
+                          aria-hidden="true"
+                          className={`grid size-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+                            s.status === 'AKTIF' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'
+                          }`}
+                        >
+                          {initials(s.fullName)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-stone-800">{s.fullName}</p>
+                          <p className="font-mono text-[11px] text-stone-400">{s.nis}</p>
+                        </div>
+                        {s.hafalanTarget && (
+                          <span
+                            className="flex max-w-[120px] shrink-0 items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800"
+                            title={`Target hafalan: ${s.hafalanTarget}`}
+                          >
+                            <Target className="size-3 shrink-0" />
+                            <span className="truncate">{s.hafalanTarget}</span>
+                          </span>
+                        )}
+                        <Badge variant="outline" className={`shrink-0 text-[10px] ${statusBadgeClass(s.status)}`}>
+                          {s.status}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              {/* Sesi terbaru */}
+              <section className="space-y-2">
+                <p className="text-xs font-medium text-stone-500">Sesi Terbaru</p>
+                {derived.recentSessions.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-200 py-8 text-center">
+                    <QrCode className="size-8 text-stone-300" />
+                    <p className="text-sm text-stone-500">Belum ada sesi</p>
+                  </div>
+                ) : (
+                  <ul role="list" className="divide-y divide-stone-100">
+                    {derived.recentSessions.map((s) => (
+                      <li key={s.id} role="listitem" className="flex items-center gap-2.5 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-stone-800" title={s.topic ?? undefined}>
+                            {s.topic || 'Tanpa topik'}
+                          </p>
+                          <p className="text-[11px] text-stone-400">{formatShortDate(s.date)}</p>
+                        </div>
+                        {s.isActive && (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 text-[10px] border-emerald-200 bg-emerald-100 text-emerald-800"
+                          >
+                            AKTIF
+                          </Badge>
+                        )}
+                        <span
+                          className="shrink-0 rounded-md border border-stone-200 bg-stone-50 px-1.5 py-0.5 font-mono text-[10px] text-stone-600"
+                          title={`${derived.hadirBySession.get(s.id) ?? 0} hadir dari ${roster.length} santri`}
+                        >
+                          {derived.hadirBySession.get(s.id) ?? 0}/{roster.length}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }

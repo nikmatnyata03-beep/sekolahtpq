@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BookMarked,
   CheckCircle2,
@@ -13,11 +13,12 @@ import {
   Sparkles,
   Target,
   Trash2,
+  Users,
   Loader2,
 } from 'lucide-react'
 import { csvDate, csvFileStamp, downloadCsv } from './overview'
-import type { Hafalan, Student } from '@/lib/types'
-import { resolveNorm, targetProgress } from '@/lib/hafalan-utils'
+import type { ClassRoom, Hafalan, Student } from '@/lib/types'
+import { JUZ30_SURAHS, resolveNorm, targetProgress } from '@/lib/hafalan-utils'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -118,6 +119,17 @@ export function HafalanAdmin() {
   const [type, setType] = useState('TAHFIDZ')
   const [grade, setGrade] = useState('')
   const [teacherNote, setTeacherNote] = useState('')
+
+  // ==== Target Kelas (Task 17-a) — penugasan target hafalan massal per kelas ====
+  const [targetOpen, setTargetOpen] = useState(false)
+  const [targetClasses, setTargetClasses] = useState<ClassRoom[]>([])
+  const [classesLoading, setClassesLoading] = useState(false)
+  const [targetClassId, setTargetClassId] = useState('none')
+  const [targetSurah, setTargetSurah] = useState('') // '' = belum dipilih; 'none' = kosongkan target
+  const [previewStudents, setPreviewStudents] = useState<Student[] | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [targetSaving, setTargetSaving] = useState(false)
+  const previewSeq = useRef(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -241,6 +253,70 @@ export function HafalanAdmin() {
       setExporting(false)
     }
   }
+
+  // ==== Target Kelas (Task 17-a): pratinjau + submit massal ====
+  function resetTargetForm() {
+    setTargetClassId('none')
+    setTargetSurah('')
+    setPreviewStudents(null)
+    setPreviewLoading(false)
+  }
+
+  function openTargetDialog() {
+    resetTargetForm()
+    setTargetOpen(true)
+    setClassesLoading(true)
+    apiGet<ClassRoom[]>('/api/classes')
+      .then((c) => setTargetClasses(c))
+      .catch((e) => toast({ title: 'Gagal memuat kelas', description: e instanceof Error ? e.message : 'Terjadi kesalahan' }))
+      .finally(() => setClassesLoading(false))
+  }
+
+  function handleTargetOpenChange(open: boolean) {
+    if (open) openTargetDialog()
+    else {
+      setTargetOpen(false)
+      resetTargetForm()
+    }
+  }
+
+  // Pratinjau santri kelas terpilih — fetch fresh (bukan state `students` halaman
+  // yang bisa usang). Guard seq mencegah race saat kelas diganti dengan cepat.
+  function loadPreview(classId: string) {
+    const seq = ++previewSeq.current
+    setPreviewStudents(null)
+    setPreviewLoading(true)
+    apiGet<Student[]>(`/api/students?classId=${encodeURIComponent(classId)}`)
+      .then((s) => { if (seq === previewSeq.current) setPreviewStudents(s) })
+      .catch(() => { if (seq === previewSeq.current) setPreviewStudents(null) })
+      .finally(() => { if (seq === previewSeq.current) setPreviewLoading(false) })
+  }
+
+  async function submitBulkTarget() {
+    if (targetClassId === 'none' || targetSurah === '' || !previewStudents) return
+    const className = targetClasses.find((c) => c.id === targetClassId)?.name ?? 'kelas'
+    setTargetSaving(true)
+    try {
+      const res = await apiSend<{ success: boolean; count: number; hafalanTarget: string | null }>(
+        '/api/students/bulk-target',
+        'POST',
+        { classId: targetClassId, hafalanTarget: targetSurah === 'none' ? null : targetSurah },
+      )
+      toast({ title: 'Target kelas diperbarui', description: `${res.count} santri · ${className}` })
+      setTargetOpen(false)
+      resetTargetForm()
+      await load()
+    } catch (e) {
+      toast({ title: 'Gagal', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setTargetSaving(false)
+    }
+  }
+
+  // Turunan pratinjau: hanya santri AKTIF yang diubah server (updateMany status AKTIF).
+  const previewAktif = previewStudents?.filter((s) => s.status === 'AKTIF') ?? []
+  const chosenTarget = targetSurah === 'none' ? null : targetSurah || null
+  const previewDifferent = previewAktif.filter((s) => (s.hafalanTarget ?? null) !== chosenTarget).length
 
   const selectedStudent = students.find((s) => s.id === studentId)
 
@@ -434,6 +510,15 @@ export function HafalanAdmin() {
               <Button
                 variant="outline"
                 size="sm"
+                className="min-h-11"
+                onClick={openTargetDialog}
+                aria-label="Atur target hafalan per kelas"
+              >
+                <Users className="size-4" /> Target Kelas
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => void exportCsv()}
                 disabled={loading || exporting || hafalans.length === 0}
               >
@@ -560,6 +645,92 @@ export function HafalanAdmin() {
           >
             Alhamdulillah
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Target Kelas (Task 17-a) — menerapkan satu target hafalan
+          sekaligus ke seluruh santri AKTIF di sebuah kelas via POST
+          /api/students/bulk-target. Form direset setiap kali dialog ditutup. */}
+      <Dialog open={targetOpen} onOpenChange={handleTargetOpenChange}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Users className="size-4 text-emerald-700" /> Atur Target Hafalan Kelas
+            </DialogTitle>
+            <DialogDescription>
+              Terapkan satu target juz 30 ke seluruh santri AKTIF di sebuah kelas sekaligus.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="ht-class">Kelas</Label>
+              <Select
+                value={targetClassId}
+                onValueChange={(v) => { setTargetClassId(v); loadPreview(v) }}
+              >
+                <SelectTrigger id="ht-class" aria-label="Kelas target" className="h-11 w-full" disabled={classesLoading}>
+                  <SelectValue placeholder="Pilih kelas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Pilih kelas —</SelectItem>
+                  {targetClasses.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="ht-target">Target Surah</Label>
+              <Select value={targetSurah} onValueChange={setTargetSurah}>
+                <SelectTrigger id="ht-target" aria-label="Target hafalan surah Juz 30" className="h-11 w-full">
+                  <SelectValue placeholder="Pilih surah target" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tanpa target (kosongkan)</SelectItem>
+                  {JUZ30_SURAHS.map((s) => (
+                    <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-stone-400">Hanya santri berstatus AKTIF yang diubah.</p>
+            </div>
+            {targetClassId !== 'none' && (
+              <div aria-live="polite" className="rounded-xl border border-stone-100 bg-stone-50/60 p-3 text-sm">
+                {previewLoading ? (
+                  <p className="flex items-center gap-2 text-stone-500">
+                    <Loader2 className="size-4 animate-spin" /> Memuat santri kelas…
+                  </p>
+                ) : !previewStudents ? (
+                  <p className="text-stone-500">Gagal memuat santri kelas — pilih ulang kelas untuk mencoba lagi.</p>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="font-medium text-stone-700">
+                      {targetSurah === ''
+                        ? `${previewAktif.length} santri AKTIF di kelas ini — pilih surah target.`
+                        : targetSurah === 'none'
+                          ? `${previewAktif.length} santri AKTIF — target akan dikosongkan.`
+                          : `${previewAktif.length} santri AKTIF akan diatur ke: `}
+                      {targetSurah !== '' && targetSurah !== 'none' && (
+                        <span className="font-bold text-emerald-800">{targetSurah}</span>
+                      )}
+                    </p>
+                    {targetSurah !== '' && previewDifferent > 0 && (
+                      <p className="text-xs font-medium text-amber-600">
+                        {previewDifferent} santri memiliki target berbeda — akan ditimpa.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            <Button
+              onClick={() => void submitBulkTarget()}
+              disabled={targetClassId === 'none' || targetSurah === '' || previewLoading || !previewStudents || targetSaving}
+              className="min-h-11 w-full rounded-2xl bg-emerald-700 text-base font-semibold hover:bg-emerald-800"
+            >
+              {targetSaving ? <Loader2 className="size-4 animate-spin" /> : <Users className="size-4" />} Terapkan ke Kelas
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
