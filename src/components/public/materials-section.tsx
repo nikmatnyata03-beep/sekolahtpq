@@ -1,9 +1,9 @@
 'use client'
 
-// Materi Ajar — katalog materi publik dari /api/materials dengan filter
-// kategori (chips) dan kelas (select). Setiap kartu punya tautan unduh.
+// Materi Ajar — katalog materi publik dari /api/materials dengan pencarian teks,
+// filter kategori (chips), kelas (select), dan pengurutan. Setiap kartu punya tautan unduh.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   BookOpen,
@@ -13,12 +13,15 @@ import {
   Music,
   Presentation,
   RefreshCw,
+  Search,
   SearchX,
   User,
   Video,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -53,6 +56,9 @@ export function MaterialsSection() {
   const [error, setError] = useState<string | null>(null)
   const [category, setCategory] = useState<string>('SEMUA')
   const [classId, setClassId] = useState<string>('SEMUA')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<string>('TERBARU')
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,13 +81,46 @@ export function MaterialsSection() {
     void load()
   }, [load])
 
+  // Pencarian teks + filter kategori/kelas + pengurutan — fungsi murni dari state
+  // dan data hasil fetch (tanpa Date.now/wall-clock) sehingga aman terhadap hydration.
   const filtered = useMemo(() => {
-    return materials.filter((m) => {
+    const q = query.trim().toLocaleLowerCase('id-ID')
+    const list = materials.filter((m) => {
       const matchCategory = category === 'SEMUA' || (m.category ?? '').toUpperCase() === category
       const matchClass = classId === 'SEMUA' || m.classId === classId || (!m.classId && classId === 'UMUM')
-      return matchCategory && matchClass
+      if (!matchCategory || !matchClass) return false
+      if (q === '') return true
+      const haystack = `${m.title} ${m.description ?? ''} ${m.category ?? ''}`.toLocaleLowerCase('id-ID')
+      return haystack.includes(q)
     })
-  }, [materials, category, classId])
+    return [...list].sort((a, b) => {
+      switch (sort) {
+        case 'TERLAMA':
+          return a.createdAt.localeCompare(b.createdAt)
+        case 'JUDUL_ASC':
+          return a.title.localeCompare(b.title, 'id')
+        case 'JUDUL_DESC':
+          return b.title.localeCompare(a.title, 'id')
+        default: // TERBARU (default)
+          return b.createdAt.localeCompare(a.createdAt)
+      }
+    })
+  }, [materials, category, classId, query, sort])
+
+  const searchActive = query.trim() !== ''
+
+  const clearSearch = () => {
+    setQuery('')
+    searchRef.current?.focus()
+  }
+
+  // Reset pencarian + semua filter ke nilai awal, lalu kembalikan fokus ke input pencarian.
+  const resetFilters = () => {
+    setQuery('')
+    setCategory('SEMUA')
+    setClassId('SEMUA')
+    searchRef.current?.focus()
+  }
 
   return (
     <section id="materi" className="scroll-mt-20 bg-stone-50 py-16">
@@ -98,8 +137,8 @@ export function MaterialsSection() {
           </p>
         </div>
 
-        {/* Filter */}
-        <div className="mb-8 flex flex-col items-center gap-3 lg:flex-row lg:justify-between">
+        {/* Filter: kategori (chips) + pencarian + urutan + kelas */}
+        <div className="mb-6 flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap lg:justify-between">
           <div className="flex flex-wrap justify-center gap-2" role="group" aria-label="Filter kategori materi">
             {(['SEMUA', ...CATEGORIES] as const).map((cat) => {
               const active = category === cat
@@ -119,24 +158,76 @@ export function MaterialsSection() {
               )
             })}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-stone-500">Kelas:</span>
-            <Select value={classId} onValueChange={setClassId}>
-              <SelectTrigger className="w-[190px] border-stone-200 bg-white" aria-label="Filter kelas materi">
-                <SelectValue placeholder="Semua Kelas" />
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 lg:w-auto lg:justify-end">
+            <div className="relative w-full sm:w-[240px]">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400"
+                aria-hidden="true"
+              />
+              <Input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Cari materi…"
+                aria-label="Cari materi"
+                className="min-h-11 rounded-xl border-stone-200 bg-white pl-9 pr-10"
+              />
+              {query !== '' && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={clearSearch}
+                  aria-label="Bersihkan pencarian"
+                  className="absolute right-0.5 top-1/2 size-8 -translate-y-1/2 rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
+                >
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
+            <Select value={sort} onValueChange={setSort}>
+              <SelectTrigger
+                className="w-[170px] min-h-11 rounded-xl border-stone-200 bg-white"
+                aria-label="Urutkan materi"
+              >
+                <SelectValue placeholder="Urutkan" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="SEMUA">Semua Kelas</SelectItem>
-                <SelectItem value="UMUM">Umum / Semua Kelas</SelectItem>
-                {classes.map((cls) => (
-                  <SelectItem key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="TERBARU">Terbaru</SelectItem>
+                <SelectItem value="TERLAMA">Terlama</SelectItem>
+                <SelectItem value="JUDUL_ASC">Judul A-Z</SelectItem>
+                <SelectItem value="JUDUL_DESC">Judul Z-A</SelectItem>
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-stone-500">Kelas:</span>
+              <Select value={classId} onValueChange={setClassId}>
+                <SelectTrigger
+                  className="w-[190px] min-h-11 rounded-xl border-stone-200 bg-white"
+                  aria-label="Filter kelas materi"
+                >
+                  <SelectValue placeholder="Semua Kelas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SEMUA">Semua Kelas</SelectItem>
+                  <SelectItem value="UMUM">Umum / Semua Kelas</SelectItem>
+                  {classes.map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
+
+        {/* Jumlah hasil (aria-live: diumumkan pembaca layar saat berubah) */}
+        {!loading && !error && (
+          <p className="mb-6 text-right text-xs text-stone-500" aria-live="polite">
+            {filtered.length === 1 ? '1 materi ditemukan' : `${filtered.length} materi ditemukan`}
+          </p>
+        )}
 
         {/* Error */}
         {error && (
@@ -170,8 +261,20 @@ export function MaterialsSection() {
             <p className="mt-3 text-sm text-stone-500">
               {materials.length === 0
                 ? 'Belum ada materi yang diunggah. Nantikan materi belajar dari ustadz dan ustadzah kami.'
-                : 'Tidak ada materi yang cocok dengan filter ini. Coba ubah kategori atau kelas.'}
+                : searchActive
+                  ? `Tidak ada materi yang cocok dengan pencarian "${query}"`
+                  : 'Tidak ada materi yang cocok dengan filter ini. Coba ubah kategori atau kelas.'}
             </p>
+            {materials.length > 0 && searchActive && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={resetFilters}
+                className="mt-4 min-h-11 border-stone-300 bg-white text-stone-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-700"
+              >
+                Hapus pencarian
+              </Button>
+            )}
           </div>
         )}
 

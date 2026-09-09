@@ -6,6 +6,8 @@
 // and hafalan by studentId of those students.
 // Task 15-a: "Catat Setoran Cepat" Sheet dari kartu Progres Target — POST /api/hafalan
 // tanpa berpindah halaman (kontrak respons targetJustReached dari Task 14-a).
+// Task 16-a: "Absen Cepat" Sheet dari kartu Sesi Aktif — GET/POST /api/attendance
+// (prefill status tersimpan + bulk upsert + notifikasi WhatsApp ke wali).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -14,6 +16,7 @@ import {
   BookOpen,
   CalendarCheck,
   CheckCircle2,
+  ClipboardCheck,
   Copy,
   Crosshair,
   GraduationCap,
@@ -23,11 +26,19 @@ import {
   QrCode,
   RefreshCw,
   Target,
+  UserCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import type { AuthUser, ClassRoom, Hafalan, SessionItem, Student } from '@/lib/types'
+import type {
+  AttendanceRecord,
+  AuthUser,
+  ClassRoom,
+  Hafalan,
+  SessionItem,
+  Student,
+} from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { JUZ30_SURAHS, targetProgress, type TargetProgress } from '@/lib/hafalan-utils'
 import { cn } from '@/lib/utils'
@@ -386,6 +397,245 @@ function QuickSetoranSheet({ student, tp, open, onOpenChange, onSaved }: {
   )
 }
 
+// ==== Quick Absen (Task 16-a) — sheet absensi cepat dari kartu Sesi Aktif ====
+
+type AttStatus = 'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA'
+
+// Kelas warna on/off persis mengikuti STATUSES di attendance-admin.tsx.
+const ABSEN_STATUSES: ReadonlyArray<{ value: AttStatus; label: string; on: string; off: string }> = [
+  { value: 'HADIR', label: 'Hadir', on: 'bg-emerald-700 text-white border-emerald-700', off: 'border-stone-200 bg-white text-stone-600 hover:border-emerald-300' },
+  { value: 'IZIN', label: 'Izin', on: 'bg-amber-500 text-white border-amber-500', off: 'border-stone-200 bg-white text-stone-600 hover:border-amber-300' },
+  { value: 'SAKIT', label: 'Sakit', on: 'bg-orange-500 text-white border-orange-500', off: 'border-stone-200 bg-white text-stone-600 hover:border-orange-300' },
+  { value: 'ALPA', label: 'Alpa', on: 'bg-red-600 text-white border-red-600', off: 'border-stone-200 bg-white text-stone-600 hover:border-red-300' },
+]
+
+// Baris state absensi per santri — status null = belum diisi (tidak ikut dikirim).
+interface QuickAbsenRow {
+  status: AttStatus | null
+  note: string
+}
+
+// Sheet "Absen Cepat": prefill dari GET /api/attendance?sessionId= lalu POST bulk
+// {sessionId, records[]} — route melakukan upsert + kirim WA ke wali per santri.
+// Pola Sheet mengikuti QuickSetoranSheet (side kanan, sm:max-w-md, header stone-50/60).
+function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
+  session: SessionItem | null
+  students: Student[] // sudah tersaring: kelas sesi terkait, status AKTIF (oleh parent)
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  const [rows, setRows] = useState<Record<string, QuickAbsenRow>>({})
+  const [loading, setLoading] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Prefill tiap sheet dibuka / ganti sesi (pola reset per-open ala student-detail-drawer;
+  // state tetap tampil selama animasi tutup).
+  const sessionId = session?.id ?? null
+  useEffect(() => {
+    if (!open || !sessionId) return
+    let cancelled = false
+    setRows({})
+    setLoadFailed(false)
+    setLoading(true)
+    apiGet<AttendanceRecord[]>(`/api/attendance?sessionId=${sessionId}`)
+      .then((records) => {
+        if (cancelled) return
+        const next: Record<string, QuickAbsenRow> = {}
+        for (const rec of records) {
+          next[rec.studentId] = { status: rec.status, note: rec.note ?? '' }
+        }
+        setRows(next)
+      })
+      .catch(() => {
+        // Gagal prefill: tetap bisa absen dari awal (hint amber tampil di bawah).
+        if (cancelled) return
+        setLoadFailed(true)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, sessionId])
+
+  function updateRow(studentId: string, patch: Partial<QuickAbsenRow>) {
+    setRows((prev) => ({
+      ...prev,
+      [studentId]: { ...{ status: null, note: '' }, ...prev[studentId], ...patch },
+    }))
+  }
+
+  // Ringkasan live dihitung dari state murni (aman hidrasi — tanpa Date.now/Math.random).
+  const counts: Record<AttStatus, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPA: 0 }
+  let filled = 0
+  for (const st of students) {
+    const status = rows[st.id]?.status
+    if (status) {
+      filled += 1
+      counts[status] += 1
+    }
+  }
+  const unset = students.length - filled
+  const summaryParts = ABSEN_STATUSES.filter((s) => counts[s.value] > 0).map(
+    (s) => `${counts[s.value]} ${s.label}`,
+  )
+  if (unset > 0) summaryParts.push(`${unset} belum diisi`)
+  const summaryText =
+    summaryParts.length > 0 ? summaryParts.join(' · ') : 'Belum ada santri yang ditandai'
+
+  const canSubmit = filled > 0 && !saving
+
+  async function submit() {
+    if (!session || !canSubmit) return
+    const records = students.flatMap((st) => {
+      const row = rows[st.id]
+      if (!row || !row.status) return []
+      return [{ studentId: st.id, status: row.status, note: row.note.trim() || undefined }]
+    })
+    if (records.length === 0) return
+    setSaving(true)
+    try {
+      await apiSend<{ success: boolean; count: number }>('/api/attendance', 'POST', {
+        sessionId: session.id,
+        records,
+      })
+      toast({
+        title: 'Absensi tersimpan',
+        description: `${records.length} santri · ${session.className}${
+          unset > 0 ? ` · ${unset} belum diisi` : ''
+        }`,
+      })
+      onOpenChange(false)
+      onSaved()
+    } catch (e) {
+      // Gagal: sheet tetap terbuka agar isian tidak hilang.
+      toast({ title: 'Gagal', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b border-stone-100 bg-stone-50/60 p-4 text-left">
+          <SheetTitle className="flex items-center gap-2.5 text-base text-stone-800">
+            <span
+              aria-hidden="true"
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"
+            >
+              <ClipboardCheck className="size-4" />
+            </span>
+            <span className="min-w-0 truncate">Absen Cepat — {session?.className ?? 'Kelas'}</span>
+          </SheetTitle>
+          <SheetDescription className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
+            <span className="min-w-0 truncate">
+              {session ? `${session.topic || 'Tanpa topik'} · ${formatShortDate(session.date)}` : '—'}
+            </span>
+            {session && (
+              <span className="rounded-md border border-stone-200 bg-stone-50 px-1.5 py-0.5 font-mono text-xs tracking-widest text-stone-600">
+                {session.code}
+              </span>
+            )}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className={cn('min-h-0 flex-1 overflow-y-auto px-4 py-3', SCROLL_AREA)}>
+          <p aria-live="polite" className="text-xs font-medium text-amber-700">
+            {loadFailed ? 'Gagal memuat absensi tersimpan — isi dari awal' : ''}
+          </p>
+          {loading ? (
+            <div aria-hidden="true" className="space-y-3 pt-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 rounded-xl" />
+              ))}
+            </div>
+          ) : students.length === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-stone-200 py-8 text-center">
+              <Users className="size-7 text-stone-300" />
+              <p className="text-sm text-stone-500">Belum ada santri AKTIF di kelas ini</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-stone-100">
+              {students.map((st) => {
+                const row = rows[st.id]
+                return (
+                  <li key={st.id} className="py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold',
+                          row?.status ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500',
+                        )}
+                      >
+                        {initialsOf(st.fullName)}
+                      </span>
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">
+                        {st.fullName}
+                      </p>
+                    </div>
+                    <div
+                      role="group"
+                      aria-label={`Status kehadiran ${st.fullName}`}
+                      className="mt-2 grid grid-cols-4 gap-1"
+                    >
+                      {ABSEN_STATUSES.map((s) => (
+                        <button
+                          key={s.value}
+                          type="button"
+                          aria-pressed={row?.status === s.value}
+                          aria-label={`Tandai ${st.fullName} ${s.label}`}
+                          onClick={() =>
+                            updateRow(st.id, { status: row?.status === s.value ? null : s.value })
+                          }
+                          className={cn(
+                            'h-9 rounded-lg border text-xs font-semibold transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                            row?.status === s.value ? s.on : s.off,
+                          )}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                    {row?.status && row.status !== 'HADIR' && (
+                      <Input
+                        value={row.note}
+                        onChange={(e) => updateRow(st.id, { note: e.target.value })}
+                        placeholder="Catatan untuk orang tua (opsional)"
+                        aria-label={`Catatan untuk orang tua ${st.fullName}`}
+                        className="mt-2 h-9 text-xs"
+                      />
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="space-y-2 border-t border-stone-100 p-4 pt-3">
+          <p aria-live="polite" className="text-xs font-medium text-stone-600">
+            {summaryText}
+          </p>
+          <Button
+            type="button"
+            disabled={!canSubmit}
+            className="min-h-11 w-full bg-emerald-700 text-white hover:bg-emerald-800"
+            onClick={() => void submit()}
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardCheck className="size-4" />} Simpan Absensi
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 export function GuruOverview({ user, onNavigate }: {
   user: AuthUser
   onNavigate?: (section: GuruOverviewSection) => void
@@ -397,6 +647,8 @@ export function GuruOverview({ user, onNavigate }: {
   const [error, setError] = useState<string | null>(null)
   // Quick Setoran (Task 15-a): id santri yang sheet-nya terbuka (null = tertutup).
   const [quickStudentId, setQuickStudentId] = useState<string | null>(null)
+  // Quick Absen (Task 16-a): id sesi yang sheet absen cepatnya terbuka (null = tertutup).
+  const [quickSessionId, setQuickSessionId] = useState<string | null>(null)
 
   // quiet=true (Task 15-a): segarkan data TANPA skeleton/error penuh — dipakai
   // setelah simpan setoran cepat agar bar kartu Progres Target langsung update.
@@ -512,6 +764,15 @@ export function GuruOverview({ user, onNavigate }: {
     ? targetProgress(hafalanByStudent.get(quickStudent.id) ?? [], quickStudent.hafalanTarget)
     : null
 
+  // Quick Absen (Task 16-a): sesi + santri AKTIF kelas terkait diturunkan dari data
+  // TERKINI (bukan snapshot), sehingga otomatis segar setiap kali load() menyegarkan state.
+  const quickSession = quickSessionId
+    ? (ownSessions.find((s) => s.id === quickSessionId) ?? null)
+    : null
+  const quickAbsenStudents = quickSession
+    ? ownStudents.filter((st) => st.classId === quickSession.classId && st.status === 'AKTIF')
+    : []
+
   // Belum ada penugasan kelas → hero saja + kartu sapaan kosong.
   if (!user.teacherId || ownClasses.length === 0) {
     return (
@@ -622,15 +883,26 @@ export function GuruOverview({ user, onNavigate }: {
                         <p className="shrink-0 text-[11px] text-stone-400">{formatShortDate(s.date)}</p>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-11 shrink-0"
-                      onClick={() => copyCode(s.code)}
-                      aria-label={`Salin kode sesi ${s.className}`}
-                    >
-                      <Copy className="size-4" />
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-11"
+                        onClick={() => copyCode(s.code)}
+                        aria-label={`Salin kode sesi ${s.className}`}
+                      >
+                        <Copy className="size-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-11 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                        onClick={() => setQuickSessionId(s.id)}
+                        aria-label={`Absen cepat ${s.className}`}
+                      >
+                        <UserCheck className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -802,6 +1074,16 @@ export function GuruOverview({ user, onNavigate }: {
         tp={quickTp}
         open={quickStudentId !== null}
         onOpenChange={(o) => { if (!o) setQuickStudentId(null) }}
+        onSaved={() => void load(true)}
+      />
+
+      {/* Quick Absen (Task 16-a) — dibuka dari tombol UserCheck per baris Sesi Aktif di atas;
+          onSaved memanggil load(true) (quiet) agar badge {hadir}/{total} langsung segar. */}
+      <QuickAbsenSheet
+        session={quickSession}
+        students={quickAbsenStudents}
+        open={quickSessionId !== null}
+        onOpenChange={(o) => { if (!o) setQuickSessionId(null) }}
         onSaved={() => void load(true)}
       />
     </div>

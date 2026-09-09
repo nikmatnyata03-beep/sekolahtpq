@@ -1,8 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  BarChart3,
   CalendarCheck,
+  ClipboardList,
+  Download,
+  Inbox,
   RefreshCw,
   AlertCircle,
   QrCode,
@@ -17,7 +21,7 @@ import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -39,7 +43,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { statusBadgeClass } from './overview'
+import { Progress } from '@/components/ui/progress'
+import { statusBadgeClass, downloadCsv } from './overview'
 
 type AttStatus = 'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA'
 
@@ -57,6 +62,54 @@ interface RecordState {
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+// ==== Rekap Absensi Bulanan (Task 16-b) ====
+// GET /api/attendance?classId= → AttendanceRecord[] (session dilepas API, take 200 —
+// bucketing bulan memakai prefix createdAt "YYYY-MM", kompromi yang sama dengan student-detail-drawer.tsx).
+const STATUS_COUNT_KEY: Record<AttStatus, 'hadir' | 'izin' | 'sakit' | 'alpa'> = {
+  HADIR: 'hadir',
+  IZIN: 'izin',
+  SAKIT: 'sakit',
+  ALPA: 'alpa',
+}
+
+// Titik warna chip — konsisten dengan STATUS_DOTS di overview.tsx.
+const RECAP_CHIPS: { status: AttStatus; label: string; dot: string }[] = [
+  { status: 'HADIR', label: 'Hadir', dot: 'bg-emerald-500' },
+  { status: 'IZIN', label: 'Izin', dot: 'bg-amber-500' },
+  { status: 'SAKIT', label: 'Sakit', dot: 'bg-orange-500' },
+  { status: 'ALPA', label: 'Alpa', dot: 'bg-red-500' },
+]
+
+// Ambang sama dengan grade-badge: >=85 emerald, >=70 amber, selainnya merah.
+function recapPctBadgeClass(pct: number): string {
+  if (pct >= 85) return 'border-emerald-200 bg-emerald-100 text-emerald-800'
+  if (pct >= 70) return 'border-amber-200 bg-amber-100 text-amber-800'
+  return 'border-red-200 bg-red-100 text-red-700'
+}
+
+// "83,3" — desimal koma id-ID, dibulatkan 1 tempat desimal (dipakai tabel & kolom CSV).
+function formatPct(pct: number): string {
+  return pct.toLocaleString('id-ID', { maximumFractionDigits: 1 })
+}
+
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('')
+}
+
+interface RecapRow {
+  student: Student
+  hadir: number
+  izin: number
+  sakit: number
+  alpa: number
+  pct: number
 }
 
 export function AttendanceAdmin() {
@@ -82,8 +135,28 @@ export function AttendanceAdmin() {
   const [loadingRoster, setLoadingRoster] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
+  // Rekap absensi bulanan
+  const [recapClassId, setRecapClassId] = useState('none')
+  const [recapMonth, setRecapMonth] = useState('none')
+  const [recapData, setRecapData] = useState<{ records: AttendanceRecord[]; roster: Student[] } | null>(null)
+  const [recapLoading, setRecapLoading] = useState(false)
+  const [recapError, setRecapError] = useState<string | null>(null)
+  const [recapRetry, setRecapRetry] = useState(0)
+
   const activeSessions = sessions.filter((s) => s.isActive)
   const selectedSession = sessions.find((s) => s.id === sessionId) ?? null
+
+  // Opsi 6 bulan terakhir — dihitung SEKALI per mount (tidak dibaca ulang wall-clock saat render hasil).
+  const monthOptions = useMemo(() => {
+    const now = new Date()
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      return {
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+      }
+    })
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -192,6 +265,103 @@ export function AttendanceAdmin() {
     } finally {
       setClosingId(null)
     }
+  }
+
+  // Muat rekap (satu effect, Promise.all) saat kelas + bulan lengkap dipilih
+  useEffect(() => {
+    if (recapClassId === 'none' || recapMonth === 'none') {
+      setRecapData(null)
+      setRecapError(null)
+      return
+    }
+    let cancelled = false
+    async function loadRecap() {
+      setRecapLoading(true)
+      setRecapError(null)
+      try {
+        const [records, roster] = await Promise.all([
+          apiGet<AttendanceRecord[]>(`/api/attendance?classId=${recapClassId}`),
+          apiGet<Student[]>(`/api/students?classId=${recapClassId}`),
+        ])
+        if (cancelled) return
+        setRecapData({ records, roster })
+      } catch (e) {
+        if (cancelled) return
+        setRecapData(null)
+        setRecapError(e instanceof Error ? e.message : 'Gagal memuat rekap absensi')
+      } finally {
+        if (!cancelled) setRecapLoading(false)
+      }
+    }
+    void loadRecap()
+    return () => {
+      cancelled = true
+    }
+  }, [recapClassId, recapMonth, recapRetry])
+
+  // Agregasi klien: filter catatan bulan terpilih (prefix createdAt YYYY-MM),
+  // hitung per status per santri; total pertemuan = jumlah sessionId unik bulan itu.
+  const recap = useMemo(() => {
+    if (!recapData) return null
+    const monthRecords = recapData.records.filter((r) => r.createdAt.slice(0, 7) === recapMonth)
+    const perStudent: Record<string, { hadir: number; izin: number; sakit: number; alpa: number }> = {}
+    const sessionIds = new Set<string>()
+    const totals: Record<AttStatus, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPA: 0 }
+    for (const r of monthRecords) {
+      totals[r.status] += 1
+      sessionIds.add(r.sessionId)
+      const agg = perStudent[r.studentId] ?? { hadir: 0, izin: 0, sakit: 0, alpa: 0 }
+      agg[STATUS_COUNT_KEY[r.status]] += 1
+      perStudent[r.studentId] = agg
+    }
+    const pertemuan = sessionIds.size
+    const rows: RecapRow[] = [...recapData.roster]
+      .sort(
+        (a, b) =>
+          (a.status === 'AKTIF' ? 0 : 1) - (b.status === 'AKTIF' ? 0 : 1) ||
+          a.fullName.localeCompare(b.fullName)
+      )
+      .map((student) => {
+        const c = perStudent[student.id] ?? { hadir: 0, izin: 0, sakit: 0, alpa: 0 }
+        return { student, ...c, pct: pertemuan > 0 ? Math.round((c.hadir / pertemuan) * 1000) / 10 : 0 }
+      })
+    return {
+      totals,
+      pertemuan,
+      rows,
+      rate: monthRecords.length > 0 ? Math.round((totals.HADIR / monthRecords.length) * 1000) / 10 : 0,
+    }
+  }, [recapData, recapMonth])
+
+  function exportRecapCsv() {
+    if (!recap || recap.pertemuan === 0 || recap.rows.length === 0) return
+    const kelas = classes.find((c) => c.id === recapClassId)
+    const slug =
+      (kelas?.name ?? 'kelas')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'kelas'
+    const filename = `rekap-absensi-${slug}-${recapMonth}.csv`
+    const rows: string[][] = [
+      ['NIS', 'Nama', 'Kelas', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Pertemuan', 'Persentase Hadir (%)'],
+      ...recap.rows.map((r) => [
+        r.student.nis,
+        r.student.fullName,
+        kelas?.name ?? r.student.class?.name ?? '',
+        String(r.hadir),
+        String(r.izin),
+        String(r.sakit),
+        String(r.alpa),
+        String(recap.pertemuan),
+        formatPct(r.pct),
+      ]),
+    ]
+    // downloadCsv menerapkan csvCell ke SETIAP sel (idiom hafalan-admin: ';', BOM, escape kutip ganda).
+    downloadCsv(filename, rows)
+    toast({
+      title: 'Ekspor CSV berhasil',
+      description: `Rekap ${recap.rows.length} santri tersimpan di ${filename}.`,
+    })
   }
 
   function setRecord(studentId: string, patch: Partial<RecordState>) {
@@ -488,6 +658,156 @@ export function AttendanceAdmin() {
             </div>
           </div>
         )}
+      </Card>
+
+      {/* Rekap absensi bulanan */}
+      <Card className="rounded-2xl border-stone-200 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <BarChart3 className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="text-base">Rekap Absensi Bulanan</CardTitle>
+              <CardDescription>Ringkasan per santri dari catatan kehadiran kelas</CardDescription>
+            </div>
+          </div>
+          <CardAction>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={exportRecapCsv}
+              disabled={!recap || recap.pertemuan === 0 || recap.rows.length === 0}
+              aria-label="Unduh rekap CSV"
+            >
+              <Download className="size-4" /> Unduh CSV
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Select value={recapClassId} onValueChange={setRecapClassId}>
+              <SelectTrigger aria-label="Kelas rekap absensi" className="min-h-11 w-full sm:w-60">
+                <SelectValue placeholder="Pilih kelas" />
+              </SelectTrigger>
+              <SelectContent>
+                {classes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={recapMonth} onValueChange={setRecapMonth}>
+              <SelectTrigger aria-label="Bulan rekap absensi" className="min-h-11 w-full sm:w-60">
+                <SelectValue placeholder="Pilih bulan" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {recapClassId === 'none' || recapMonth === 'none' ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-200 py-10 text-center">
+              <ClipboardList className="size-8 text-stone-300" />
+              <p className="text-sm text-stone-500">Pilih kelas dan bulan untuk melihat rekap</p>
+            </div>
+          ) : recapError ? (
+            <Alert variant="destructive" className="rounded-2xl">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Gagal memuat rekap absensi</AlertTitle>
+              <AlertDescription>
+                {recapError}
+                <div className="mt-3">
+                  <Button size="sm" variant="outline" onClick={() => setRecapRetry((t) => t + 1)}>
+                    <RefreshCw className="size-4" /> Coba Lagi
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : recapLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 rounded-xl" />
+              ))}
+            </div>
+          ) : !recap || recap.pertemuan === 0 || recap.rows.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-200 py-10 text-center">
+              <Inbox className="size-8 text-stone-300" />
+              <p className="text-sm text-stone-500">Belum ada catatan kehadiran pada bulan ini</p>
+            </div>
+          ) : (
+            <>
+              {/* Ringkasan bulan */}
+              <div aria-live="polite" className="flex flex-wrap gap-2">
+                {RECAP_CHIPS.map((chip) => (
+                  <div key={chip.status} className="flex items-center gap-2.5 rounded-xl border border-stone-100 bg-stone-50/60 px-3 py-2">
+                    <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', chip.dot)} />
+                    <div>
+                      <p className="text-lg font-bold leading-none text-stone-900">{recap.totals[chip.status]}</p>
+                      <p className="mt-0.5 text-xs text-stone-500">{chip.label}</p>
+                    </div>
+                  </div>
+                ))}
+                <div className="min-w-44 flex-1 rounded-xl border border-stone-100 bg-stone-50/60 px-3 py-2 sm:min-w-56">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-stone-500">Tingkat Kehadiran</p>
+                    <p className="text-lg font-bold leading-none text-stone-900">{formatPct(recap.rate)}%</p>
+                  </div>
+                  <Progress
+                    value={recap.rate}
+                    aria-label="Tingkat kehadiran bulan ini"
+                    className="mt-2 h-2 bg-stone-200 [&>div]:bg-emerald-600"
+                  />
+                </div>
+              </div>
+
+              {/* Tabel per santri — kontainer tabel (data-slot) menjadi area scroll agar thead sticky bekerja */}
+              <div className="[&_[data-slot=table-container]]:max-h-80 [&_[data-slot=table-container]]:overflow-y-auto [&_[data-slot=table-container]]:pr-1 [&_[data-slot=table-container]]:[scrollbar-width:thin] [&_[data-slot=table-container]::-webkit-scrollbar]:w-1.5 [&_[data-slot=table-container]::-webkit-scrollbar-thumb]:rounded-full [&_[data-slot=table-container]::-webkit-scrollbar-thumb]:bg-stone-300">
+                <Table className="min-w-[640px]">
+                  <TableHeader className="sticky top-0 z-10 bg-white">
+                    <TableRow className="bg-white hover:bg-white">
+                      <TableHead className="sticky top-0 z-10 bg-white">Santri</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-white text-center">Hadir</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-white text-center">Izin</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-white text-center">Sakit</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-white text-center">Alpa</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-white text-right">% Hadir</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recap.rows.map((row) => (
+                      <TableRow key={row.student.id} className="hover:bg-stone-50/60">
+                        <TableCell>
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              aria-hidden="true"
+                              className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-[11px] font-bold text-emerald-800"
+                            >
+                              {initials(row.student.fullName)}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-stone-800">{row.student.fullName}</p>
+                              <p className="font-mono text-[10px] text-stone-400">{row.student.nis}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center text-sm font-semibold text-stone-700">{row.hadir}</TableCell>
+                        <TableCell className="text-center text-sm text-stone-600">{row.izin}</TableCell>
+                        <TableCell className="text-center text-sm text-stone-600">{row.sakit}</TableCell>
+                        <TableCell className="text-center text-sm text-stone-600">{row.alpa}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge className={recapPctBadgeClass(row.pct)}>{formatPct(row.pct)}%</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </CardContent>
       </Card>
     </div>
   )
