@@ -40,6 +40,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { useToast } from '@/hooks/use-toast'
 import { apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
 import type { Hafalan, Payment, ParentPortalData, SessionItem } from '@/lib/types'
+import { HafalanProgress } from './hafalan-chart'
 
 export type ParentStudent = ParentPortalData['students'][number]
 
@@ -842,6 +843,13 @@ export function ChildPanel({
           )}
         </CardContent>
       </Card>
+
+      {/* c2. Hafalan analytics (juz-30 map + grade trend) — only with data */}
+      {child.hafalans.length > 0 && (
+        <div className="lg:col-span-2">
+          <HafalanProgress hafalans={child.hafalans} />
+        </div>
+      )}
 
       {/* d. Tagihan & pembayaran */}
       <Card className="rounded-2xl lg:col-span-2">

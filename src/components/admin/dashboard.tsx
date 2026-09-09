@@ -14,6 +14,7 @@ import {
   Newspaper,
   UserCog,
   MessageCircle,
+  Settings,
   LogOut,
   Menu,
   Home,
@@ -27,6 +28,8 @@ import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { OverviewSection } from './overview'
+import { GuruOverview, type GuruOverviewSection } from './guru-overview'
+import { SettingsSection } from './settings-section'
 import { RegistrationsAdmin } from './registrations-admin'
 import { StudentsAdmin } from './students-admin'
 import { TeachersAdmin } from './teachers-admin'
@@ -52,6 +55,7 @@ type SectionKey =
   | 'content'
   | 'users'
   | 'whatsapp'
+  | 'pengaturan'
 
 interface SectionDef {
   key: SectionKey
@@ -74,9 +78,10 @@ const SECTIONS: SectionDef[] = [
   { key: 'content', label: 'Konten', description: 'Berita, artikel, dan pengumuman', icon: Newspaper, adminOnly: true },
   { key: 'users', label: 'Pengguna', description: 'Akun admin, guru, dan wali santri', icon: UserCog, adminOnly: true },
   { key: 'whatsapp', label: 'Log WhatsApp', description: 'Riwayat notifikasi terkirim ke wali', icon: MessageCircle, adminOnly: true },
+  { key: 'pengaturan', label: 'Pengaturan', description: 'Profil akun dan keamanan', icon: Settings },
 ]
 
-const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'hafalan', 'materials']
+const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'hafalan', 'materials', 'pengaturan']
 
 function roleBadgeClass(role: string): string {
   if (role === 'ADMIN') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
@@ -106,11 +111,23 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const current: SectionDef = visible.find((s) => s.key === active) ?? visible[0]
+  // Role-aware header copy: guru Ringkasan is a personal teaching digest, not the institution overview
+  const headerDef: SectionDef =
+    active === 'ringkasan' && user.role === 'GURU'
+      ? { ...current, description: 'Ikhtisar kelas dan aktivitas mengajar Anda' }
+      : current
 
   function renderSection() {
     switch (active) {
       case 'ringkasan':
-        return <OverviewSection />
+        return user.role === 'GURU' ? (
+          <GuruOverview
+            user={user}
+            onNavigate={(section: GuruOverviewSection) => setActive(section)}
+          />
+        ) : (
+          <OverviewSection />
+        )
       case 'registrations':
         return <RegistrationsAdmin />
       case 'students':
@@ -133,6 +150,8 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return <UsersAdmin user={user} />
       case 'whatsapp':
         return <WhatsAppLog user={user} />
+      case 'pengaturan':
+        return <SettingsSection user={user} />
       default:
         return null
     }
@@ -213,8 +232,8 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
           </Sheet>
 
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">{current.label}</h1>
-            <p className="hidden truncate text-xs text-stone-500 sm:block">{current.description}</p>
+            <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">{headerDef.label}</h1>
+            <p className="hidden truncate text-xs text-stone-500 sm:block">{headerDef.description}</p>
           </div>
 
           <button
