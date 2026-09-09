@@ -15,6 +15,7 @@ import {
   BookMarked,
   Wallet,
   CalendarCheck,
+  Download,
 } from 'lucide-react'
 import type { AppUser, ClassRoom, Student } from '@/lib/types'
 import { apiGet, apiSend } from '@/lib/api-client'
@@ -68,7 +69,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { statusBadgeClass } from './overview'
+import { statusBadgeClass, csvDate, csvFileStamp, downloadCsv } from './overview'
 
 interface StudentFormState {
   fullName: string
@@ -105,6 +106,7 @@ export function StudentsAdmin() {
   const [classFilter, setClassFilter] = useState('all')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
@@ -222,6 +224,32 @@ export function StudentsAdmin() {
     }
   }
 
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const filename = `santri-darul-jinan-${csvFileStamp()}.csv`
+      const rows: string[][] = [
+        ['NIS', 'Nama Lengkap', 'Jenis Kelamin', 'Tanggal Lahir', 'Kelas', 'Wali', 'No HP Wali', 'Status', 'Alamat'],
+        ...filtered.map((s) => [
+          s.nis,
+          s.fullName,
+          s.gender === 'P' ? 'Perempuan' : 'Laki-laki',
+          csvDate(s.birthDate),
+          s.class?.name ?? '',
+          s.parent?.name ?? '',
+          s.parent?.phone ?? '',
+          s.status,
+          s.address,
+        ]),
+      ]
+      await new Promise((r) => setTimeout(r, 200))
+      downloadCsv(filename, rows)
+      toast({ title: 'Ekspor CSV berhasil', description: `${filtered.length} data santri tersimpan di ${filename}.` })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -248,6 +276,14 @@ export function StudentsAdmin() {
         </Select>
         <Button onClick={openCreate} className="bg-emerald-700 hover:bg-emerald-800">
           <Plus className="size-4" /> Tambah Santri
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => void exportCsv()}
+          disabled={loading || exporting || filtered.length === 0}
+        >
+          {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          Ekspor CSV
         </Button>
         <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Muat ulang">
           <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />

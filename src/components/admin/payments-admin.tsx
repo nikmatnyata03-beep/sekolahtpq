@@ -15,6 +15,8 @@ import {
   XCircle,
   TrendingUp,
   TrendingDown,
+  BellRing,
+  Download,
 } from 'lucide-react'
 import type { Payment, Student } from '@/lib/types'
 import { apiGet, apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
@@ -66,12 +68,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { statusBadgeClass } from './overview'
+import { statusBadgeClass, csvDate, csvFileStamp, downloadCsv } from './overview'
 
 function methodChip(method: string | null): string {
   if (method === 'MANUAL') return 'border-stone-200 bg-stone-100 text-stone-600'
   if (method) return 'border-teal-200 bg-teal-100 text-teal-800'
   return 'border-stone-200 bg-stone-50 text-stone-400'
+}
+
+function buildReminderMessage(p: Payment): string {
+  const studentName = p.studentName || p.student?.fullName || 'Santri'
+  return `Pengingat: Tagihan *${p.title}* sebesar Rp ${p.amount.toLocaleString('id-ID')} (${p.invoiceNo}) untuk ${studentName} masih menunggu pembayaran. Bayar mudah via Portal Wali SIMADJI (QRIS/GoPay/VA). Terima kasih. — TPQ Darul Jinan`
 }
 
 export function PaymentsAdmin() {
@@ -84,6 +91,9 @@ export function PaymentsAdmin() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkSending, setBulkSending] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [newStudentId, setNewStudentId] = useState('none')
@@ -135,6 +145,12 @@ export function PaymentsAdmin() {
       return matchQ && matchS
     })
   }, [payments, search, statusFilter])
+
+  const pendingPayments = useMemo(() => payments.filter((p) => p.status === 'PENDING'), [payments])
+  const remindableCount = useMemo(
+    () => pendingPayments.filter((p) => p.student?.parent?.phone).length,
+    [pendingPayments],
+  )
 
   async function createInvoice() {
     if (newStudentId === 'none') {
@@ -203,6 +219,91 @@ export function PaymentsAdmin() {
     }
   }
 
+  async function sendReminder(p: Payment) {
+    const parent = p.student?.parent
+    if (!parent?.phone) return
+    setBusyId(p.id)
+    try {
+      await apiSend('/api/notifications', 'POST', {
+        phone: parent.phone,
+        userId: parent.id,
+        message: buildReminderMessage(p),
+      })
+      toast({
+        title: `Reminder terkirim ke ${parent.name}`,
+        description: `Pengingat tagihan ${p.invoiceNo} dikirim via WhatsApp.`,
+      })
+    } catch (e) {
+      toast({ title: 'Gagal mengirim reminder', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function sendBulkReminders() {
+    const targets = pendingPayments.filter((p) => p.student?.parent?.phone)
+    setBulkOpen(false)
+    if (targets.length === 0) {
+      toast({
+        title: 'Tidak ada target pengingat',
+        description: 'Tagihan tertunda yang dimuat belum memiliki nomor WhatsApp wali.',
+      })
+      return
+    }
+    const skipped = pendingPayments.length - targets.length
+    setBulkSending(true)
+    let ok = 0
+    try {
+      for (const p of targets) {
+        const parent = p.student?.parent
+        if (!parent?.phone) continue
+        try {
+          await apiSend('/api/notifications', 'POST', {
+            phone: parent.phone,
+            userId: parent.id,
+            message: buildReminderMessage(p),
+          })
+          ok += 1
+        } catch {
+          // lanjut ke tagihan berikutnya
+        }
+        await new Promise((r) => setTimeout(r, 250))
+      }
+      const failed = targets.length - ok
+      toast({
+        title: `${ok} reminder terkirim`,
+        description: `Pengingat WhatsApp dikirim untuk ${targets.length} tagihan tertunda${skipped > 0 ? ` · ${skipped} dilewati (tanpa nomor wali)` : ''}${failed > 0 ? ` · ${failed} gagal terkirim` : ''}.`,
+      })
+    } finally {
+      setBulkSending(false)
+    }
+  }
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const filename = `keuangan-darul-jinan-${csvFileStamp()}.csv`
+      const rows: string[][] = [
+        ['No Invoice', 'Santri', 'Keterangan', 'Nominal', 'Metode', 'Status', 'Tanggal Bayar', 'Tanggal Dibuat'],
+        ...filtered.map((p) => [
+          p.invoiceNo,
+          p.studentName || p.student?.fullName || '',
+          p.title,
+          String(p.amount),
+          p.method ?? '',
+          p.status,
+          csvDate(p.paidAt),
+          csvDate(p.createdAt),
+        ]),
+      ]
+      await new Promise((r) => setTimeout(r, 200))
+      downloadCsv(filename, rows)
+      toast({ title: 'Ekspor CSV berhasil', description: `${filtered.length} data tagihan tersimpan di ${filename}.` })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Ringkasan */}
@@ -255,8 +356,25 @@ export function PaymentsAdmin() {
             <SelectItem value="FAILED">FAILED</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          onClick={() => void exportCsv()}
+          disabled={loading || exporting || filtered.length === 0}
+        >
+          {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          Ekspor CSV
+        </Button>
         <Button onClick={() => setCreateOpen(true)} className="bg-emerald-700 hover:bg-emerald-800">
           <Plus className="size-4" /> Buat Tagihan
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setBulkOpen(true)}
+          disabled={loading || bulkSending || remindableCount === 0}
+          className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+        >
+          {bulkSending ? <Loader2 className="size-4 animate-spin" /> : <BellRing className="size-4" />}
+          {bulkSending ? 'Mengirim…' : 'Ingatkan Semua'}
         </Button>
         <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Muat ulang">
           <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
@@ -324,6 +442,14 @@ export function PaymentsAdmin() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
+                          {(p.status === 'PENDING' || p.status === 'FAILED') && (
+                            <DropdownMenuItem
+                              disabled={!p.student?.parent?.phone}
+                              onClick={() => void sendReminder(p)}
+                            >
+                              <BellRing className="size-4 text-amber-600" /> Kirim Reminder WA
+                            </DropdownMenuItem>
+                          )}
                           {p.status !== 'SUCCESS' && (
                             <DropdownMenuItem onClick={() => void markStatus(p, 'SUCCESS')}>
                               <CheckCircle2 className="size-4 text-emerald-600" /> Tandai Berhasil
@@ -404,6 +530,30 @@ export function PaymentsAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog Reminder Massal */}
+      <AlertDialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kirim pengingat WhatsApp massal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sistem akan mengirim pengingat ke {remindableCount} tagihan tertunda melalui WhatsApp ke wali
+              masing-masing santri.
+              {pendingPayments.length > remindableCount &&
+                ` ${pendingPayments.length - remindableCount} tagihan tanpa nomor wali akan dilewati.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void sendBulkReminders() }}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              <BellRing className="size-4" /> Kirim Pengingat
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* AlertDialog Hapus */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

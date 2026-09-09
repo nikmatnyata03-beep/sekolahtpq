@@ -12,6 +12,8 @@ const QUICK_LINKS = [
   { id: 'guru', label: 'Biodata Guru' },
   { id: 'materi', label: 'Materi Ajar' },
   { id: 'berita', label: 'Berita & Kegiatan' },
+  { id: 'testimoni', label: 'Testimoni' },
+  { id: 'faq', label: 'FAQ' },
   { id: 'ppdb', label: 'PPDB Online' },
   { id: 'checkin', label: 'Cek-in Absensi' },
 ]

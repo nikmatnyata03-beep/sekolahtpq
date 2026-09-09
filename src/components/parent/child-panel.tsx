@@ -1,20 +1,25 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   BadgeCheck,
+  BookOpenCheck,
   CalendarDays,
   CheckCircle2,
   CircleCheck,
+  ClipboardCheck,
   Clock,
+  FileText,
   Inbox,
   Landmark,
   Loader2,
+  Printer,
   QrCode,
   ReceiptText,
   ScanLine,
   Smartphone,
   User,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +36,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
 import type { Hafalan, Payment, ParentPortalData, SessionItem } from '@/lib/types'
@@ -66,6 +71,14 @@ const PAYMENT_BADGE: Record<Payment['status'], string> = {
   FAILED: 'border-transparent bg-red-100 text-red-700',
 }
 
+// Colored dots used by the printable report's attendance summary.
+const RAPOR_ATT_DOT: Record<'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA', string> = {
+  HADIR: 'bg-emerald-500',
+  IZIN: 'bg-amber-500',
+  SAKIT: 'bg-orange-500',
+  ALPA: 'bg-red-500',
+}
+
 const ATT_COUNT_KEY: Record<'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA', 'hadir' | 'izin' | 'sakit' | 'alpa'> = {
   HADIR: 'hadir',
   IZIN: 'izin',
@@ -78,6 +91,14 @@ function gradeCircleClass(grade: number | null): string {
   if (grade >= 85) return 'bg-emerald-600 text-white'
   if (grade >= 70) return 'bg-amber-500 text-white'
   return 'bg-red-500 text-white'
+}
+
+/** Text-only grade coloring used inside the printable report table. */
+function gradeTextClass(grade: number | null): string {
+  if (grade === null) return 'text-stone-400'
+  if (grade >= 85) return 'text-emerald-700'
+  if (grade >= 70) return 'text-amber-600'
+  return 'text-red-600'
 }
 
 function attendanceRate(child: ParentStudent): number {
@@ -259,6 +280,274 @@ function PaymentDialog({
   )
 }
 
+// ==== printable student report (Rapor Santri) ====
+
+/**
+ * Scoped print rules, mounted only while the Rapor dialog is open.
+ * Strategy: every direct child of <body> that does not contain the report is
+ * removed from layout (no blank trailing pages), the Radix scroll-lock inline
+ * styles are neutralized so long reports paginate, and the dialog chrome is
+ * hidden while the report subtree stays visible.
+ */
+const RAPOR_PRINT_CSS = `
+@media print {
+  body > *:not(:has(#rapor-santri-print)) { display: none !important; }
+  html, body { overflow: visible !important; height: auto !important; }
+  body * { visibility: hidden !important; }
+  #rapor-santri-print, #rapor-santri-print * { visibility: visible !important; }
+  [data-slot='dialog-overlay'],
+  [data-slot='dialog-close'],
+  .no-print { display: none !important; }
+  [data-slot='dialog-content'] {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    animation: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+  #rapor-santri-print { border-radius: 0 !important; box-shadow: none !important; }
+  #rapor-santri-print, #rapor-santri-print * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+`
+
+function RaporSectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
+  return (
+    <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-800">
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-emerald-100 text-emerald-700">
+        <Icon className="size-3.5" />
+      </span>
+      {children}
+    </p>
+  )
+}
+
+function RaporDialog({
+  child,
+  open,
+  onOpenChange,
+}: {
+  child: ParentStudent
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const summary = child.attendanceSummary
+  const rate = attendanceRate(child)
+  const avgGrade = averageHafalanGrade(child.hafalans)
+  const printDate = formatShortDate(new Date())
+  const reportYear = new Date().getFullYear()
+
+  const paidList = child.payments.filter((p) => p.status === 'SUCCESS')
+  const pendingList = child.payments.filter((p) => p.status === 'PENDING')
+  const totalPaid = paidList.reduce((acc, p) => acc + p.amount, 0)
+  const totalPending = pendingList.reduce((acc, p) => acc + p.amount, 0)
+
+  const identityRows: [string, string][] = [
+    ['Nama Lengkap', child.fullName],
+    ['NIS', child.nis],
+    ['Kelas', child.className],
+    ['Program & Jadwal', child.classSchedule || '—'],
+    ['Ustadz/Ustadzah Pengampu', child.teacherName || '—'],
+    ['Tanggal Cetak', printDate],
+  ]
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto rounded-2xl sm:max-w-2xl">
+        <style dangerouslySetInnerHTML={{ __html: RAPOR_PRINT_CSS }} />
+
+        <DialogHeader className="no-print">
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="size-5 text-emerald-700" />
+            Rapor Santri
+          </DialogTitle>
+          <DialogDescription>
+            Laporan resmi perkembangan {child.fullName} — siap dicetak atau disimpan sebagai PDF.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div id="rapor-santri-print" className="rounded-2xl border-2 border-emerald-700/70 bg-white p-5 sm:p-7">
+          {/* Report letterhead */}
+          <div className="flex items-center gap-4 border-b-2 border-emerald-700 pb-4">
+            <span className="grid size-12 shrink-0 place-items-center rounded-full bg-emerald-700 text-white">
+              <Landmark className="size-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-extrabold tracking-[0.18em] text-emerald-800 sm:text-xl">TPQ DARUL JINAN</p>
+              <p className="mt-0.5 text-xs text-stone-500 sm:text-sm">Laporan Perkembangan Santri — SIMADJI</p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800">
+              Rapor {reportYear}
+            </span>
+          </div>
+
+          {/* Identity */}
+          <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-3 rounded-xl bg-stone-50 p-4 sm:grid-cols-2">
+            {identityRows.map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{label}</p>
+                <p className="break-words text-sm font-semibold text-stone-800">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Attendance summary */}
+          <div className="mt-6 space-y-3">
+            <RaporSectionTitle icon={ClipboardCheck}>Ringkasan Kehadiran</RaporSectionTitle>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(['HADIR', 'IZIN', 'SAKIT', 'ALPA'] as const).map((st) => (
+                <div key={st} className="rounded-xl border border-stone-200 bg-white p-3 text-center">
+                  <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                    <span className={`size-2 rounded-full ${RAPOR_ATT_DOT[st]}`} />
+                    {st}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-stone-800">{summary[ATT_COUNT_KEY[st]]}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Tingkat Kehadiran</p>
+                  <p className="mt-0.5 text-xs text-stone-500">
+                    {summary.total > 0
+                      ? `dari ${summary.total} pertemuan tercatat`
+                      : 'Belum ada pertemuan tercatat.'}
+                  </p>
+                </div>
+                <p className="text-4xl font-extrabold leading-none text-emerald-700">
+                  {summary.total > 0 ? `${rate}%` : '–'}
+                </p>
+              </div>
+              {summary.total > 0 && (
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white">
+                  <div className="h-full rounded-full bg-emerald-600" style={{ width: `${rate}%` }} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Hafalan progress */}
+          <div className="mt-6 space-y-3">
+            <RaporSectionTitle icon={BookOpenCheck}>Progres Hafalan</RaporSectionTitle>
+            {child.hafalans.length === 0 ? (
+              <p className="rounded-xl bg-stone-50 p-4 text-sm italic text-stone-500">
+                Belum ada setoran tercatat. Progres hafalan akan muncul setelah santri menyetorkan hafalan kepada
+                ustadz/ustadzah pengampu.
+              </p>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-stone-200">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-stone-50 hover:bg-stone-50">
+                      <TableHead>Surah</TableHead>
+                      <TableHead>Ayat</TableHead>
+                      <TableHead>Jenis</TableHead>
+                      <TableHead className="text-center">Nilai</TableHead>
+                      <TableHead>Catatan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {child.hafalans.map((h) => (
+                      <TableRow key={h.id}>
+                        <TableCell className="font-medium text-stone-800">QS {h.surahName}</TableCell>
+                        <TableCell className="text-stone-600">{h.ayatRange}</TableCell>
+                        <TableCell>
+                          <Badge className={`text-[10px] ${HAFALAN_BADGE[h.type] ?? ''}`}>{h.type}</Badge>
+                        </TableCell>
+                        <TableCell className={`text-center font-bold ${gradeTextClass(h.grade)}`}>
+                          {h.grade ?? '–'}
+                        </TableCell>
+                        <TableCell className="whitespace-normal text-xs text-stone-500">
+                          {h.teacherNote || '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow className="bg-emerald-50/70 hover:bg-emerald-50/70">
+                      <TableCell colSpan={3} className="font-semibold text-emerald-800">
+                        Rata-rata Nilai
+                      </TableCell>
+                      <TableCell className={`text-center font-bold ${gradeTextClass(avgGrade)}`}>
+                        {avgGrade ?? '–'}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Finance */}
+          <div className="mt-6 space-y-3">
+            <RaporSectionTitle icon={Wallet}>Keuangan</RaporSectionTitle>
+            {child.payments.length === 0 ? (
+              <p className="rounded-xl bg-stone-50 p-4 text-sm italic text-stone-500">
+                Belum ada tagihan tercatat untuk santri ini.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-800">
+                    <CircleCheck className="size-3.5" />
+                    Total Dibayar
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-700">{formatRupiah(totalPaid)}</p>
+                  <p className="text-xs text-stone-500">{paidList.length} tagihan berhasil dibayar</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                    <Clock className="size-3.5" />
+                    Tunggakan
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-amber-700">{formatRupiah(totalPending)}</p>
+                  <p className="text-xs text-stone-500">{pendingList.length} tagihan menunggu pembayaran</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer note */}
+          <div className="mt-6 border-t border-dashed border-stone-300 pt-4">
+            <p className="text-xs italic leading-relaxed text-stone-500">
+              Laporan ini dihasilkan otomatis oleh SIMADJI — Sistem Informasi Manajemen TPQ Darul Jinan pada {printDate}{' '}
+              dan merupakan dokumentasi resmi perkembangan santri.
+            </p>
+            <p className="mt-1 text-xs italic text-stone-500">
+              Pertanyaan &amp; konfirmasi: WhatsApp Sekretariat 0812-3456-7890 (wa.me/6281234567890).
+            </p>
+          </div>
+        </div>
+
+        <div className="no-print flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
+            Tutup
+          </Button>
+          <Button
+            onClick={() => window.print()}
+            className="rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+          >
+            <Printer className="size-4" />
+            Cetak / Simpan PDF
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ==== QR check-in mini card ====
 
 function QrCheckinCard({
@@ -383,6 +672,7 @@ export function ChildPanel({
   onRefresh: () => void
 }) {
   const [payTarget, setPayTarget] = useState<Payment | null>(null)
+  const [raporOpen, setRaporOpen] = useState(false)
   const summary = child.attendanceSummary
   const rate = attendanceRate(child)
   const avgGrade = averageHafalanGrade(child.hafalans)
@@ -415,7 +705,16 @@ export function ChildPanel({
               </span>
             </span>
           </CardTitle>
-          <CardAction>
+          <CardAction className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setRaporOpen(true)}
+              className="h-8 rounded-lg border-emerald-300 px-3 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+            >
+              <FileText className="size-4" />
+              Rapor Santri
+            </Button>
             <Badge className={summary.total > 0 ? 'bg-amber-500 text-white' : 'bg-stone-200 text-stone-600'}>
               Kehadiran {rate}%
             </Badge>
@@ -644,6 +943,8 @@ export function ChildPanel({
         onDismiss={() => setPayTarget(null)}
         onPaid={onRefresh}
       />
+
+      <RaporDialog child={child} open={raporOpen} onOpenChange={setRaporOpen} />
     </div>
   )
 }

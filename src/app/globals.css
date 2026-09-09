@@ -116,7 +116,33 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  ::selection {
+    background-color: oklch(0.696 0.17 162.48 / 0.35);
+  }
+  /* Refined global scrollbar (thin, emerald-tinted) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.696 0.17 162.48 / 0.35);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.508 0.118 165.612 / 0.5);
+  }
+  /* Accessible focus ring in brand emerald */
+  :focus-visible {
+    outline: 2px solid oklch(0.508 0.118 165.612);
+    outline-offset: 2px;
   }
 }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiGet } from '@/lib/api-client'
 import type { DashboardStats } from '@/lib/types'
+import { HijriDate } from './hijri-date'
 
 /** 8-point star / diamond lattice — subtle Islamic geometric decoration. */
 export function StarLattice({ id, className }: { id: string; className?: string }) {
@@ -27,6 +28,32 @@ export function StarLattice({ id, className }: { id: string; className?: string 
       <rect width="100%" height="100%" fill={`url(#${id})`} />
     </svg>
   )
+}
+
+/** Angka statistik menghitung naik dari 0 (ease-out ~1.2s), berakhir tepat pada nilai. */
+function useCountUp(target: number, duration = 1200): number {
+  const [display, setDisplay] = useState(0)
+
+  useEffect(() => {
+    if (!Number.isFinite(target) || target < 0) return
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3) // ease-out cubic
+      setDisplay(progress < 1 ? Math.round(target * eased) : target)
+      if (progress < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+
+  return display
+}
+
+function CountUpValue({ value }: { value: number }) {
+  const display = useCountUp(value)
+  return <span className="block text-lg font-bold tabular-nums">{display}</span>
 }
 
 export function Hero({
@@ -57,9 +84,9 @@ export function Hero({
   }, [])
 
   const chips = [
-    { icon: Users, value: stats?.students, label: 'Santri Aktif' },
-    { icon: GraduationCap, value: stats?.teachers, label: 'Ustadz & Ustadzah' },
-    { icon: BookOpen, value: stats?.classes, label: 'Kelas Tersedia' },
+    { icon: Users, value: stats?.students ?? null, label: 'Santri Aktif' },
+    { icon: GraduationCap, value: stats?.teachers ?? null, label: 'Ustadz & Ustadzah' },
+    { icon: BookOpen, value: stats?.classes ?? null, label: 'Kelas Tersedia' },
   ]
 
   return (
@@ -85,6 +112,8 @@ export function Hero({
         <span className="mt-6 inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-amber-300">
           Taman Pendidikan Al-Qur&apos;an
         </span>
+
+        <HijriDate variant="dark" className="mt-4" />
 
         <h1 className="mt-4 text-4xl font-extrabold tracking-tight drop-shadow-sm sm:text-5xl md:text-6xl">
           TPQ Darul Jinan
@@ -129,8 +158,10 @@ export function Hero({
               <span className="text-left leading-tight">
                 {loading ? (
                   <Skeleton className="mb-1 h-5 w-10 bg-white/20" />
+                ) : chip.value == null ? (
+                  <span className="block text-lg font-bold">—</span>
                 ) : (
-                  <span className="block text-lg font-bold">{chip.value ?? '—'}</span>
+                  <CountUpValue value={chip.value} />
                 )}
                 <span className="block text-[11px] font-medium text-emerald-100/80">{chip.label}</span>
               </span>

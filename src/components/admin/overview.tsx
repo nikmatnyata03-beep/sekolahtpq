@@ -64,6 +64,42 @@ export function statusBadgeClass(status: string | null | undefined): string {
   }
 }
 
+// ==== Shared CSV helpers (client-side export for Students/Payments admin) ====
+// `;` separator (Excel id-ID friendly), quotes escaped by doubling, BOM prepended.
+export function csvCell(value: string | number | null | undefined): string {
+  const raw = value === null || value === undefined ? '' : String(value)
+  return /[";\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw
+}
+
+export function csvDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getFullYear()}`
+}
+
+export function csvFileStamp(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function downloadCsv(filename: string, rows: string[][]): void {
+  const csv = rows.map((r) => r.map(csvCell).join(';')).join('\r\n')
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// Mobile-polished KPI card: tighter padding/icon/value on <sm, muted hint hidden on
+// very small screens to avoid tall cards with dead space. Desktop (sm+) unchanged.
 function KpiCard({
   icon: Icon,
   label,
@@ -79,14 +115,14 @@ function KpiCard({
 }) {
   return (
     <Card className="rounded-2xl border-stone-200 shadow-sm">
-      <CardContent className="flex items-start gap-3 p-4">
-        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl', iconClass)}>
-          <Icon className="size-5" />
+      <CardContent className="flex items-start gap-2.5 p-3 sm:gap-3 sm:p-4">
+        <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-10', iconClass)}>
+          <Icon className="size-4 sm:size-5" />
         </div>
         <div className="min-w-0">
           <p className="text-xs font-medium text-stone-500">{label}</p>
-          <p className="truncate text-xl font-bold text-stone-900">{value}</p>
-          <p className="mt-0.5 text-[11px] text-stone-400">{hint}</p>
+          <p className="truncate text-lg font-bold text-stone-900 sm:text-xl">{value}</p>
+          <p className="mt-0.5 hidden text-[11px] text-stone-400 sm:block">{hint}</p>
         </div>
       </CardContent>
     </Card>
@@ -132,7 +168,7 @@ export function OverviewSection() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-20 rounded-2xl" />
           ))}
@@ -168,7 +204,7 @@ export function OverviewSection() {
   return (
     <div className="space-y-5">
       {/* KPI row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
         <KpiCard icon={Users} label="Santri Aktif" value={String(stats.students)} hint="Total santri terdaftar" iconClass="bg-emerald-100 text-emerald-700" />
         <KpiCard icon={GraduationCap} label="Guru" value={String(stats.teachers)} hint="Ustadz/ustadzah aktif" iconClass="bg-amber-100 text-amber-700" />
         <KpiCard icon={BookOpen} label="Kelas" value={String(stats.classes)} hint="Kelas yang berjalan" iconClass="bg-teal-100 text-teal-700" />
