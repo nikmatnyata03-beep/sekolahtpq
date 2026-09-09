@@ -13,6 +13,10 @@ import {
   Trash2,
   FileText,
   Loader2,
+  Copy,
+  Check,
+  KeyRound,
+  Info,
 } from 'lucide-react'
 import type { ClassRoom, Registration } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
@@ -77,6 +81,41 @@ function safeParseArray(json: string | null | undefined): string[] {
   }
 }
 
+/** Kredensial akun yang dihasilkan saat penerimaan (DITERIMA) — null jika tidak ada akun baru dibuat. */
+interface AcceptCredentials {
+  nis: string
+  email: string
+  tempPassword: string
+}
+
+/** Respons PUT /api/registrations pada status DITERIMA. */
+interface AcceptResult {
+  registration: Registration
+  credentials: AcceptCredentials | null
+}
+
+function CredentialRow({ label, value, copied, onCopy }: { label: string; value: string; copied: boolean; onCopy: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500">{label}</p>
+        <p className="truncate font-mono text-sm font-medium text-stone-800">{value}</p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="min-h-11 shrink-0 gap-1.5 border-emerald-200 bg-white px-3 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+        aria-label={`Salin ${label}`}
+        onClick={onCopy}
+      >
+        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+        {copied ? 'Tersalin' : 'Salin'}
+      </Button>
+    </div>
+  )
+}
+
 const FILTERS = [
   { value: 'SEMUA', label: 'Semua' },
   { value: 'PENDING', label: 'Menunggu' },
@@ -96,6 +135,8 @@ export function RegistrationsAdmin() {
 
   const [acceptTarget, setAcceptTarget] = useState<Registration | null>(null)
   const [acceptClassId, setAcceptClassId] = useState('none')
+  const [acceptResult, setAcceptResult] = useState<AcceptResult | null>(null)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<Registration | null>(null)
   const [reviewNote, setReviewNote] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Registration | null>(null)
@@ -135,22 +176,62 @@ export function RegistrationsAdmin() {
     }
   }
 
+  function resetAcceptState() {
+    setAcceptTarget(null)
+    setAcceptClassId('none')
+    setAcceptResult(null)
+    setCopiedKey(null)
+  }
+
+  async function finishAccept() {
+    resetAcceptState()
+    await load()
+  }
+
+  async function copyCredential(key: string, value: string) {
+    let copied = false
+    try {
+      await navigator.clipboard.writeText(value)
+      copied = true
+    } catch {
+      try {
+        // Fallback untuk browser/perangkat tanpa izin Clipboard API
+        const ta = document.createElement('textarea')
+        ta.value = value
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        copied = document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        copied = false
+      }
+    }
+    if (!copied) {
+      toast({ title: 'Gagal menyalin', description: 'Silakan salin nilai secara manual dari panel.' })
+      return
+    }
+    setCopiedKey(key)
+    window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 2000)
+  }
+
   async function submitAccept() {
     if (!acceptTarget) return
     setIsPending(true)
     try {
-      await apiSend('/api/registrations', 'PUT', {
+      const res = await apiSend<AcceptResult>('/api/registrations', 'PUT', {
         id: acceptTarget.id,
         status: 'DITERIMA',
         classId: acceptClassId === 'none' ? undefined : acceptClassId,
       })
       toast({
         title: 'Pendaftaran diterima',
-        description: `${acceptTarget.childName} resmi diterima. Data santri dan akun wali otomatis dibuat, notifikasi WhatsApp terkirim.`,
+        description: `${acceptTarget.childName} resmi diterima. Notifikasi WhatsApp terkirim ke wali.`,
       })
-      setAcceptTarget(null)
-      setAcceptClassId('none')
-      await load()
+      // Jangan tutup dialog — beralih ke panel sukses (kredensial / status duplikat)
+      setAcceptResult({ registration: res.registration, credentials: res.credentials ?? null })
     } catch (e) {
       toast({ title: 'Gagal menerima pendaftaran', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
     } finally {
@@ -308,7 +389,7 @@ export function RegistrationsAdmin() {
                             </DropdownMenuItem>
                           )}
                           {r.status !== 'DITERIMA' && (
-                            <DropdownMenuItem onClick={() => { setAcceptTarget(r); setAcceptClassId('none') }}>
+                            <DropdownMenuItem onClick={() => { setAcceptTarget(r); setAcceptClassId('none'); setAcceptResult(null) }}>
                               <CheckCircle2 className="size-4 text-emerald-600" /> Terima
                             </DropdownMenuItem>
                           )}
@@ -333,37 +414,106 @@ export function RegistrationsAdmin() {
       )}
 
       {/* Dialog Terima */}
-      <Dialog open={!!acceptTarget} onOpenChange={(open) => !open && setAcceptTarget(null)}>
+      <Dialog
+        open={!!acceptTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            const hadResult = !!acceptResult
+            resetAcceptState()
+            if (hadResult) void load()
+          }
+        }}
+      >
         <DialogContent className="rounded-2xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Terima Pendaftaran</DialogTitle>
-            <DialogDescription>
-              Terima <span className="font-semibold text-stone-800">{acceptTarget?.childName}</span> sebagai santri baru.
-              Sistem akan otomatis membuat data santri beserta akun wali (email &amp; kata sandi awal dikirim via WhatsApp).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Tempatkan di kelas (opsional)</Label>
-            <Select value={acceptClassId} onValueChange={setAcceptClassId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Pilih kelas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Belum ditempatkan</SelectItem>
-                {classes.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} ({c.level.replace('_', ' ')})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAcceptTarget(null)} disabled={isPending}>Batal</Button>
-            <Button onClick={() => void submitAccept()} disabled={isPending} className="bg-emerald-700 hover:bg-emerald-800">
-              {isPending && <Loader2 className="size-4 animate-spin" />} Terima Santri
-            </Button>
-          </DialogFooter>
+          {acceptResult ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-emerald-800">
+                  <CheckCircle2 className="size-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                  Pendaftaran Diterima
+                </DialogTitle>
+                <DialogDescription>
+                  <span className="font-semibold text-stone-800">{acceptResult.registration.childName}</span> resmi menjadi santri TPQ Darul Jinan.
+                </DialogDescription>
+              </DialogHeader>
+
+              {acceptResult.credentials ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4" role="group" aria-label="Kredensial akun santri">
+                    {([
+                      { key: 'nis', label: 'NIS Santri', value: acceptResult.credentials.nis },
+                      { key: 'email', label: 'Email Wali', value: acceptResult.credentials.email },
+                      { key: 'tempPassword', label: 'Kata Sandi Awal', value: acceptResult.credentials.tempPassword },
+                    ] as const).map((row) => (
+                      <CredentialRow
+                        key={row.key}
+                        label={row.label}
+                        value={row.value}
+                        copied={copiedKey === row.key}
+                        onCopy={() => void copyCredential(row.key, row.value)}
+                      />
+                    ))}
+                  </div>
+                  <p className="flex items-start gap-1.5 text-xs text-stone-500">
+                    <KeyRound className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                    Kredensial juga telah dikirim ke wali via WhatsApp.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="flex items-start gap-2 text-sm font-medium text-amber-800">
+                    <Info className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" />
+                    Santri dengan nama serupa sudah terdaftar — tidak ada akun baru dibuat.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 pl-6 text-xs text-stone-500">
+                    Status pendaftaran:
+                    <Badge className={statusBadgeClass(acceptResult.registration.status)}>{acceptResult.registration.status}</Badge>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button
+                  onClick={() => void finishAccept()}
+                  className="min-h-11 w-full bg-emerald-700 hover:bg-emerald-800 sm:w-auto"
+                >
+                  Selesai
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Terima Pendaftaran</DialogTitle>
+                <DialogDescription>
+                  Terima <span className="font-semibold text-stone-800">{acceptTarget?.childName}</span> sebagai santri baru.
+                  Sistem akan otomatis membuat data santri beserta akun wali (email &amp; kata sandi awal dikirim via WhatsApp).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label>Tempatkan di kelas (opsional)</Label>
+                <Select value={acceptClassId} onValueChange={setAcceptClassId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pilih kelas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Belum ditempatkan</SelectItem>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.level.replace('_', ' ')})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={resetAcceptState} disabled={isPending}>Batal</Button>
+                <Button onClick={() => void submitAccept()} disabled={isPending} className="bg-emerald-700 hover:bg-emerald-800">
+                  {isPending && <Loader2 className="size-4 animate-spin" />} Terima Santri
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

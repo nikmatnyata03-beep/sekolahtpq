@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import {
   AlertTriangle,
   Bell,
+  BellDot,
   CheckCheck,
   Inbox,
   Home,
@@ -14,6 +15,7 @@ import {
   MoonStar,
   RefreshCw,
   Smartphone,
+  Sparkles,
   User,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -63,6 +65,35 @@ function initialsOf(name: string): string {
     .toUpperCase()
 }
 
+/** localStorage key for client-side announcement read-state (no backend involvement). */
+const READ_ANNOUNCEMENTS_KEY = 'simadji.readAnnouncements'
+/** Max stored ids — when exceeded, the oldest entries are dropped. */
+const READ_ANNOUNCEMENTS_CAP = 100
+
+/** Reads + parses the stored read-id list. Corrupt/unavailable storage → treated as empty.
+ *  Hydration rule: never call during render — only after mount (timer/effect) or in event handlers. */
+function readStoredReadAnnouncements(): string[] {
+  try {
+    const raw = window.localStorage.getItem(READ_ANNOUNCEMENTS_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : null
+    if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === 'string')
+  } catch {
+    // corrupted value or storage unavailable → treat as empty
+  }
+  return []
+}
+
+/** Merges ids into storage (dedup, newest last, capped at 100 — oldest dropped). Best-effort. */
+function persistReadAnnouncements(ids: string[]): void {
+  if (ids.length === 0) return
+  try {
+    const merged = new Set([...readStoredReadAnnouncements(), ...ids])
+    window.localStorage.setItem(READ_ANNOUNCEMENTS_KEY, JSON.stringify([...merged].slice(-READ_ANNOUNCEMENTS_CAP)))
+  } catch {
+    // storage full/unavailable → keep in-memory read-state only
+  }
+}
+
 function PortalSkeleton() {
   return (
     <div className="space-y-6">
@@ -85,6 +116,7 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [markingRead, setMarkingRead] = useState(false)
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([])
 
   const load = useCallback(
     async (initial = false) => {
@@ -110,6 +142,14 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
       .catch(() => setSessions([]))
   }, [load])
 
+  // Announcement read-state: SSR + first client render stay identical (empty list), the stored
+  // ids hydrate after mount via a deferred timer (same pattern as page.tsx session restore —
+  // avoids the react-hooks/set-state-in-effect lint error for synchronous setState in effects).
+  useEffect(() => {
+    const timer = setTimeout(() => setReadAnnouncementIds(readStoredReadAnnouncements()), 10)
+    return () => clearTimeout(timer)
+  }, [])
+
   const unreadCount = data?.notifications.filter((n) => !n.readAt).length ?? 0
 
   const markAllRead = useCallback(async () => {
@@ -131,6 +171,19 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
 
   const parentName = data?.parent.name || user.name
   const importantAnnouncements = (data?.announcements ?? []).slice(0, 2)
+  const newAnnouncementCount = importantAnnouncements.filter((a) => !readAnnouncementIds.includes(a.id)).length
+
+  // Marks one shown announcement as read (badge disappears immediately; storage best-effort).
+  const markAnnouncementRead = (id: string) => {
+    persistReadAnnouncements([id])
+    setReadAnnouncementIds((prev) => (prev.includes(id) ? prev : [...prev, id].slice(-READ_ANNOUNCEMENTS_CAP)))
+  }
+
+  // Marks every currently shown hero announcement as read.
+  const markAllAnnouncementsRead = () => {
+    persistReadAnnouncements(importantAnnouncements.map((a) => a.id))
+    setReadAnnouncementIds((prev) => [...new Set([...prev, ...importantAnnouncements.map((a) => a.id)])].slice(-READ_ANNOUNCEMENTS_CAP))
+  }
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -260,16 +313,35 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
 
           {importantAnnouncements.length > 0 && (
             <div className="mt-5 space-y-2">
+              {newAnnouncementCount > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-300">
+                    <BellDot className="size-3" aria-hidden />
+                    {newAnnouncementCount} pengumuman baru
+                  </p>
+                  <button
+                    type="button"
+                    onClick={markAllAnnouncementsRead}
+                    className="rounded px-1 py-1 text-[11px] font-medium text-white/90 underline-offset-2 transition-colors hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                  >
+                    Tandai semua dibaca
+                  </button>
+                </div>
+              )}
               {importantAnnouncements.map((a) => {
                 const important = a.priority === 'PENTING'
+                const isNew = !readAnnouncementIds.includes(a.id)
                 return (
-                  <div
+                  <button
                     key={a.id}
+                    type="button"
+                    onClick={() => markAnnouncementRead(a.id)}
+                    aria-label={isNew ? `${a.title} (pengumuman baru, klik untuk menandai sudah dibaca)` : a.title}
                     className={
-                      'flex gap-2.5 rounded-xl border p-3 ' +
+                      'flex w-full cursor-pointer gap-2.5 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ' +
                       (important
-                        ? 'border-amber-300 bg-amber-50 text-stone-800 shadow-sm'
-                        : 'border-white/20 bg-white/10 text-white backdrop-blur')
+                        ? 'border-amber-300 bg-amber-50 text-stone-800 shadow-sm hover:border-amber-400 hover:bg-amber-100/80'
+                        : 'border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/15')
                     }
                   >
                     <Megaphone className={`mt-0.5 size-4 shrink-0 ${important ? 'text-amber-600' : 'text-white/80'}`} />
@@ -277,6 +349,17 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
                       <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                         {a.title}
                         {important && <Badge className="bg-amber-500 text-white">PENTING</Badge>}
+                        {isNew && (
+                          <span
+                            className={
+                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ' +
+                              (important ? 'bg-emerald-600 text-white' : 'bg-amber-400 text-amber-950')
+                            }
+                          >
+                            <Sparkles className="size-3" aria-hidden />
+                            Baru
+                          </span>
+                        )}
                       </p>
                       <p className={`mt-0.5 line-clamp-2 text-xs ${important ? 'text-stone-600' : 'text-emerald-50/85'}`}>
                         {a.content}
@@ -285,7 +368,7 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
                         {formatShortDate(a.createdAt)}
                       </p>
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

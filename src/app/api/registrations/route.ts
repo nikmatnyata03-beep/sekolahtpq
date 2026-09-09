@@ -70,7 +70,8 @@ export async function PUT(req: NextRequest) {
           userId: parent.id,
           message: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. NIS: *${nis}*. Akun Portal Wali: ${parent.email} / ortu123. — TPQ Darul Jinan`,
         })
-        return ok({ registration: reg, student })
+        // credentials = akun wali yang dibuat/dipakai (parent bisa sudah ada sebelumnya); UI menampilkan panel salin
+        return ok({ registration: reg, student, credentials: { nis, email: parent.email, tempPassword: 'ortu123' } })
       }
     }
 
@@ -82,7 +83,8 @@ export async function PUT(req: NextRequest) {
     if (messages[b.status]) {
       await sendWhatsApp({ phone: reg.phone, message: messages[b.status] })
     }
-    return ok({ registration: reg })
+    // credentials: null → tidak ada akun baru dibuat (santri dengan nama serupa sudah ada, atau status bukan DITERIMA)
+    return ok({ registration: reg, credentials: null })
   } catch {
     return bad('Gagal memperbarui pendaftaran')
   }

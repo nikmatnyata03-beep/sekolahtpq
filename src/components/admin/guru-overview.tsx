@@ -1,9 +1,11 @@
 'use client'
 
 // Guru landing view (Task 10-a) — role-specific "Ringkasan" for GURU.
-// Reuses existing GET APIs only (no backend changes): /api/classes, /api/sessions?active=1,
-// /api/hafalan, /api/students. Ownership filtering is client-side: classes by teacherId,
-// then sessions/students by classId and hafalan by studentId of those students.
+// Reuses existing GET APIs: /api/classes, /api/sessions?active=1, /api/hafalan, /api/students.
+// Ownership filtering is client-side: classes by teacherId, then sessions/students by classId
+// and hafalan by studentId of those students.
+// Task 15-a: "Catat Setoran Cepat" Sheet dari kartu Progres Target — POST /api/hafalan
+// tanpa berpindah halaman (kontrak respons targetJustReached dari Task 14-a).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -16,15 +18,18 @@ import {
   Crosshair,
   GraduationCap,
   Inbox,
+  Loader2,
+  PencilLine,
   QrCode,
   RefreshCw,
+  Target,
   Users,
   type LucideIcon,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import type { AuthUser, ClassRoom, Hafalan, SessionItem, Student } from '@/lib/types'
-import { apiGet, formatShortDate } from '@/lib/api-client'
-import { targetProgress } from '@/lib/hafalan-utils'
+import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
+import { JUZ30_SURAHS, targetProgress, type TargetProgress } from '@/lib/hafalan-utils'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -32,6 +37,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { WeeklySchedule } from './weekly-schedule'
 
 export type GuruOverviewSection = 'attendance' | 'hafalan' | 'classes'
@@ -148,6 +164,228 @@ function GreetingHero({ user, onNavigate }: { user: AuthUser; onNavigate?: (sect
   )
 }
 
+// ==== Quick Setoran (Task 15-a) — sheet catat setoran dari kartu Progres Target ====
+
+// Respons POST /api/hafalan (kontrak Task 14-a): baris baru + status perayaan target.
+type QuickHafalanResponse = Hafalan & { targetJustReached?: boolean; targetName?: string | null }
+
+const QUICK_TYPES: ReadonlyArray<{ value: Hafalan['type']; label: string }> = [
+  { value: 'TAHFIDZ', label: 'Tahfidz' },
+  { value: 'TAHSHIN', label: 'Tahsin' },
+  { value: 'MURAJAAH', label: 'Murajaah' },
+]
+
+// Sheet "Catat Setoran Cepat": header santri (avatar inisial, kelas, chip target amber
+// dengan reached/position) + formulir ringkas. Pola Sheet mengikuti
+// student-detail-drawer.tsx (side kanan, sm:max-w-md, header stone-50/60).
+function QuickSetoranSheet({ student, tp, open, onOpenChange, onSaved }: {
+  student: Student | null
+  tp: TargetProgress | null
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  const [surahName, setSurahName] = useState('')
+  const [ayatRange, setAyatRange] = useState('')
+  const [type, setType] = useState<Hafalan['type']>('TAHFIDZ')
+  const [grade, setGrade] = useState('')
+  const [teacherNote, setTeacherNote] = useState('')
+  const [surahTouched, setSurahTouched] = useState(false)
+  const [ayatTouched, setAyatTouched] = useState(false)
+  const [pending, setPending] = useState(false)
+
+  // Formulir bersih setiap kali sheet dibuka untuk seorang santri (pola reset
+  // per-open ala student-detail-drawer; state tetap tampil selama animasi tutup).
+  useEffect(() => {
+    if (!open || !student) return
+    setSurahName('')
+    setAyatRange('')
+    setType('TAHFIDZ')
+    setGrade('')
+    setTeacherNote('')
+    setSurahTouched(false)
+    setAyatTouched(false)
+    setPending(false)
+  }, [open, student?.id])
+
+  const surah = surahName.trim()
+  const ayat = ayatRange.trim()
+  const canSubmit = surah !== '' && ayat !== '' && !pending
+
+  async function submit() {
+    if (!student || !canSubmit) return
+    const rawGrade = Number(grade)
+    setPending(true)
+    try {
+      const created = await apiSend<QuickHafalanResponse>('/api/hafalan', 'POST', {
+        studentId: student.id,
+        surahName: surah,
+        ayatRange: ayat,
+        type,
+        grade:
+          grade.trim() === '' || !Number.isFinite(rawGrade)
+            ? undefined
+            : Math.min(100, Math.max(0, Math.round(rawGrade))),
+        teacherNote: teacherNote.trim() || undefined,
+      })
+      if (created.targetJustReached && created.targetName) {
+        // Setoran ini MENYEMPURNAKAN target santri untuk pertama kali (kontrak Task 14-a).
+        toast({
+          title: '🎉 Target tercapai!',
+          description: `MasyaAllah! ${student.fullName} menyempurnakan target ${created.targetName}.`,
+        })
+      } else {
+        toast({
+          title: 'Setoran tercatat',
+          description: `${student.fullName} — QS ${surah} ${ayat}.`,
+        })
+      }
+      onOpenChange(false)
+      onSaved()
+    } catch (e) {
+      // Gagal: sheet tetap terbuka agar isian tidak hilang.
+      toast({ title: 'Gagal', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b border-stone-100 bg-stone-50/60 p-4 text-left">
+          <SheetTitle className="text-base text-stone-800">Catat Setoran Cepat</SheetTitle>
+          <SheetDescription className="sr-only">
+            Formulir pencatatan setoran hafalan tanpa keluar dari ringkasan guru.
+          </SheetDescription>
+          {student && (
+            <div className="mt-1 flex items-start gap-3 pr-6">
+              <div
+                aria-hidden="true"
+                className="grid size-12 shrink-0 place-items-center rounded-full bg-emerald-700 text-sm font-semibold text-white"
+              >
+                {initialsOf(student.fullName)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-stone-800">{student.fullName}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-800"
+                  >
+                    {student.class?.name ?? 'Tanpa kelas'}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-amber-200 bg-amber-100 text-[10px] text-amber-800"
+                  >
+                    <Target className="size-2.5" aria-hidden="true" />
+                    Target:{' '}
+                    {tp ? `${tp.targetName} · ${tp.reached}/${tp.position}` : (student.hafalanTarget ?? '—')}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetHeader>
+
+        <form
+          onSubmit={(e) => { e.preventDefault(); void submit() }}
+          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4"
+        >
+          <div className="grid gap-1.5">
+            <Label htmlFor="quick-surah">Nama Surah *</Label>
+            <Input
+              id="quick-surah"
+              list="quick-surah-list"
+              value={surahName}
+              onChange={(e) => { setSurahName(e.target.value); setSurahTouched(true) }}
+              placeholder="Ketik atau pilih surah…"
+              autoComplete="off"
+              className="min-h-11"
+            />
+            <datalist id="quick-surah-list">
+              {JUZ30_SURAHS.map((s) => (
+                <option key={s.no} value={s.name} />
+              ))}
+            </datalist>
+            <div aria-live="polite">
+              {surahTouched && surah === '' && (
+                <p className="text-xs font-medium text-amber-700">Nama surah wajib diisi.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="quick-ayat">Rentang Ayat *</Label>
+            <Input
+              id="quick-ayat"
+              value={ayatRange}
+              onChange={(e) => { setAyatRange(e.target.value); setAyatTouched(true) }}
+              placeholder="1-7"
+              className="min-h-11"
+            />
+            <div aria-live="polite">
+              {ayatTouched && ayat === '' && (
+                <p className="text-xs font-medium text-amber-700">Rentang ayat wajib diisi.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="quick-type">Jenis Setoran</Label>
+            <Select value={type} onValueChange={(v) => setType(v as Hafalan['type'])}>
+              <SelectTrigger id="quick-type" className="w-full min-h-11">
+                <SelectValue placeholder="Pilih jenis" />
+              </SelectTrigger>
+              <SelectContent>
+                {QUICK_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="quick-grade">Nilai (opsional)</Label>
+            <Input
+              id="quick-grade"
+              type="number"
+              min={0}
+              max={100}
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              placeholder="85"
+              className="min-h-11"
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="quick-note">Catatan ustadz (opsional)</Label>
+            <Textarea
+              id="quick-note"
+              rows={2}
+              value={teacherNote}
+              onChange={(e) => setTeacherNote(e.target.value)}
+              placeholder="Masukan tajwid, kelancaran, dsb."
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={!canSubmit}
+            className="mt-1 min-h-11 w-full bg-emerald-700 text-white hover:bg-emerald-800"
+          >
+            {pending ? <Loader2 className="size-4 animate-spin" /> : <BookMarked className="size-4" />} Simpan
+            Setoran
+          </Button>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 export function GuruOverview({ user, onNavigate }: {
   user: AuthUser
   onNavigate?: (section: GuruOverviewSection) => void
@@ -157,10 +395,16 @@ export function GuruOverview({ user, onNavigate }: {
   const [data, setData] = useState<GuruData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Quick Setoran (Task 15-a): id santri yang sheet-nya terbuka (null = tertutup).
+  const [quickStudentId, setQuickStudentId] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  // quiet=true (Task 15-a): segarkan data TANPA skeleton/error penuh — dipakai
+  // setelah simpan setoran cepat agar bar kartu Progres Target langsung update.
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) {
+      setLoading(true)
+      setError(null)
+    }
     try {
       const [classes, sessions, hafalans, students] = await Promise.all([
         apiGet<ClassRoom[]>('/api/classes'),
@@ -172,9 +416,10 @@ export function GuruOverview({ user, onNavigate }: {
       setData({ classes, sessions, hafalans, students })
     } catch (e) {
       if (!mountedRef.current) return
+      if (quiet) return // refresh senyap: biarkan data lama tampil tanpa Alert penuh
       setError(e instanceof Error ? e.message : 'Gagal memuat data ringkasan')
     } finally {
-      if (mountedRef.current) setLoading(false)
+      if (mountedRef.current && !quiet) setLoading(false)
     }
   }, [])
 
@@ -257,6 +502,15 @@ export function GuruOverview({ user, onNavigate }: {
       (a, b) =>
         Number(b.tp.targetReached) - Number(a.tp.targetReached) || b.tp.percent - a.tp.percent,
     )
+
+  // Quick Setoran (Task 15-a): santri + progres sheet diturunkan dari data TERKINI
+  // (bukan snapshot), sehingga otomatis segar setiap kali load() menyegarkan state.
+  const quickStudent = quickStudentId
+    ? (data.students.find((s) => s.id === quickStudentId) ?? null)
+    : null
+  const quickTp = quickStudent
+    ? targetProgress(hafalanByStudent.get(quickStudent.id) ?? [], quickStudent.hafalanTarget)
+    : null
 
   // Belum ada penugasan kelas → hero saja + kartu sapaan kosong.
   if (!user.teacherId || ownClasses.length === 0) {
@@ -525,12 +779,31 @@ export function GuruOverview({ user, onNavigate }: {
                       Progres {tp.percent}%
                     </span>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9 shrink-0 text-stone-400 hover:bg-emerald-100 hover:text-emerald-700"
+                    onClick={() => setQuickStudentId(st.id)}
+                    aria-label={`Catat setoran ${st.fullName}`}
+                  >
+                    <PencilLine className="size-4" />
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
         </CardContent>
       </Card>
+
+      {/* Quick Setoran (Task 15-a) — dibuka dari tombol pensil per baris target di atas;
+          onSaved memanggil load(true) (quiet) agar progres bar nudge card langsung segar. */}
+      <QuickSetoranSheet
+        student={quickStudent}
+        tp={quickTp}
+        open={quickStudentId !== null}
+        onOpenChange={(o) => { if (!o) setQuickStudentId(null) }}
+        onSaved={() => void load(true)}
+      />
     </div>
   )
 }
