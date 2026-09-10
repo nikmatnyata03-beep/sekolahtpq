@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Nama worker = subdomain: tpqdarussolah.nikmatnyata03.workers.dev
-  "name": "tpqdarussolah",
+  // Nama worker = subdomain: tpq.darussolah.workers.dev
+  "name": "tpq",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-01",
   "compatibility_flags": ["nodejs_compat"],
