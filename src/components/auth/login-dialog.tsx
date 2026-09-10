@@ -3,19 +3,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   AlertCircle,
-  Code2,
   Eye,
   EyeOff,
-  GraduationCap,
   Landmark,
   Loader2,
   LogIn,
   Mail,
   MoonStar,
-  ShieldCheck,
-  Users,
   X,
-  type LucideIcon,
 } from 'lucide-react'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -24,52 +19,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { apiSend } from '@/lib/api-client'
 import type { AuthUser } from '@/lib/types'
-
-interface DemoAccount {
-  role: string
-  name: string
-  email: string
-  password: string
-  hint: string
-  icon: LucideIcon
-  featured?: boolean
-}
-
-const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    role: 'Admin',
-    name: 'Administrator',
-    email: 'admin@daruljinan.sch.id',
-    password: 'admin123',
-    hint: 'Kelola data & keuangan',
-    icon: ShieldCheck,
-  },
-  {
-    role: 'Guru',
-    name: 'Ustadzah Fatimah',
-    email: 'ustadzah.fatimah@daruljinan.sch.id',
-    password: 'guru123',
-    hint: 'Input hafalan & absensi',
-    icon: GraduationCap,
-  },
-  {
-    role: 'Wali',
-    name: 'Budi Santoso',
-    email: 'budi.santoso@gmail.com',
-    password: 'ortu123',
-    hint: 'Portal wali santri',
-    icon: Users,
-    featured: true,
-  },
-  {
-    role: 'Developer',
-    name: 'Tim Developer',
-    email: 'dev@daruljinan.sch.id',
-    password: 'dev123',
-    hint: 'AI Pentest & Dev Console',
-    icon: Code2,
-  },
-]
 
 export function LoginDialog({
   open,
@@ -110,12 +59,6 @@ export function LoginDialog({
     } finally {
       setLoading(false)
     }
-  }
-
-  function fillDemo(acc: DemoAccount) {
-    setEmail(acc.email)
-    setPassword(acc.password)
-    setError(null)
   }
 
   return (
@@ -209,49 +152,6 @@ export function LoginDialog({
             </Button>
           </form>
 
-          {/* Demo quick-fill */}
-          <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
-            <p className="text-xs font-medium text-stone-600">Akun demo — klik untuk mengisi cepat:</p>
-            <div className="grid gap-2">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => fillDemo(acc)}
-                  disabled={loading}
-                  className={
-                    'flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors disabled:opacity-60 ' +
-                    (acc.featured
-                      ? 'border-emerald-300 bg-emerald-50/70 hover:border-emerald-500 hover:bg-emerald-50'
-                      : 'border-stone-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/40')
-                  }
-                >
-                  <span
-                    className={
-                      'grid size-9 shrink-0 place-items-center rounded-lg ' +
-                      (acc.featured ? 'bg-emerald-700 text-white' : 'bg-stone-100 text-stone-500')
-                    }
-                  >
-                    <acc.icon className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-stone-800">
-                      {acc.role} — {acc.name}
-                      {acc.featured && (
-                        <span className="rounded-full bg-amber-500 px-1.5 py-px text-[10px] font-bold text-white">
-                          WALI
-                        </span>
-                      )}
-                    </span>
-                    <span className="block truncate text-xs text-stone-500">
-                      {acc.email} · {acc.hint}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="text-center text-[11px] text-stone-400">Data demo — password default per peran.</p>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

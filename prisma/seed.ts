@@ -4,8 +4,22 @@ import { hashPassword } from '../src/lib/password'
 
 const db = new PrismaClient()
 
+function requiredSeedPassword(name: string): string {
+  const value = process.env[name]
+  if (!value || value.length < 12) {
+    throw new Error(`${name} wajib diisi dan minimal 12 karakter sebelum menjalankan seed`)
+  }
+  return value
+}
+
 async function main() {
   console.log('Seeding database...')
+  const passwords = {
+    admin: requiredSeedPassword('SEED_ADMIN_PASSWORD'),
+    developer: requiredSeedPassword('SEED_DEVELOPER_PASSWORD'),
+    teacher: requiredSeedPassword('SEED_TEACHER_PASSWORD'),
+    parent: requiredSeedPassword('SEED_PARENT_PASSWORD'),
+  }
 
   // wipe
   await db.notification.deleteMany()
@@ -25,19 +39,19 @@ async function main() {
 
   // ===== USERS =====
   const admin = await db.user.create({
-    data: { email: 'admin@daruljinan.sch.id', name: 'H. Ahmad Fauzi, S.Pd.I', phone: '081234567890', password: hashPassword('admin123'), role: 'ADMIN' },
+    data: { email: 'admin@daruljinan.sch.id', name: 'H. Ahmad Fauzi, S.Pd.I', phone: '081234567890', password: hashPassword(passwords.admin), role: 'ADMIN' },
   })
 
-  // Akun developer — akses Dev Console & AI Pentest (terhubung agen otomatis GitHub + Cloudflare)
+  // Akun developer — akses Dev Console & AI Pentest.
   await db.user.create({
-    data: { email: 'dev@daruljinan.sch.id', name: 'Tim Developer SIMADJI', phone: '081300000001', password: hashPassword('dev123'), role: 'DEVELOPER' },
+    data: { email: 'dev@daruljinan.sch.id', name: 'Tim Developer SIMADJI', phone: '081300000001', password: hashPassword(passwords.developer), role: 'DEVELOPER' },
   })
 
   const guruUsers = [
-    { email: 'ustadzah.fatimah@daruljinan.sch.id', name: 'Ustadzah Fatimah Az-Zahra, S.Pd.I', phone: '081200000001', password: 'guru123', role: 'GURU' },
-    { email: 'ustadz.yusuf@daruljinan.sch.id', name: 'Ustadz Yusuf Rahman, Lc.', phone: '081200000002', password: 'guru123', role: 'GURU' },
-    { email: 'ustadzah.khadijah@daruljinan.sch.id', name: 'Ustadzah Khadijah Rahmawati', phone: '081200000003', password: 'guru123', role: 'GURU' },
-    { email: 'ustadz.ibrahim@daruljinan.sch.id', name: 'Ustadz Ibrahim Musa, S.Pd.', phone: '081200000004', password: 'guru123', role: 'GURU' },
+    { email: 'ustadzah.fatimah@daruljinan.sch.id', name: 'Ustadzah Fatimah Az-Zahra, S.Pd.I', phone: '081200000001', password: passwords.teacher, role: 'GURU' },
+    { email: 'ustadz.yusuf@daruljinan.sch.id', name: 'Ustadz Yusuf Rahman, Lc.', phone: '081200000002', password: passwords.teacher, role: 'GURU' },
+    { email: 'ustadzah.khadijah@daruljinan.sch.id', name: 'Ustadzah Khadijah Rahmawati', phone: '081200000003', password: passwords.teacher, role: 'GURU' },
+    { email: 'ustadz.ibrahim@daruljinan.sch.id', name: 'Ustadz Ibrahim Musa, S.Pd.', phone: '081200000004', password: passwords.teacher, role: 'GURU' },
   ]
 
   const guruData = [
@@ -136,12 +150,12 @@ async function main() {
 
   // ===== PARENTS =====
   const parents = [
-    { email: 'budi.santoso@gmail.com', name: 'Budi Santoso', phone: '081300000001', password: 'ortu123' },
-    { email: 'siti.aminah@gmail.com', name: 'Siti Aminah', phone: '081300000002', password: 'ortu123' },
-    { email: 'joko.purnomo@gmail.com', name: 'Joko Purnomo', phone: '081300000003', password: 'ortu123' },
-    { email: 'dewi.lestari@gmail.com', name: 'Dewi Lestari', phone: '081300000004', password: 'ortu123' },
-    { email: 'ahmad.hidayat@gmail.com', name: 'Ahmad Hidayat', phone: '081300000005', password: 'ortu123' },
-    { email: 'ratna.sari@gmail.com', name: 'Ratna Sari', phone: '081300000006', password: 'ortu123' },
+    { email: 'budi.santoso@gmail.com', name: 'Budi Santoso', phone: '081300000001', password: passwords.parent },
+    { email: 'siti.aminah@gmail.com', name: 'Siti Aminah', phone: '081300000002', password: passwords.parent },
+    { email: 'joko.purnomo@gmail.com', name: 'Joko Purnomo', phone: '081300000003', password: passwords.parent },
+    { email: 'dewi.lestari@gmail.com', name: 'Dewi Lestari', phone: '081300000004', password: passwords.parent },
+    { email: 'ahmad.hidayat@gmail.com', name: 'Ahmad Hidayat', phone: '081300000005', password: passwords.parent },
+    { email: 'ratna.sari@gmail.com', name: 'Ratna Sari', phone: '081300000006', password: passwords.parent },
   ]
   const parentUsers: User[] = []
   for (const p of parents) {

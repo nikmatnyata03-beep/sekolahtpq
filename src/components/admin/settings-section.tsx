@@ -9,7 +9,6 @@ import {
   Mail,
   Phone,
   ShieldCheck,
-  Info,
   Loader2,
   Fingerprint,
   type LucideIcon,
@@ -53,12 +52,6 @@ function initials(name: string): string {
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('')
 }
-
-const DEMO_ACCOUNTS: { role: AuthUser['role']; email: string; password: string }[] = [
-  { role: 'ADMIN', email: 'admin@daruljinan.sch.id', password: 'admin123' },
-  { role: 'GURU', email: 'ustadzah.fatimah@daruljinan.sch.id', password: 'guru123' },
-  { role: 'ORANG_TUA', email: 'budi.santoso@gmail.com', password: 'ortu123' },
-]
 
 // ==== Password input with show/hide toggle (44px touch target) ====
 
@@ -181,7 +174,7 @@ export function SettingsSection({ user }: { user: AuthUser }) {
       const res = await fetch('/api/auth/password', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, currentPassword: current, newPassword: next }),
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
@@ -211,7 +204,7 @@ export function SettingsSection({ user }: { user: AuthUser }) {
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
-      {/* Left column: profile + demo accounts */}
+        {/* Left column: profile */}
       <div className="space-y-4">
         {/* a. Profil Akun */}
         <Card className="rounded-2xl border-stone-200 shadow-sm">
@@ -254,35 +247,6 @@ export function SettingsSection({ user }: { user: AuthUser }) {
           </CardContent>
         </Card>
 
-        {/* c. Akun Demo */}
-        <Card className="rounded-2xl border-stone-200 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="size-4 text-emerald-700" /> Akun Demo
-            </CardTitle>
-            <CardDescription>Kredensial bawaan yang tersedia pada sistem demo</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {DEMO_ACCOUNTS.map((acc) => (
-              <div
-                key={acc.email}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-stone-100 bg-stone-50/60 px-3.5 py-2.5 sm:flex-nowrap"
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <Badge className={roleBadgeClass(acc.role)}>{roleLabel(acc.role)}</Badge>
-                  <span className="truncate font-mono text-xs text-stone-600">{acc.email}</span>
-                </div>
-                <code className="shrink-0 rounded-md border border-stone-200 bg-white px-2 py-1 font-mono text-xs text-stone-700">
-                  {acc.password}
-                </code>
-              </div>
-            ))}
-            <p className="flex items-start gap-1.5 pt-1 text-xs text-stone-500">
-              <Info className="mt-0.5 size-3.5 shrink-0 text-amber-500" aria-hidden />
-              Gunakan akun ini untuk mencoba berbagai peran.
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Right column: b. Ubah Password */}

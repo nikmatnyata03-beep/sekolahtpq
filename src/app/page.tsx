@@ -7,9 +7,7 @@ import { AdminDashboard } from '@/components/admin/dashboard'
 import { ParentPortal } from '@/components/parent/parent-portal'
 import { LoginDialog } from '@/components/auth/login-dialog'
 import type { AuthUser } from '@/lib/types'
-import { installRuntimeErrorHook } from '@/lib/api-client'
-
-const STORAGE_KEY = 'simadji_user'
+import { apiGet, installRuntimeErrorHook } from '@/lib/api-client'
 
 export default function Home() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -22,21 +20,10 @@ export default function Home() {
     // rejection) — error otomatis masuk antrean agen AI via /api/dev/errors.
     installRuntimeErrorHook()
     const timer = setTimeout(() => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY)
-        if (raw) {
-          const parsed = JSON.parse(raw) as AuthUser
-          if (parsed?.id && parsed?.role) setUser(parsed)
-          else localStorage.removeItem(STORAGE_KEY)
-        }
-      } catch {
-        try {
-          localStorage.removeItem(STORAGE_KEY)
-        } catch {
-          /* ignore */
-        }
-      }
-      setHydrated(true)
+      void apiGet<AuthUser>('/api/auth/me')
+        .then(setUser)
+        .catch(() => setUser(null))
+        .finally(() => setHydrated(true))
     }, 10)
     return () => clearTimeout(timer)
   }, [])
@@ -44,20 +31,10 @@ export default function Home() {
   const handleLoginSuccess = useCallback((u: AuthUser) => {
     setUser(u)
     setLoginOpen(false)
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(u))
-    } catch {
-      /* ignore */
-    }
   }, [])
 
   const handleLogout = useCallback(() => {
     setUser(null)
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch {
-      /* ignore */
-    }
     // Hapus cookie sesi di server (fire-and-forget — UI sudah keluar).
     void fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
   }, [])

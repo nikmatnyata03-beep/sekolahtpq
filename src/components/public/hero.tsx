@@ -70,7 +70,7 @@ export function Hero({
 
   useEffect(() => {
     let cancelled = false
-    apiGet<DashboardStats>('/api/stats')
+    apiGet<Pick<DashboardStats, 'students' | 'teachers' | 'classes'>>('/api/public/stats')
       .then((data) => {
         if (!cancelled) setStats(data)
       })

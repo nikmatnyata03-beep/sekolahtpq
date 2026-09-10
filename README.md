@@ -86,25 +86,24 @@ echo 'DATABASE_URL=file:../db/custom.db' > .env
 # 4. Buat schema database
 bun run db:push
 
-# 5. Isi data awal (akun demo, santri, kelas, dll.)
+# 5. Siapkan password seed melalui environment (jangan commit nilainya)
+export SEED_ADMIN_PASSWORD='password-kuat-minimal-12-karakter'
+export SEED_DEVELOPER_PASSWORD='password-kuat-minimal-12-karakter'
+export SEED_TEACHER_PASSWORD='password-kuat-minimal-12-karakter'
+export SEED_PARENT_PASSWORD='password-kuat-minimal-12-karakter'
+
+# 6. Isi data awal (santri, kelas, dan akun)
 bun prisma/seed.ts
 bun prisma/seed-hafalan.ts
 
-# 6. Jalankan development server
+# 7. Jalankan development server
 bun run dev
 ```
 
 Buka `http://localhost:3000` — portal publik; dashboard admin di `/admin`.
 
-### 🔑 Akun Demo (dari seed)
-
-| Peran | Email | Password |
-|---|---|---|
-| Admin | `admin@daruljinan.sch.id` | `admin123` |
-| Ustadzah | `ustadzah.fatimah@daruljinan.sch.id` | `guru123` |
-| Ustadz | `ustadz.yusuf@daruljinan.sch.id` | `guru123` |
-
-> ⚠️ Segera ganti password default sebelum digunakan di lingkungan produksi.
+Password akun seed sengaja tidak disimpan di repository. Gunakan nilai environment
+yang berbeda untuk setiap lingkungan dan rotasi sebelum deployment produksi.
 
 ## 📜 Skrip Tersedia
 

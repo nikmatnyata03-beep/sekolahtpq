@@ -123,7 +123,7 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
       if (initial) setLoading(true)
       setError(null)
       try {
-        const d = await apiGet<ParentPortalData>(`/api/portal/parent?userId=${encodeURIComponent(user.id)}`)
+        const d = await apiGet<ParentPortalData>('/api/portal/parent')
         setData(d)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Gagal memuat data portal.')
