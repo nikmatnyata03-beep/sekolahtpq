@@ -24,6 +24,9 @@ import {
   Cloud,
   Github,
   ShieldCheck,
+  Radar,
+  GitCommitHorizontal,
+  ArrowRight,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/types'
 import { apiGet, apiSend } from '@/lib/api-client'
@@ -58,10 +61,21 @@ interface IssueRecord {
   message: string
   detail: string | null
   status: string
+  source: string
+  severity: string
   aiDiagnosis: string | null
   aiFix: string | null
+  claimedAt: string | null
+  claimedBy: string | null
+  commitHash: string | null
   fixedAt: string | null
   createdAt: string
+}
+
+interface QueueData {
+  items: IssueRecord[]
+  recentFixed: IssueRecord[]
+  counts: { waiting: number; inProgress: number }
 }
 
 interface ChatMessage {
@@ -80,6 +94,8 @@ const ISSUE_TYPE_LABEL: Record<string, string> = {
 
 const ISSUE_STATUS_STYLES: Record<string, string> = {
   OPEN: 'border-rose-200 bg-rose-50 text-rose-700',
+  WAITING_AI: 'border-purple-200 bg-purple-50 text-purple-700',
+  IN_PROGRESS: 'border-amber-200 bg-amber-100 text-amber-800',
   DIAGNOSING: 'border-amber-200 bg-amber-50 text-amber-700',
   FIXED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   IGNORED: 'border-stone-200 bg-stone-50 text-stone-500',
@@ -87,9 +103,26 @@ const ISSUE_STATUS_STYLES: Record<string, string> = {
 
 const ISSUE_STATUS_LABEL: Record<string, string> = {
   OPEN: 'Terbuka',
+  WAITING_AI: 'Menunggu AI',
+  IN_PROGRESS: 'Diproses AI',
   DIAGNOSING: 'Diagnosa',
   FIXED: 'Selesai',
   IGNORED: 'Diabaikan',
+}
+
+const SEVERITY_STYLES: Record<string, string> = {
+  CRITICAL: 'border-rose-300 bg-rose-100 text-rose-800',
+  HIGH: 'border-orange-300 bg-orange-100 text-orange-800',
+  MEDIUM: 'border-amber-300 bg-amber-100 text-amber-800',
+  LOW: 'border-stone-300 bg-stone-100 text-stone-600',
+  INFO: 'border-stone-200 bg-stone-50 text-stone-500',
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  HEALTH: 'Health Monitor',
+  RUNTIME: 'Error Runtime',
+  PENTEST: 'Pentest',
+  MANUAL: 'Manual',
 }
 
 const QUICK_PROMPTS = [
@@ -105,7 +138,9 @@ export function DevConsole({ user }: { user: AuthUser }) {
   const [healthLoading, setHealthLoading] = useState(false)
   const [issues, setIssues] = useState<IssueRecord[]>([])
   const [issueCounts, setIssueCounts] = useState({ open: 0, diagnosing: 0, fixed: 0 })
+  const [queue, setQueue] = useState<QueueData | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [expandedQ, setExpandedQ] = useState<string | null>(null)
   const [busyIssue, setBusyIssue] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
@@ -125,6 +160,15 @@ export function DevConsole({ user }: { user: AuthUser }) {
     }
   }, [])
 
+  const loadQueue = useCallback(async () => {
+    try {
+      const data = await apiGet<QueueData>('/api/dev/agent-queue')
+      setQueue(data)
+    } catch {
+      /* diamkan */
+    }
+  }, [])
+
   const loadChat = useCallback(async () => {
     try {
       const data = await apiGet<{ messages: ChatMessage[] }>('/api/dev/chat')
@@ -137,7 +181,10 @@ export function DevConsole({ user }: { user: AuthUser }) {
   useEffect(() => {
     void loadIssues()
     void loadChat()
-  }, [loadIssues, loadChat])
+    void loadQueue()
+    const t = setInterval(() => void loadQueue(), 30_000) // antrean diperbarui tiap 30 detik
+    return () => clearInterval(t)
+  }, [loadIssues, loadChat, loadQueue])
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight })
@@ -149,7 +196,7 @@ export function DevConsole({ user }: { user: AuthUser }) {
     try {
       const data = await apiGet<HealthData>('/api/dev/health')
       setHealth(data)
-      await loadIssues()
+      await Promise.all([loadIssues(), loadQueue()])
       toast({
         title: data.summary.unhealthy === 0 ? 'Semua sistem sehat ✓' : `${data.summary.unhealthy} endpoint bermasalah`,
         description: `Database ${data.db.healthy ? 'OK' : 'GAGAL'} · ${data.summary.healthy}/${data.summary.total} endpoint sehat`,
@@ -201,6 +248,30 @@ export function DevConsole({ user }: { user: AuthUser }) {
     }
   }
 
+  /** Kirim issue terbuka ke antrean agen AI (AI Fix Bridge). */
+  async function sendIssueToAI(id: string) {
+    if (busyIssue) return
+    setBusyIssue(id)
+    try {
+      const iss = issues.find((x) => x.id === id)
+      const res = await apiSend<{ result: string }>('/api/dev/agent-queue', 'POST', {
+        action: 'enqueue',
+        type: iss?.type ?? 'ENDPOINT_FAIL',
+        source: 'MANUAL',
+        severity: 'HIGH',
+        endpoint: iss?.endpoint ?? undefined,
+        message: iss?.message ?? 'Issue dari Dev Console',
+        detail: iss?.detail ?? undefined,
+      })
+      toast({ title: 'Dikirim ke AI Developer', description: res.result })
+      await Promise.all([loadIssues(), loadQueue()])
+    } catch (e) {
+      toast({ title: 'Gagal mengirim', description: e instanceof Error ? e.message : '', variant: 'destructive' })
+    } finally {
+      setBusyIssue(null)
+    }
+  }
+
   async function copyText(id: string, text: string) {
     try {
       await navigator.clipboard.writeText(text)
@@ -238,8 +309,99 @@ export function DevConsole({ user }: { user: AuthUser }) {
       </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* ====== Kolom kiri: kesehatan + issue ====== */}
+        {/* ====== Kolom kiri: antrean AI + kesehatan + issue ====== */}
         <div className="grid content-start gap-6 lg:col-span-3">
+          {/* Antrean AI Fix Bridge */}
+          <Card className="border-purple-200 bg-gradient-to-br from-purple-50/70 via-white to-emerald-50/40">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                <Radar className="size-5 text-purple-700" />
+                Antrean AI Developer
+                <span className="ml-auto flex flex-wrap gap-1.5">
+                  <Badge className="border-purple-200 bg-purple-100 text-[10px] text-purple-700">{queue?.counts.waiting ?? 0} menunggu</Badge>
+                  <Badge className="border-amber-200 bg-amber-100 text-[10px] text-amber-800">{queue?.counts.inProgress ?? 0} diproses</Badge>
+                </span>
+              </CardTitle>
+              <CardDescription>Temuan &amp; error yang otomatis diperbaiki agen AI eksternal — komit GitHub → auto-deploy Cloudflare.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {/* Penjelasan loop perbaikan otomatis */}
+              <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-purple-100 bg-white/70 px-3 py-2.5 text-[11px] text-stone-600">
+                <span className="font-semibold text-purple-800">1. Deteksi/Temuan</span>
+                <ArrowRight className="size-3 shrink-0 text-stone-400" />
+                <span className="font-semibold text-purple-800">2. Antrean (≤5 mnt diambil)</span>
+                <ArrowRight className="size-3 shrink-0 text-stone-400" />
+                <span className="font-semibold text-purple-800">3. Fix + push GitHub</span>
+                <ArrowRight className="size-3 shrink-0 text-stone-400" />
+                <span className="font-semibold text-emerald-700">4. Auto-deploy → Selesai</span>
+              </div>
+
+              {(!queue || queue.items.length === 0) && (
+                <p className="py-4 text-center text-sm text-stone-400">
+                  Antrean kosong — tidak ada perbaikan berjalan. Temuan CRITICAL/HIGH dari pentest &amp; error runtime masuk sini otomatis.
+                </p>
+              )}
+              {queue?.items.map((it) => {
+                const isOpen = expandedQ === it.id
+                return (
+                  <div key={it.id} className={cn('rounded-xl border', isOpen ? 'border-purple-300 bg-purple-50/40' : 'border-stone-200 bg-white')}>
+                    <button type="button" onClick={() => setExpandedQ(isOpen ? null : it.id)} className="flex w-full items-start gap-2.5 p-3.5 text-left" aria-expanded={isOpen}>
+                      <Badge className={cn('mt-0.5 shrink-0 border text-[10px] font-bold', SEVERITY_STYLES[it.severity])}>{it.severity}</Badge>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium break-words text-stone-800">{it.message}</span>
+                        <span className="mt-0.5 block font-mono text-[11px] break-all text-stone-500">
+                          {SOURCE_LABEL[it.source] ?? it.source} · {it.endpoint ?? '—'} · {new Date(it.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {it.status === 'IN_PROGRESS' && it.claimedBy && (
+                          <span className="mt-0.5 block text-[11px] text-amber-700">Sedang dikerjakan oleh {it.claimedBy} sejak {it.claimedAt ? new Date(it.claimedAt).toLocaleTimeString('id-ID') : '—'}</span>
+                        )}
+                      </span>
+                      <Badge className={cn('shrink-0 border text-[10px]', ISSUE_STATUS_STYLES[it.status])}>{ISSUE_STATUS_LABEL[it.status] ?? it.status}</Badge>
+                      {isOpen ? <ChevronUp className="mt-1 size-4 shrink-0 text-stone-400" /> : <ChevronDown className="mt-1 size-4 shrink-0 text-stone-400" />}
+                    </button>
+                    {isOpen && (
+                      <div className="grid gap-3 border-t border-purple-100 px-3.5 pb-4 pt-3">
+                        {it.detail && (
+                          <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                            <p className="mb-1 text-[11px] font-semibold text-stone-500">Bukti / detail</p>
+                            <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-xs break-all text-stone-700">{it.detail}</pre>
+                          </div>
+                        )}
+                        {it.aiFix && (
+                          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                            <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
+                              <Wrench className="size-3" /> Catatan perbaikan
+                            </p>
+                            <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-xs break-words text-emerald-900">{it.aiFix}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {queue && queue.recentFixed.length > 0 && (
+                <div className="grid gap-1.5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
+                    <CheckCircle2 className="size-3.5" /> Riwayat diperbaiki agen AI
+                  </p>
+                  {queue.recentFixed.map((fx) => (
+                    <div key={fx.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-600">
+                      <span className="min-w-0 flex-1 truncate">{fx.message}</span>
+                      {fx.commitHash && (
+                        <Badge variant="outline" className="shrink-0 gap-1 border-emerald-200 font-mono text-[9px] text-emerald-700">
+                          <GitCommitHorizontal className="size-3" /> {fx.commitHash.slice(0, 7)}
+                        </Badge>
+                      )}
+                      <span className="shrink-0 text-stone-400">{fx.fixedAt ? new Date(fx.fixedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Kesehatan */}
           <Card>
             <CardHeader className="pb-3">
@@ -365,6 +527,11 @@ export function DevConsole({ user }: { user: AuthUser }) {
                           <Button size="sm" variant="outline" className="h-8 gap-1.5 border-emerald-300 text-emerald-800 hover:bg-emerald-50" disabled={!!busyIssue} onClick={() => void issueAction(iss.id, 'autofix')}>
                             <Wrench className="size-3.5" /> Auto-Fix
                           </Button>
+                          {iss.status !== 'WAITING_AI' && iss.status !== 'IN_PROGRESS' && (
+                            <Button size="sm" variant="outline" className="h-8 gap-1.5 border-purple-300 text-purple-800 hover:bg-purple-50" disabled={!!busyIssue} onClick={() => void sendIssueToAI(iss.id)}>
+                              <Bot className="size-3.5" /> Kirim ke AI Developer
+                            </Button>
+                          )}
                           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-stone-400" disabled={!!busyIssue} onClick={() => void issueAction(iss.id, 'ignore')}>
                             <EyeOff className="size-3.5" /> Abaikan
                           </Button>

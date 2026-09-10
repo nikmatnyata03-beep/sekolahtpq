@@ -292,21 +292,30 @@ model PentestFinding {
   cwe         String? // referensi CWE, mis. CWE-89
   confidence  String? // HIGH | MEDIUM | LOW
   aiAnalysis  String? // analisa mendalam dari AI
-  status      String      @default("OPEN") // OPEN | FIXED | FALSE_POSITIVE | ACKNOWLEDGED
+  status      String      @default("OPEN") // OPEN | WAITING_AI | FIXED | FALSE_POSITIVE | ACKNOWLEDGED
+  linkedIssueId String? // ID DevIssue pada antrean AI Fix Bridge (jika dikirim ke agen AI)
   createdAt   DateTime    @default(now())
 }
 
 // Issue kesehatan sistem — terisi otomatis oleh health monitor Dev Console
 // (mis. endpoint gagal, respons bukan JSON → "web gagal load json")
+// AI FIX BRIDGE: status WAITING_AI = masuk antrean perbaikan oleh agen AI
+// eksternal (cron 5 menit: ambil → perbaiki kode → push GitHub → auto-deploy
+// → resolve dengan catatan + hash commit).
 model DevIssue {
   id          String    @id @default(cuid())
-  type        String // ENDPOINT_FAIL | JSON_PARSE | DB_ERROR | PENTEST_CRITICAL
+  type        String // ENDPOINT_FAIL | JSON_PARSE | DB_ERROR | PENTEST_CRITICAL | PENTEST_HIGH | RUNTIME_JS | RUNTIME_PROMISE | RUNTIME_FETCH | RUNTIME_HTTP5XX
   endpoint    String?
   message     String
   detail      String?
-  status      String    @default("OPEN") // OPEN | DIAGNOSING | FIXED | IGNORED
-  aiDiagnosis String? // hasil diagnosa AI
-  aiFix       String? // saran perbaikan / hasil auto-fix dari AI
+  status      String    @default("OPEN") // OPEN | WAITING_AI | IN_PROGRESS | DIAGNOSING | FIXED | IGNORED
+  source      String    @default("HEALTH") // HEALTH | RUNTIME | PENTEST | MANUAL
+  severity    String    @default("MEDIUM") // CRITICAL | HIGH | MEDIUM | LOW | INFO
+  aiDiagnosis String? // hasil diagnosa AI / alasan ditolak agen
+  aiFix       String? // saran perbaikan / hasil auto-fix / catatan resolusi agen
+  claimedAt   DateTime? // waktu agen AI mengambil item antrean
+  claimedBy   String? // identitas sesi agen AI yang mengambil
+  commitHash  String? // hash commit GitHub perbaikan (auto-deploy Cloudflare)
   fixedAt     DateTime?
   createdAt   DateTime  @default(now())
 }

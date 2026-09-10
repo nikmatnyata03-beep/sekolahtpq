@@ -7,6 +7,7 @@ import { AdminDashboard } from '@/components/admin/dashboard'
 import { ParentPortal } from '@/components/parent/parent-portal'
 import { LoginDialog } from '@/components/auth/login-dialog'
 import type { AuthUser } from '@/lib/types'
+import { installRuntimeErrorHook } from '@/lib/api-client'
 
 const STORAGE_KEY = 'simadji_user'
 
@@ -17,6 +18,9 @@ export default function Home() {
 
   // Restore session after mount (deferred callback keeps hydration consistent)
   useEffect(() => {
+    // AI Fix Bridge: pasang pelapor error runtime global (JS error, promise
+    // rejection) — error otomatis masuk antrean agen AI via /api/dev/errors.
+    installRuntimeErrorHook()
     const timer = setTimeout(() => {
       try {
         const raw = localStorage.getItem(STORAGE_KEY)

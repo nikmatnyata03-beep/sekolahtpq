@@ -109,7 +109,8 @@ export async function GET(req: NextRequest) {
         )
       } else {
         // endpoint pulih → tutup issue terbuka untuk endpoint ini
-        const open = await db.devIssue.findFirst({ where: { endpoint: path, status: { in: ['OPEN', 'DIAGNOSING'] } } })
+        // (termasuk yang masih menunggu agen AI — tidak perlu diperbaiki lagi)
+        const open = await db.devIssue.findFirst({ where: { endpoint: path, status: { in: ['OPEN', 'WAITING_AI', 'DIAGNOSING'] } } })
         if (open) {
           await db.devIssue.update({
             where: { id: open.id },
@@ -146,11 +147,13 @@ export async function GET(req: NextRequest) {
   })
 }
 
-/** Buat DevIssue bila belum ada issue OPEN untuk endpoint/type yang sama (dedupe). */
+/** Buat DevIssue bila belum ada issue aktif untuk endpoint/type yang sama (dedupe).
+ *  AI FIX BRIDGE: issue baru langsung berstatus WAITING_AI — otomatis masuk
+ *  antrean agen AI eksternal (cron 5 menit) tanpa perlu klik apa pun. */
 async function raiseIssue(type: string, endpoint: string | null, message: string, detail: string) {
   try {
     const existing = await db.devIssue.findFirst({
-      where: { type, endpoint, status: { in: ['OPEN', 'DIAGNOSING'] } },
+      where: { type, endpoint, status: { in: ['OPEN', 'WAITING_AI', 'DIAGNOSING'] } },
     })
     if (existing) {
       await db.devIssue.update({
@@ -160,7 +163,15 @@ async function raiseIssue(type: string, endpoint: string | null, message: string
       return
     }
     await db.devIssue.create({
-      data: { type, endpoint, message, detail: detail.slice(0, 2000) },
+      data: {
+        type,
+        endpoint,
+        message,
+        detail: detail.slice(0, 2000),
+        status: 'WAITING_AI',
+        source: 'HEALTH',
+        severity: type === 'DB_ERROR' ? 'CRITICAL' : 'HIGH',
+      },
     })
   } catch (e) {
     console.error('[dev/health] raiseIssue gagal', e)
