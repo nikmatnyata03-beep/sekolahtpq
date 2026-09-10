@@ -119,14 +119,17 @@ export class PresenceHub extends DurableObject {
       }
       try {
         await this.load()
-        const pair = new WebSocketPair()
-        this.st.acceptWebSocket(pair.server)
+        // WebSocketPair = array-like [client, server] — TIDAK punya .client/.server
+        // (terverifikasi workerd; lihat catatan di src/types/cloudflare-do.d.ts).
+        const pair = new WebSocketPair() as unknown as [WebSocket, WebSocket]
+        const [client, server] = pair
+        this.st.acceptWebSocket(server)
         try {
-          pair.server.send(JSON.stringify({ kind: 'snapshot', events: this.events } satisfies HubMessage))
+          server.send(JSON.stringify({ kind: 'snapshot', events: this.events } satisfies HubMessage))
         } catch {
           /* klien sudah pergi */
         }
-        return new Response(null, { status: 101, webSocket: pair.client } as unknown as ResponseInit)
+        return new Response(null, { status: 101, webSocket: client } as unknown as ResponseInit)
       } catch (e) {
         // Diagnostik: pesan error asli ikut dikirim supaya masalah upgrade
         // terlihat dari uji curl tanpa harus membuka log dashboard.

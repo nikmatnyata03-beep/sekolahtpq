@@ -30,9 +30,14 @@ interface DurableObjectState {
   storage: DurableObjectStorage
 }
 
-interface WebSocketPair {
-  client: WebSocket
-  server: WebSocket
+/**
+ * Pair WebSocket workerd: array-like [client, server] — CATATAN PENTING:
+ * properti bernama .client/.server TIDAK ADA di runtime modern; wajib pakai
+ * indeks `pair[0]` (client) dan `pair[1]` (server) — sudah diverifikasi
+ * empiris dengan workerd (wrangler dev) dan produksi.
+ */
+declare const WebSocketPair: {
+  new (): [WebSocket, WebSocket]
 }
 
 interface DurableObjectStub {
