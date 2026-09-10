@@ -51,7 +51,10 @@ export function TurnstileWidget({ onToken, resetSignal = 0 }: { onToken: (token:
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetIdRef = useRef<string | number | undefined>(undefined)
   const onTokenRef = useRef(onToken)
-  onTokenRef.current = onToken
+
+  useEffect(() => {
+    onTokenRef.current = onToken
+  }, [onToken])
 
   useEffect(() => {
     let cancelled = false

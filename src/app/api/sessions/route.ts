@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { guard, getSession } from '@/lib/session'
+import { broadcastPresence } from '@/lib/presence-broadcast'
 
 export async function GET(req: NextRequest) {
   // Daftar sesi dipakai halaman cek-in publik -> tetap terbuka, NAMAI kode
@@ -60,6 +61,15 @@ export async function POST(req: NextRequest) {
         isActive: true,
       },
     })
+    broadcastPresence({
+      id: crypto.randomUUID(),
+      type: 'session_open',
+      sessionId: session.id,
+      sessionCode: code,
+      className: cls.name,
+      actor: g.session.name,
+      at: new Date().toISOString(),
+    })
     return ok(session)
   } catch {
     return bad('Gagal membuat sesi')
@@ -78,6 +88,15 @@ export async function PUT(req: NextRequest) {
       return bad('Anda bukan pengampu kelas sesi ini', 403)
     }
     const session = await db.session.update({ where: { id: b.id }, data: { isActive: !!b.isActive } })
+    broadcastPresence({
+      id: crypto.randomUUID(),
+      type: b.isActive ? 'session_open' : 'session_close',
+      sessionId: existing.id,
+      sessionCode: existing.code,
+      className: existing.class.name,
+      actor: g.session.name,
+      at: new Date().toISOString(),
+    })
     return ok(session)
   } catch {
     return bad('Gagal memperbarui sesi')

@@ -8,6 +8,7 @@ import {
   GraduationCap,
   BookOpen,
   CalendarCheck,
+  Radio,
   BookMarked,
   FolderOpen,
   Wallet,
@@ -40,6 +41,7 @@ import { StudentsAdmin } from './students-admin'
 import { TeachersAdmin } from './teachers-admin'
 import { ClassesAdmin } from './classes-admin'
 import { AttendanceAdmin } from './attendance-admin'
+import { PresenceLivePanel } from './presence-live'
 import { HafalanAdmin } from './hafalan-admin'
 import { MaterialsAdmin } from './materials-admin'
 import { PaymentsAdmin } from './payments-admin'
@@ -59,6 +61,7 @@ type SectionKey =
   | 'teachers'
   | 'classes'
   | 'attendance'
+  | 'presensi-live'
   | 'hafalan'
   | 'materials'
   | 'ai'
@@ -88,6 +91,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'teachers', label: 'Guru', description: 'Biodata dan keaktifan ustadz/ustadzah', icon: GraduationCap, adminOnly: true },
   { key: 'classes', label: 'Kelas', description: 'Kelola kelas, jadwal, dan pengajar', icon: BookOpen },
   { key: 'attendance', label: 'Absensi', description: 'Buka sesi QR, catat kehadiran santri', icon: CalendarCheck },
+  { key: 'presensi-live', label: 'Presensi Live', description: 'Panel real-time kehadiran santri (Durable Objects)', icon: Radio },
   { key: 'hafalan', label: 'Hafalan', description: 'Catat setoran dan capaian hafalan', icon: BookMarked },
   { key: 'materials', label: 'Materi', description: 'Unggah dan bagikan materi pembelajaran', icon: FolderOpen },
   { key: 'ai', label: 'Asisten AI', description: 'Generator kuis hafalan, ide materi, dan rencana belajar', icon: Sparkles },
@@ -102,7 +106,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'pengaturan', label: 'Pengaturan', description: 'Profil akun dan keamanan', icon: Settings },
 ]
 
-const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'hafalan', 'materials', 'ai', 'pengaturan']
+const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'presensi-live', 'hafalan', 'materials', 'ai', 'pengaturan']
 const DEVELOPER_ALLOWED: SectionKey[] = ['ringkasan', 'pentest', 'devconsole', 'pengaturan']
 
 function roleBadgeClass(role: string): string {
@@ -167,6 +171,8 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return <ClassesAdmin />
       case 'attendance':
         return <AttendanceAdmin />
+      case 'presensi-live':
+        return <PresenceLivePanel />
       case 'hafalan':
         return <HafalanAdmin />
       case 'materials':

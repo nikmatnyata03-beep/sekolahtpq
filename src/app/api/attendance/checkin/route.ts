@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { broadcastPresence } from '@/lib/presence-broadcast'
 
 /**
  * Simulated QR check-in (per blueprint SantriQ-style flow):
@@ -31,6 +32,17 @@ export async function POST(req: NextRequest) {
     if (existing) return ok({ already: true, message: `${student.fullName} sudah tercatat ${existing.status} pada sesi ini.` })
 
     await db.attendance.create({ data: { sessionId: session.id, studentId, status: 'HADIR' } })
+    broadcastPresence({
+      id: crypto.randomUUID(),
+      type: 'checkin',
+      sessionId: session.id,
+      sessionCode: session.code,
+      className: session.class.name,
+      studentId,
+      studentName: student.fullName,
+      status: 'HADIR',
+      at: new Date().toISOString(),
+    })
     if (student.parent) {
       await sendWhatsApp({
         phone: student.parent.phone,

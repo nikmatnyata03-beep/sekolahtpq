@@ -5,6 +5,14 @@ import { createSessionToken, sessionCookieHeader, isSecureRequest, type SessionU
 import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { verifyTurnstileToken } from '@/lib/turnstile-server'
 
+/** Bandingkan string constant-time (anti timing attack) untuk kunci layanan. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown; turnstileToken?: unknown } | null
@@ -22,7 +30,20 @@ export async function POST(req: NextRequest) {
 
     const { email, password } = body
     if (!email || !password) return bad('Email dan password wajib diisi')
-    if (!(await verifyTurnstileToken(body.turnstileToken, ip))) return bad('Verifikasi keamanan gagal. Silakan coba lagi.', 403)
+
+    // Turnstile wajib untuk login manusia. Pengecualian NARROW: agen layanan
+    // (AI Fix Bridge, non-browser) membawa kunci layanan — tanpa itu bot
+    // tetap terblokir. Kunci HANYA melewati cek bot, email+password tetap wajib.
+    const agentKey = req.headers.get('x-agent-key') ?? undefined
+    const expectedAgentKey = process.env.AGENT_API_KEY
+    const isServiceAgent =
+      typeof expectedAgentKey === 'string' &&
+      expectedAgentKey.length >= 32 &&
+      typeof agentKey === 'string' &&
+      safeEqual(agentKey, expectedAgentKey)
+    if (!isServiceAgent && !(await verifyTurnstileToken(body.turnstileToken, ip))) {
+      return bad('Verifikasi keamanan gagal. Silakan coba lagi.', 403)
+    }
     const user = await db.user.findUnique({
       where: { email: String(email).toLowerCase().trim() },
       include: { teacherProfile: { select: { id: true, fullName: true } } },

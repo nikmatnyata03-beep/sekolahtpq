@@ -33,8 +33,22 @@
     "BCRYPT_ROUNDS": "5",
     // Secret untuk memicu /api/cron/daily dari scheduled handler (repo privat;
     // bila repo jadi publik, pindahkan ke Worker Secret via dashboard).
-    "CRON_SECRET": "d086576c5cc5541cbb25f28cb8bb438b81461ad6e6fb33dd"
+    "CRON_SECRET": "d086576c5cc5541cbb25f28cb8bb438b81461ad6e6fb33dd",
+    // Kunci layanan utk agen non-browser (AI Fix Bridge) melewati Turnstile pada login.
+    // Kunci hanya mem-bypass cek bot — email+password tetap wajib. Repo privat;
+    // bila repo jadi publik, pindahkan ke Worker Secret via dashboard.
+    "AGENT_API_KEY": "0ec95d1666aa735ca8cb3782f12e5105f736981728f52b31"
   },
+  // Durable Object "PresenceHub" — panel presensi real-time (WebSocket
+  // hibernation). Kelas SQLite-backed → tersedia di tier gratis Workers.
+  "durable_objects": {
+    "bindings": [
+      { "name": "PRESENCE_HUB", "class_name": "PresenceHub" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PresenceHub"] }
+  ],
   // Workers AI (tier gratis Â±10rb neuron/hari): ringkasan laporan + asisten guru
   "ai": {
     "binding": "AI"

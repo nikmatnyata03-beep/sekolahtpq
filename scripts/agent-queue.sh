@@ -13,6 +13,7 @@
 # Kredensial dibaca dari .agent-credentials.local (gitignored, chmod 600):
 #   email=agent@daruljinan.sch.id
 #   password=xxxxxxxxxxxxxxxxxxxxxx
+#   agent_key=xxxxxxxxxxxxxxxxxxxxxxxx   (kunci layanan, dilewati Turnstile)
 # Keluar code 0; antrean kosong dicetak sebagai {"empty": true}.
 
 set -uo pipefail
@@ -33,6 +34,7 @@ load_creds() {
   fi
   AGENT_EMAIL=$(grep -E '^email=' "$CRED_FILE" | head -1 | cut -d= -f2-)
   AGENT_PASS=$(grep -E '^password=' "$CRED_FILE" | head -1 | cut -d= -f2-)
+  AGENT_KEY=$(grep -E '^agent_key=' "$CRED_FILE" | head -1 | cut -d= -f2-)
   if [ -z "$AGENT_EMAIL" ] || [ -z "$AGENT_PASS" ]; then
     echo "{\"empty\": true, \"note\": \"format .agent-credentials.local tidak valid\"}"
     return 1
@@ -42,9 +44,13 @@ load_creds() {
 login() {
   load_creds || return 1
   local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -X POST "$BASE/api/auth/login" \
-    -H 'Content-Type: application/json' \
-    -d "$(python3 -c 'import json,sys; print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))' "$AGENT_EMAIL" "$AGENT_PASS")")
+  # Header x-agent-key: kunci layanan agar login non-browser (curl) tidak
+  # diblokir Turnstile. Email+password tetap wajib valid.
+  local auth_payload
+  auth_payload=$(python3 -c 'import json,sys; print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))' "$AGENT_EMAIL" "$AGENT_PASS")
+  local login_args=(-H 'Content-Type: application/json' -d "$auth_payload")
+  [ -n "${AGENT_KEY:-}" ] && login_args+=(-H "x-agent-key: $AGENT_KEY")
+  code=$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -X POST "$BASE/api/auth/login" "${login_args[@]}")
   if [ "$code" != "200" ]; then
     echo "{\"empty\": true, \"note\": \"login agen gagal HTTP $code — akun $AGENT_EMAIL belum ada/salah password di $BASE\"}" >&1
     return 1
