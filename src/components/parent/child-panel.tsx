@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  AlertCircle,
   BadgeCheck,
   BookOpenCheck,
   CalendarDays,
+  Camera,
+  CameraOff,
   CheckCircle2,
   CircleCheck,
   ClipboardCheck,
@@ -13,14 +16,17 @@ import {
   Inbox,
   Landmark,
   Loader2,
+  MapPin,
   Printer,
   Download,
   QrCode,
   ReceiptText,
+  RefreshCw,
   ScanLine,
   Smartphone,
   User,
   Wallet,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +45,10 @@ import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
+import { useGpsFix } from '@/hooks/use-gps-fix'
+import { useQrScanner } from '@/hooks/use-qr-scanner'
 import { apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
+import { type GpsFix } from '@/lib/gps-client'
 import { buildRaporSantriPdf, buildStrukPdf, downloadBlob } from '@/lib/rapor-pdf'
 import type { Hafalan, Payment, ParentPortalData, SessionItem } from '@/lib/types'
 import { HafalanProgress } from './hafalan-chart'
@@ -812,23 +821,58 @@ function QrCheckinCard({
   const [code, setCode] = useState('')
   const [checking, setChecking] = useState(false)
 
+  // ==== GPS wajib (Task 33/34) — hook bersama; izin lokasi diminta otomatis saat kartu tampil ====
+  const { gps, state: gpsState, error: gpsError, acquire: acquireGps, ensureFresh } = useGpsFix()
+
+  // ==== Pemindai QR kamera — hook bersama dgn halaman publik (id unik per anak) ====
+  const SCANNER_DIV = `wali-checkin-qr-${child.id}`
+  const handleDecoded = useCallback(
+    (found: string) => {
+      setCode(found)
+      toast({ title: 'QR Terbaca', description: `Kode ${found} terisi otomatis. Tekan Check-in.` })
+    },
+    [toast],
+  )
+  const { scanning, error: scanError, start: startScan, stop: stopScan } = useQrScanner(SCANNER_DIV, handleDecoded)
+
   // Portal data has no classId, so match the child's class by class name.
   const classSessions = activeSessions.filter((s) => s.className === child.className)
 
   async function submit() {
     const trimmed = code.trim()
     if (!trimmed) {
-      toast({ title: 'Kode kosong', description: 'Masukkan kode kehadiran terlebih dahulu.', variant: 'destructive' })
+      toast({ title: 'Kode kosong', description: 'Masukkan atau pindai kode kehadiran terlebih dahulu.', variant: 'destructive' })
       return
     }
     setChecking(true)
     try {
+      // GPS segar saat submit — server menolak posisi basi (> 3 menit).
+      let fix: GpsFix
+      try {
+        fix = await ensureFresh()
+      } catch {
+        toast({
+          title: 'GPS belum siap',
+          description:
+            'Check-in wajib GPS untuk mencegah absen palsu (maks. 20 m dari titik kelas). Izinkan akses lokasi, lalu tekan Coba Lagi.',
+          variant: 'destructive',
+        })
+        return
+      }
       const res = await apiSend<{ success?: boolean; already?: boolean; message?: string }>(
         '/api/attendance/checkin',
         'POST',
-        { code: trimmed, studentId: child.id },
+        {
+          code: trimmed,
+          studentId: child.id,
+          gps: { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, posTs: fix.posTs },
+        },
       )
-      toast({ title: 'Check-in tercatat', description: res.message ?? `${child.fullName} tercatat hadir.` })
+      if (res?.already) {
+        toast({ title: 'Sudah terabsen', description: res.message ?? `${child.fullName} sudah tercatat pada sesi ini.` })
+      } else {
+        toast({ title: 'Check-in tercatat', description: res.message ?? `${child.fullName} tercatat hadir.` })
+      }
       setCode('')
       onRefresh()
     } catch (err) {
@@ -852,35 +896,121 @@ function QrCheckinCard({
           Check-in QR Kehadiran
         </CardTitle>
         <CardDescription>
-          Masukkan kode kehadiran dari ustadz/ustadzah untuk mencatat kehadiran {child.fullName} secara mandiri.
+          Pindai QR kelas dengan kamera atau masukkan kode dari ustadz/ustadzah — kehadiran {child.fullName}{' '}
+          tervalidasi GPS (maks. 20 m dari titik kelas).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !checking) void submit()
             }}
             placeholder="Contoh: DJ-IA01-XXXX"
             className="h-10 flex-1 rounded-xl font-mono uppercase tracking-wider"
             disabled={checking}
+            aria-label="Kode kehadiran sesi"
           />
-          <Button
-            onClick={() => void submit()}
-            disabled={checking}
-            className="h-10 rounded-xl bg-emerald-700 px-5 text-white hover:bg-emerald-800"
-          >
-            {checking ? (
-              <>
-                <Loader2 className="size-4 animate-spin" /> Memproses...
-              </>
-            ) : (
-              'Check-in'
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => (scanning ? void stopScan() : void startScan())}
+              disabled={checking}
+              className="h-10 shrink-0 rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              aria-label={scanning ? 'Tutup kamera' : 'Pindai QR dengan kamera'}
+            >
+              {scanning ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
+              {scanning ? 'Tutup' : 'Pindai QR'}
+            </Button>
+            <Button
+              onClick={() => void submit()}
+              disabled={checking}
+              className="h-10 flex-1 rounded-xl bg-emerald-700 px-5 text-white hover:bg-emerald-800 sm:flex-none"
+            >
+              {checking ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Memproses...
+                </>
+              ) : (
+                'Check-in'
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* ==== Kamera pemindai QR ==== */}
+        {scanning && (
+          <div className="overflow-hidden rounded-2xl border-2 border-emerald-300 bg-stone-900 shadow-inner">
+            <div className="flex items-center justify-between border-b border-stone-700 bg-stone-800 px-3 py-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+                <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                Kamera aktif — arahkan ke QR kelas
+              </span>
+              <button
+                type="button"
+                className="rounded-md p-1 text-stone-300 transition-colors hover:bg-stone-700 hover:text-white"
+                onClick={() => void stopScan()}
+                aria-label="Tutup kamera"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div id={SCANNER_DIV} className="mx-auto max-w-xs" aria-label="Bidang pemindai QR" />
+          </div>
+        )}
+        {scanError && !scanning && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
+            {scanError}
+          </div>
+        )}
+
+        {/* ==== Status GPS (wajib — validasi 20 m) ==== */}
+        {gpsState === 'locating' && (
+          <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+            <Loader2 className="size-4 animate-spin text-emerald-600" />
+            Mengunci posisi GPS… (diperlukan untuk validasi absen maks. 20 m)
+          </div>
+        )}
+        {gpsState === 'ok' && gps && (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            <span className="inline-flex items-center gap-2">
+              <MapPin className="size-3.5 text-emerald-600" />
+              GPS siap{gps.accuracy != null ? ` (±${Math.round(gps.accuracy)} m)` : ''} — validasi 20 m aktif
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-emerald-700 hover:bg-emerald-100"
+              onClick={() => void acquireGps()}
+              aria-label="Perbarui posisi GPS"
+            >
+              <RefreshCw className="size-3" /> Segarkan
+            </Button>
+          </div>
+        )}
+        {gpsState === 'error' && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+              <span>{gpsError}</span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2 h-8 border-red-300 text-red-700 hover:bg-red-100"
+              onClick={() => void acquireGps()}
+            >
+              <RefreshCw className="size-3.5" /> Coba Lagi
+            </Button>
+          </div>
+        )}
+
         <div className="rounded-xl bg-stone-50 p-3">
           {classSessions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">

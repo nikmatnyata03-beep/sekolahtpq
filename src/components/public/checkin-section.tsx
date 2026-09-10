@@ -5,7 +5,7 @@
 // (kunci = kode sesi) → pilih nama → POST /api/attendance/checkin dgn GPS.
 // HADIR hanya sah bila perangkat ≤ 20 m dari titik QR ustadz (server-side).
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   Camera,
@@ -34,8 +34,10 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
+import { useGpsFix } from '@/hooks/use-gps-fix'
+import { useQrScanner } from '@/hooks/use-qr-scanner'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
-import { getGpsFix, GpsUnavailableError, type GpsFix } from '@/lib/gps-client'
+import { type GpsFix } from '@/lib/gps-client'
 import type { SessionItem } from '@/lib/types'
 
 type CheckinResult = { success?: boolean; already?: boolean; message?: string }
@@ -43,18 +45,6 @@ type RosterStudent = { id: string; fullName: string; nis: string }
 type RosterPayload = {
   session: { id: string; className: string; classLevel?: string; topic?: string | null; date?: string }
   students: RosterStudent[]
-}
-
-/** Ambil kode sesi dari hasil scan — QR berisi URL (?absen=KODE) maupun kode polos. */
-function extractCode(decoded: string): string {
-  try {
-    const url = new URL(decoded)
-    const absen = url.searchParams.get('absen')
-    if (absen) return absen.toUpperCase()
-  } catch {
-    // bukan URL — perlakukan sebagai kode polos
-  }
-  return decoded.trim().toUpperCase()
 }
 
 export function CheckinSection() {
@@ -67,36 +57,15 @@ export function CheckinSection() {
   const [code, setCode] = useState<string>('')
   const [checking, setChecking] = useState(false)
 
-  // ==== GPS wajib (Task 33) — diambil otomatis saat halaman dibuka ====
-  const [gps, setGps] = useState<GpsFix | null>(null)
-  const [gpsState, setGpsState] = useState<'locating' | 'ok' | 'error'>('locating')
-  const [gpsError, setGpsError] = useState<string | null>(null)
-  const acquireGps = useCallback(async () => {
-    setGpsState('locating')
-    setGpsError(null)
-    try {
-      const fix = await getGpsFix()
-      setGps(fix)
-      setGpsState('ok')
-    } catch (e) {
-      setGps(null)
-      setGpsState('error')
-      setGpsError(e instanceof GpsUnavailableError ? e.message : 'Lokasi gagal diambil. Coba lagi.')
-    }
-  }, [])
-  useEffect(() => {
-    void acquireGps()
-  }, [acquireGps])
+  // ==== GPS wajib (Task 33/34) — hook bersama, auto-request saat halaman dibuka ====
+  const { gps, state: gpsState, error: gpsError, acquire: acquireGps, ensureFresh } = useGpsFix()
 
   // Daftar santri kelas (dari kode sesi) — bukan seluruh sekolah.
   const [roster, setRoster] = useState<RosterPayload | null>(null)
   const [rosterLoading, setRosterLoading] = useState(false)
   const [rosterError, setRosterError] = useState<string | null>(null)
 
-  // ==== Pemindai QR kamera (html5-qrcode, lazy-load saat tombol ditekan) ====
-  const [scanning, setScanning] = useState(false)
-  const [scanError, setScanError] = useState<string | null>(null)
-  const scannerRef = useRef<{ stop: () => Promise<void>; clear: () => Promise<void> } | null>(null)
+  // ==== Pemindai QR kamera (hook bersama — html5-qrcode lazy-load saat ditekan) ====
   const SCANNER_DIV = 'checkin-qr-reader'
 
   // Prefill kode dari URL (?absen=KODE#checkin) — hasil scan kamera ponsel
@@ -108,60 +77,17 @@ export function CheckinSection() {
     }
   }, [])
 
-  const stopScan = useCallback(async () => {
-    const scanner = scannerRef.current
-    scannerRef.current = null
-    if (scanner) {
-      try {
-        await scanner.stop()
-        await scanner.clear()
-      } catch {
-        // kamera sudah berhenti sendiri — abaikan
-      }
-    }
-    setScanning(false)
-  }, [])
-
-  // Berhenti + lepaskan kamera saat komponen dibongkar
-  useEffect(() => {
-    return () => {
-      void stopScan()
-    }
-  }, [stopScan])
-
-  const startScan = async () => {
-    setScanError(null)
-    setScanning(true)
-    try {
-      const { Html5Qrcode } = await import('html5-qrcode')
-      const scanner = new Html5Qrcode(SCANNER_DIV, { verbose: false })
-      scannerRef.current = scanner
-      await scanner.start(
-        { facingMode: 'environment' }, // kamera belakang
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        (decodedText: string) => {
-          const found = extractCode(decodedText)
-          void stopScan()
-          setCode(found)
-          toast({
-            title: 'QR Terbaca',
-            description: `Kode ${found} terisi otomatis. Sekarang pilih nama santri.`,
-          })
-        },
-        () => {
-          // frame tanpa QR — abaikan diam-diam
-        },
-      )
-    } catch (err) {
-      scannerRef.current = null
-      setScanning(false)
-      const msg =
-        err instanceof Error && /permission|denied|notallowed/i.test(err.message)
-          ? 'Izin kamera ditolak. Aktifkan izin kamera di browser, atau ketik kode manual.'
-          : 'Kamera tidak dapat dibuka di perangkat ini. Silakan ketik kode manual.'
-      setScanError(msg)
-    }
-  }
+  const handleDecoded = useCallback(
+    (found: string) => {
+      setCode(found)
+      toast({
+        title: 'QR Terbaca',
+        description: `Kode ${found} terisi otomatis. Sekarang pilih nama santri.`,
+      })
+    },
+    [toast],
+  )
+  const { scanning, error: scanError, start: startScan, stop: stopScan } = useQrScanner(SCANNER_DIV, handleDecoded)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -210,14 +136,6 @@ export function CheckinSection() {
   // (Dropdown santri kini berasal dari roster per kode sesi — lihat effect di atas.)
 
   const handleCheckin = async () => {
-    if (!gps) {
-      toast({
-        title: 'GPS Belum Siap',
-        description: 'Check-in wajib GPS untuk mencegah absen palsu. Tunggu lokasi terkunci atau tekan Coba Lagi.',
-        variant: 'destructive',
-      })
-      return
-    }
     if (!studentId) {
       toast({
         title: 'Santri Belum Dipilih',
@@ -236,10 +154,22 @@ export function CheckinSection() {
     }
     setChecking(true)
     try {
+      // Posisi segar saat submit — pakai yang ada bila masih baru, atau ambil ulang.
+      let fix: GpsFix
+      try {
+        fix = await ensureFresh()
+      } catch {
+        toast({
+          title: 'GPS Belum Siap',
+          description: 'Check-in wajib GPS untuk mencegah absen palsu. Tunggu lokasi terkunci atau tekan Coba Lagi.',
+          variant: 'destructive',
+        })
+        return
+      }
       const result = await apiSend<CheckinResult>('/api/attendance/checkin', 'POST', {
         code: code.trim().toUpperCase(),
         studentId,
-        gps: { lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, posTs: gps.posTs },
+        gps: { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, posTs: fix.posTs },
       })
       if (result?.already) {
         toast({
