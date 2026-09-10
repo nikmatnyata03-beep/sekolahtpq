@@ -355,12 +355,11 @@ export function SettingsSection({ user }: { user: AuthUser }) {
             </Button>
           </form>
 
-          <Alert className="mt-4 rounded-xl border-amber-200 bg-amber-50 text-amber-800">
-            <Info className="size-4" />
+          <Alert className="mt-4 rounded-xl border-emerald-200 bg-emerald-50 text-emerald-800">
+            <ShieldCheck className="size-4" />
             <AlertTitle>Keamanan</AlertTitle>
-            <AlertDescription className="text-amber-700/90">
-              Demo: password disimpan sebagai teks biasa untuk keperluan demo. Pada produksi gunakan hashing
-              (bcrypt/argon2).
+            <AlertDescription className="text-emerald-700/90">
+              Password disimpan sebagai hash bcrypt — tidak ada yang bisa membacanya, termasuk administrator.
             </AlertDescription>
           </Alert>
         </CardContent>

@@ -21,6 +21,17 @@ type R2Bucket = {
 }
 
 /**
+ * Header keamanan untuk berkas statis:
+ * - CSP 'default-src none' → SVG berbahaya (berisi <script>) tidak bisa
+ *   mengeksekusi skrip saat dibuka langsung (mencegah stored XSS via unggahan).
+ * - nosniff → browser wajib hormati Content-Type.
+ */
+const FILE_SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  'X-Content-Type-Options': 'nosniff',
+}
+
+/**
  * GET /api/files/<nama> — sajikan gambar yang tersimpan di R2 (produksi).
  * Di `next dev` (tanpa workerd), fallback membaca public/uploads dari disk
  * sehingga URL dari editor admin tetap berfungsi di kedua mode.
@@ -48,7 +59,11 @@ export async function GET(
       if (!obj) return NextResponse.json({ error: 'Berkas tidak ditemukan' }, { status: 404 })
       const buf = await obj.arrayBuffer()
       return new NextResponse(buf, {
-        headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' },
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          ...FILE_SECURITY_HEADERS,
+        },
       })
     }
   } catch {
@@ -58,7 +73,11 @@ export async function GET(
   try {
     const file = await readFile(path.join(process.cwd(), 'public', 'uploads', name))
     return new NextResponse(new Uint8Array(file), {
-      headers: { 'Content-Type': contentType, 'Cache-Control': 'no-store' },
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'no-store',
+        ...FILE_SECURITY_HEADERS,
+      },
     })
   } catch {
     return NextResponse.json({ error: 'Berkas tidak ditemukan' }, { status: 404 })
