@@ -150,7 +150,7 @@ export interface Payment {
   title: string
   amount: number
   method: string | null
-  status: 'PENDING' | 'SUCCESS' | 'FAILED'
+  status: 'PENDING' | 'MENUNGGU_KONFIRMASI' | 'SUCCESS' | 'FAILED'
   paidAt: string | null
   createdAt: string
   student?: { id: string; fullName: string; nis: string; parent?: { id: string; name: string; phone: string | null } | null }

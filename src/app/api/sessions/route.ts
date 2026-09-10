@@ -23,17 +23,20 @@ export async function GET(req: NextRequest) {
   }
   const active = req.nextUrl.searchParams.get('active')
   const classId = req.nextUrl.searchParams.get('classId')
+  // Temuan pentest F-10: anonim tidak boleh melihat riwayat 50 sesi (pola
+  // operasional sekolah). Publik hanya menerima sesi AKTIF, tanpa jumlah hadir.
+  const anon = !session
   const sessions = await db.session.findMany({
     where: {
-      ...(active === '1' && { isActive: true }),
+      ...((anon || active === '1') && { isActive: true }),
       ...(classId && { classId }),
     },
     include: {
       class: { select: { id: true, name: true, level: true } },
-      attendances: { select: { status: true, studentId: true } },
+      ...(anon ? {} : { attendances: { select: { status: true, studentId: true } } }),
     },
     orderBy: { date: 'desc' },
-    take: 50,
+    take: anon ? 20 : 50,
   })
   return ok(
     sessions.map((s) => ({
@@ -52,8 +55,12 @@ export async function GET(req: NextRequest) {
         locAt: s.locAt,
       }),
       isActive: s.isActive,
-      total: s.attendances.length,
-      hadir: s.attendances.filter((a) => a.status === 'HADIR').length,
+      ...(anon
+        ? {}
+        : {
+            total: s.attendances.length,
+            hadir: s.attendances.filter((a) => a.status === 'HADIR').length,
+          }),
     }))
   )
 }
@@ -73,6 +80,8 @@ export async function POST(req: NextRequest) {
     if (!gps) return bad('Titik lokasi wajib. Pilih titik di peta, tempel koordinat, atau izinkan GPS perangkat.')
     const gpsErr = validateGpsQuality(gps, { maxAccuracy: MAX_SESSION_ACCURACY_M, requireFresh: true })
     if (gpsErr) return bad(gpsErr)
+    // Temuan pentest F-05: batas panjang topik
+    if (typeof b.topic === 'string' && b.topic.length > 500) return bad('Topik maksimal 500 karakter')
     const cls = await db.class.findUnique({ where: { id: b.classId } })
     if (!cls) return bad('Kelas tidak ditemukan')
     if (g.session.role === 'GURU' && cls.teacherId !== g.session.teacherId) {

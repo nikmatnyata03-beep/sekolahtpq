@@ -506,7 +506,9 @@ export function CheckinSection() {
                         </span>
                         <span className="inline-flex items-center gap-1 text-emerald-700">
                           <CheckCircle2 className="size-3" />
-                          {session.hadir}/{session.total} hadir
+                          {session.hadir !== undefined && session.total !== undefined
+                            ? `${session.hadir}/${session.total} hadir`
+                            : 'Sesi absensi berjalan'}
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
                           <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />

@@ -38,6 +38,11 @@ export async function POST(req: NextRequest) {
     if (!gps) {
       return bad('Lokasi GPS wajib untuk check-in. Izinkan akses lokasi pada browser, tunggu posisi terkunci, lalu coba lagi.')
     }
+    // Temuan pentest F-02: waktu posisi wajib — tanpa posTs, heuristik
+    // freshness (≤3 menit) bisa dilewati klien dgn koordinat beku hasil replay.
+    if (!gps.posTs) {
+      return bad('Data waktu posisi tidak lengkap. Ambil lokasi ulang lalu coba lagi.')
+    }
     const qualityErr = validateGpsQuality(gps, { maxAccuracy: MAX_CHECKIN_ACCURACY_M, requireFresh: true })
     if (qualityErr) return bad(qualityErr)
 

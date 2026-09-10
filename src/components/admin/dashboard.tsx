@@ -107,7 +107,7 @@ const SECTIONS: SectionDef[] = [
 ]
 
 const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'presensi-live', 'hafalan', 'materials', 'ai', 'pengaturan']
-const DEVELOPER_ALLOWED: SectionKey[] = ['ringkasan', 'pentest', 'devconsole', 'pengaturan']
+const DEVELOPER_ALLOWED: SectionKey[] = ['pentest', 'devconsole', 'pengaturan']
 
 function roleBadgeClass(role: string): string {
   if (role === 'ADMIN') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
@@ -140,7 +140,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
     if (isDeveloper) return DEVELOPER_ALLOWED.includes(s.key)
     return GURU_ALLOWED.includes(s.key)
   })
-  const [active, setActive] = useState<SectionKey>('ringkasan')
+  const [active, setActive] = useState<SectionKey>(isDeveloper ? 'pentest' : 'ringkasan')
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const current: SectionDef = visible.find((s) => s.key === active) ?? visible[0]
@@ -168,7 +168,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
       case 'teachers':
         return <TeachersAdmin />
       case 'classes':
-        return <ClassesAdmin />
+        return <ClassesAdmin canManage={isAdmin} />
       case 'attendance':
         return <AttendanceAdmin />
       case 'presensi-live':

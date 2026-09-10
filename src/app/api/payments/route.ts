@@ -47,15 +47,36 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Simulated payment webhook (Midtrans-style): parent pays -> status updated -> WA confirmation
+// Pembayaran tersimulasi (gaya webhook Midtrans).
+// ADMIN: kendali penuh status. ORANG_TUA (temuan pentest BUG-1 — alur
+// "Bayar" portal wali 403 terus): hanya boleh mengklaim tagihan ANAKNYA
+// sendiri yang masih PENDING → status dipaksa MENUNGGU_KONFIRMASI
+// (bukan SUCCESS — wali tidak bisa memantapkan tagihan lunas sendiri;
+// verifikasi oleh admin/bendahara tetap wajib).
 export async function PUT(req: NextRequest) {
   try {
-    const g = await guard(req, ['ADMIN'])
+    const g = await guard(req, ['ADMIN', 'ORANG_TUA'])
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const payment = await db.payment.findUnique({ where: { id: b.id }, include: { student: { include: { parent: true } } } })
     if (!payment) return bad('Tagihan tidak ditemukan', 404)
+
+    if (g.session.role === 'ORANG_TUA') {
+      if (payment.student.parentId !== g.session.id) {
+        return bad('Tagihan ini bukan untuk anak Anda', 403)
+      }
+      // PENDING atau FAILED (gagal bayar) boleh diklaim ulang
+      if (payment.status !== 'PENDING' && payment.status !== 'FAILED') {
+        return bad('Tagihan ini sudah diproses dan tidak dapat diklaim ulang', 400)
+      }
+      const claimMethod = typeof b.method === 'string' && b.method ? b.method : 'QRIS'
+      const updated = await db.payment.update({
+        where: { id: b.id },
+        data: { status: 'MENUNGGU_KONFIRMASI', method: claimMethod, paidAt: null },
+      })
+      return ok({ ...updated, message: 'Bukti pembayaran terkirim. Menunggu konfirmasi bendahara/pengurus.' })
+    }
 
     const status = b.status || 'SUCCESS'
     const method = b.method || 'QRIS'

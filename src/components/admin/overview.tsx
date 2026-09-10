@@ -64,6 +64,7 @@ export function statusBadgeClass(status: string | null | undefined): string {
       return 'border-emerald-200 bg-emerald-100 text-emerald-800'
     case 'IZIN':
     case 'PENDING':
+    case 'MENUNGGU_KONFIRMASI':
       return 'border-amber-200 bg-amber-100 text-amber-800'
     case 'SAKIT':
       return 'border-orange-200 bg-orange-100 text-orange-800'

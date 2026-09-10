@@ -151,7 +151,7 @@ export function PaymentsAdmin() {
     let pendingCount = 0
     for (const p of payments) {
       if (p.status === 'SUCCESS') revenue += p.amount
-      if (p.status === 'PENDING') {
+      if (p.status === 'PENDING' || p.status === 'MENUNGGU_KONFIRMASI') {
         outstanding += p.amount
         pendingCount += 1
       }
@@ -436,6 +436,7 @@ export function PaymentsAdmin() {
           <SelectContent>
             <SelectItem value="all">Semua Status</SelectItem>
             <SelectItem value="PENDING">PENDING</SelectItem>
+            <SelectItem value="MENUNGGU_KONFIRMASI">MENUNGGU KONFIRMASI</SelectItem>
             <SelectItem value="SUCCESS">SUCCESS</SelectItem>
             <SelectItem value="FAILED">FAILED</SelectItem>
           </SelectContent>
@@ -533,7 +534,7 @@ export function PaymentsAdmin() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          {(p.status === 'PENDING' || p.status === 'FAILED') && (
+                          {(p.status === 'PENDING' || p.status === 'FAILED' || p.status === 'MENUNGGU_KONFIRMASI') && (
                             <DropdownMenuItem
                               disabled={!p.student?.parent?.phone}
                               onClick={() => void sendReminder(p)}

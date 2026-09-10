@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 
 /**
  * GET /api/registrations/check — public PPDB status lookup (no auth required).
@@ -23,6 +24,11 @@ import { db, ok, bad } from '@/lib/api'
  */
 export async function GET(req: NextRequest) {
   try {
+    // Temuan pentest F-08: batasi pencarian status (regNumber + 5 digit HP)
+    // agar tidak bisa di-brute-force masif oleh anonim.
+    if (!rateLimit(`regcheck:${clientIp(req)}`, 10, 60 * 1000)) {
+      return bad('Terlalu banyak percobaan. Tunggu sebentar.', 429)
+    }
     const regNumber = (req.nextUrl.searchParams.get('regNumber') || '').trim().toUpperCase()
     const phone = req.nextUrl.searchParams.get('phone') || ''
     if (!regNumber || !phone.trim()) {

@@ -5,6 +5,9 @@ import { guard } from '@/lib/session'
 
 // Seluruh manajemen pengguna = ADMIN saja (data email/HP sensitif).
 
+// Whitelist peran (temuan pentest: role string arbitrer membuat akun rusak)
+const VALID_ROLES = ['ADMIN', 'GURU', 'ORANG_TUA', 'DEVELOPER']
+
 export async function GET(req: NextRequest) {
   const g = await guard(req, ['ADMIN'])
   if ('res' in g) return g.res
@@ -21,6 +24,8 @@ export async function POST(req: NextRequest) {
     if ('res' in g) return g.res
     const body = await req.json()
     if (!body.name || !body.email || !body.password || !body.role) return bad('Data tidak lengkap')
+    if (!VALID_ROLES.includes(String(body.role))) return bad('Peran tidak dikenal')
+    if (String(body.password).length < 6) return bad('Password minimal 6 karakter')
     const exists = await db.user.findUnique({ where: { email: String(body.email).toLowerCase() } })
     if (exists) return bad('Email sudah terdaftar')
     const user = await db.user.create({
@@ -48,8 +53,14 @@ export async function PUT(req: NextRequest) {
     const data: Record<string, string> = {}
     if (body.name) data.name = body.name
     if (body.phone !== undefined) data.phone = body.phone
-    if (body.role) data.role = body.role
-    if (body.password) data.password = hashPassword(String(body.password))
+    if (body.role) {
+      if (!VALID_ROLES.includes(String(body.role))) return bad('Peran tidak dikenal')
+      data.role = body.role
+    }
+    if (body.password) {
+      if (String(body.password).length < 6) return bad('Password minimal 6 karakter')
+      data.password = hashPassword(String(body.password))
+    }
     const user = await db.user.update({ where: { id: body.id }, data, select: { id: true, email: true, name: true, phone: true, role: true } })
     return ok(user)
   } catch {

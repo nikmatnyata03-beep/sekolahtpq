@@ -93,7 +93,9 @@ interface ClassFormState {
 
 const EMPTY_FORM: ClassFormState = { name: '', level: 'IQRA', schedule: '', room: '', teacherId: 'none' }
 
-export function ClassesAdmin() {
+export function ClassesAdmin({ canManage = true }: { canManage?: boolean }) {
+  // Temuan pentest BUG-3: tombol Tambah/Edit/Hapus kelas berbahaya utk GURU —
+  // server menolak (403) tapi UI menampilkannya. GURU = mode lihat-saja.
   const { toast } = useToast()
   const [classes, setClasses] = useState<ClassRoom[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -197,9 +199,11 @@ export function ClassesAdmin() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-stone-500">{classes.length} kelas berjalan</p>
         <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="bg-emerald-700 hover:bg-emerald-800">
-            <Plus className="size-4" /> Tambah Kelas
-          </Button>
+          {canManage && (
+            <Button onClick={openCreate} className="bg-emerald-700 hover:bg-emerald-800">
+              <Plus className="size-4" /> Tambah Kelas
+            </Button>
+          )}
           <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Muat ulang">
             <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
           </Button>
@@ -279,18 +283,22 @@ export function ClassesAdmin() {
                   >
                     <Eye className="size-3.5" /> Detail
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => openEdit(c)}>
-                    <Pencil className="size-3.5" /> Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="size-8 border-red-200 text-red-600 hover:bg-red-50"
-                    onClick={() => setDeleteTarget(c)}
-                    aria-label="Hapus kelas"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {canManage && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => openEdit(c)}>
+                        <Pencil className="size-3.5" /> Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-8 border-red-200 text-red-600 hover:bg-red-50"
+                        onClick={() => setDeleteTarget(c)}
+                        aria-label="Hapus kelas"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

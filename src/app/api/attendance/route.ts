@@ -75,14 +75,27 @@ export async function POST(req: NextRequest) {
     await ensureAttendanceSchema()
     const { sessionId, records } = (await req.json()) as { sessionId?: string; records?: BulkRecord[] }
     if (!sessionId || !Array.isArray(records)) return bad('Data absensi tidak valid')
+    // Temuan pentest F-04: batasi jumlah santri per permintaan (anti-DoS CPU Workers)
+    if (records.length > 100) return bad('Maksimal 100 santri per permintaan. Pecah pengisian menjadi beberapa batch.')
     const session = await db.session.findUnique({ where: { id: sessionId }, include: { class: true } })
     if (!session) return bad('Sesi tidak ditemukan')
     if (g.session.role === 'GURU' && session.class.teacherId !== g.session.teacherId) {
       return bad('Anda bukan pengampu kelas sesi ini', 403)
     }
 
+    // Temuan pentest F-03: santri yang dicatat WAJIB tergolong kelas sesi —
+    // mencegah guru menimpa status / memicu WA untuk santri kelas lain.
+    const classStudents = await db.student.findMany({
+      where: { classId: session.classId },
+      select: { id: true },
+    })
+    const classStudentIds = new Set(classStudents.map((s) => s.id))
+
     for (const r of records) {
       if (!r.studentId) continue
+      if (!classStudentIds.has(r.studentId)) {
+        return bad(`Santri tidak tergolong kelas ${session.class.name}. Periksa kembali pilihan santri.`, 400)
+      }
       const status = (r.status || '').toUpperCase()
 
       if (status === 'HADIR') {
@@ -125,6 +138,11 @@ export async function POST(req: NextRequest) {
         if (!gps) {
           return bad('GPS kamera wajib untuk foto bukti. Izinkan akses lokasi lalu potret ulang suratnya.')
         }
+        // Temuan pentest F-02: waktu posisi wajib — tanpa posTs, heuristik
+        // freshness (≤3 menit) bisa dilewati dengan koordinat beku hasil replay.
+        if (!gps.posTs) {
+          return bad('Data waktu posisi tidak lengkap. Potret ulang surat lewat kamera aplikasi.')
+        }
         const gpsErr = validateGpsQuality(gps, { maxAccuracy: MAX_CHECKIN_ACCURACY_M, requireFresh: true })
         if (gpsErr) return bad(`Foto bukti ditolak: ${gpsErr}`)
 
@@ -149,7 +167,7 @@ export async function POST(req: NextRequest) {
         where: { sessionId_studentId: { sessionId, studentId: r.studentId } },
         update: {
           status,
-          note: r.note || null,
+          note: typeof r.note === 'string' ? r.note.slice(0, 500) : null,
           method: status === 'ALPA' ? 'ALPA_MANUAL' : `${status}_FOTO`,
           recordedBy: g.session.name,
           ...(proofData ?? { proofUrl: null, proofLat: null, proofLng: null, proofAccuracy: null, proofAt: null, proofGpsFlags: null }),
@@ -158,7 +176,7 @@ export async function POST(req: NextRequest) {
           sessionId,
           studentId: r.studentId,
           status,
-          note: r.note || null,
+          note: typeof r.note === 'string' ? r.note.slice(0, 500) : null,
           method: status === 'ALPA' ? 'ALPA_MANUAL' : `${status}_FOTO`,
           recordedBy: g.session.name,
           ...proofData,

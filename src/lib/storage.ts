@@ -12,7 +12,8 @@ const MIME_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
-  'image/svg+xml': 'svg',
+  // SVG SENGAJA DITOLAK (temuan pentest F-07): SVG dapat membawa <script>
+  // (stored-XSS). Semua kebutuhan aplikasi adalah foto/kanvas raster.
 }
 
 const MAX_BYTES = 5 * 1024 * 1024
@@ -39,10 +40,10 @@ export async function saveImageFromDataUrl(
   dataUrl: string,
   namePrefix: string,
 ): Promise<{ url?: string; bytes?: number; error?: string }> {
-  const match = /^data:(image\/(?:png|jpeg|webp|gif|svg\+xml));base64,([A-Za-z0-9+/=\s]+)$/.exec(
+  const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=\s]+)$/.exec(
     dataUrl,
   )
-  if (!match) return { error: 'Format harus data URL gambar (PNG/JPG/WEBP/GIF/SVG)' }
+  if (!match) return { error: 'Format harus data URL gambar (PNG/JPG/WEBP/GIF)' }
   const buffer = Buffer.from(match[2], 'base64')
   if (buffer.length === 0) return { error: 'Berkas kosong' }
   if (buffer.length > MAX_BYTES) return { error: 'Ukuran gambar maksimal 5 MB' }

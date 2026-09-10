@@ -26,6 +26,14 @@ export async function GET(req: NextRequest) {
   return ok(students)
 }
 
+/** Validasi parentId: harus akun ORANG_TUA yang benar-benar ada (temuan pentest F-01). */
+async function validateParentId(parentId: unknown): Promise<string | null> {
+  if (parentId === undefined || parentId === null || parentId === '') return null
+  const parent = await db.user.findUnique({ where: { id: String(parentId) }, select: { role: true } })
+  if (!parent || parent.role !== 'ORANG_TUA') return 'Wali tidak valid — akun wali tidak ditemukan'
+  return null
+}
+
 export async function POST(req: NextRequest) {
   try {
     const g = await guard(req, ['ADMIN', 'GURU'])
@@ -37,7 +45,13 @@ export async function POST(req: NextRequest) {
       const targetClass = await db.class.findUnique({ where: { id: String(b.classId) }, select: { teacherId: true } })
       if (!targetClass) return bad('Kelas tidak ditemukan', 404)
       if (targetClass.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas ini', 403)
+      // Guru tidak boleh menautkan wali apa pun — penautan wali = wewenang admin
+      // (temuan pentest F-01: guru bisa menautkan akun ADMIN sebagai parent)
+      if (b.parentId) return bad('Penautan akun wali dilakukan oleh admin', 403)
     }
+    const parentErr = await validateParentId(b.parentId)
+    if (parentErr) return bad(parentErr)
+    if (typeof b.fullName === 'string' && b.fullName.length > 120) return bad('Nama santri maksimal 120 karakter')
     let nis = b.nis
     if (!nis) {
       const year = new Date().getFullYear()
@@ -83,6 +97,14 @@ export async function PUT(req: NextRequest) {
         if (!targetClass) return bad('Kelas tidak ditemukan', 404)
         if (targetClass.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas tujuan', 403)
       }
+      // Temuan pentest F-01: guru tidak boleh mengubah penautan wali (IDOR relasi)
+      if (b.parentId !== undefined && b.parentId !== null && b.parentId !== '') {
+        return bad('Perubahan akun wali dilakukan oleh admin', 403)
+      }
+    }
+    if (g.session.role === 'ADMIN') {
+      const parentErr = await validateParentId(b.parentId)
+      if (parentErr) return bad(parentErr)
     }
     const student = await db.student.update({
       where: { id: b.id },

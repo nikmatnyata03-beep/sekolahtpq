@@ -2,7 +2,11 @@ import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { guard } from '@/lib/session'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Temuan pentest F-09: daftar kelas (dgn nama pengampu & jumlah santri)
+  // tidak lagi terbuka untuk anonim — hanya pengguna terautentikasi.
+  const g = await guard(req)
+  if ('res' in g) return g.res
   const classes = await db.class.findMany({
     include: {
       teacher: { select: { id: true, fullName: true } },

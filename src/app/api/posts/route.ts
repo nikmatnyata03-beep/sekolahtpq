@@ -36,6 +36,11 @@ export async function POST(req: NextRequest) {
     const b = await req.json()
     if (!b.title || !b.content) return bad('Judul dan konten wajib diisi')
     if (g.session.role === 'GURU' && !g.session.teacherId) return bad('Akun guru belum terhubung ke profil guru', 403)
+    // Temuan pentest F-06: publikasi artikel = wewenang admin. Guru mengirim
+    // draf; admin yang menerbitkan.
+    if (g.session.role === 'GURU' && b.published) {
+      return bad('Publikasi artikel memerlukan persetujuan admin. Artikel akan tersimpan sebagai draf.', 403)
+    }
     const baseSlug = slugify(b.title)
     const slugCount = await db.post.count({ where: { slug: { startsWith: baseSlug } } })
     const post = await db.post.create({
@@ -65,6 +70,8 @@ export async function PUT(req: NextRequest) {
     const existing = await db.post.findUnique({ where: { id: String(b.id) }, select: { authorId: true } })
     if (!existing) return bad('Artikel tidak ditemukan', 404)
     if (g.session.role === 'GURU' && existing.authorId !== g.session.teacherId) return bad('Anda bukan penulis artikel ini', 403)
+    // Temuan pentest F-06: guru tidak dapat menerbitkan/menarik publikasi sendiri
+    // (field published diabaikan utk guru — hanya admin yang bisa mengubahnya)
     const post = await db.post.update({
       where: { id: b.id },
       data: {
@@ -72,7 +79,7 @@ export async function PUT(req: NextRequest) {
         ...(b.content && { content: b.content }),
         ...(b.category && { category: b.category }),
         ...(b.coverImage !== undefined && { coverImage: b.coverImage }),
-        ...(b.published !== undefined && { published: b.published }),
+        ...(b.published !== undefined && g.session.role !== 'GURU' && { published: b.published }),
         ...(g.session.role === 'ADMIN' && b.authorId !== undefined && { authorId: b.authorId || null }),
       },
       include: { author: { select: { id: true, fullName: true } } },

@@ -80,6 +80,7 @@ const HAFALAN_BADGE: Record<Hafalan['type'], string> = {
 
 const PAYMENT_BADGE: Record<Payment['status'], string> = {
   PENDING: 'border-transparent bg-amber-100 text-amber-800',
+  MENUNGGU_KONFIRMASI: 'border-transparent bg-teal-100 text-teal-800',
   SUCCESS: 'border-transparent bg-emerald-100 text-emerald-800',
   FAILED: 'border-transparent bg-red-100 text-red-700',
 }
@@ -152,7 +153,6 @@ function PaymentDialog({
   const [method, setMethod] = useState<PayMethod | null>(null)
   const [step, setStep] = useState<PayStep>('form')
   const [error, setError] = useState<string | null>(null)
-  const [receiptOpen, setReceiptOpen] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -166,9 +166,10 @@ function PaymentDialog({
     setError(null)
     setStep('processing')
     if (timerRef.current) clearTimeout(timerRef.current)
-    // Simulated gateway round-trip (~1.8s) before the "webhook" hits the API
+    // "Webhook" gateway: server memaksa status MENUNGGU_KONFIRMASI utk wali —
+    // tagihan lunas hanya setelah dikonfirmasi admin/bendahara.
     timerRef.current = setTimeout(() => {
-      apiSend('/api/payments', 'PUT', { id: payment.id, status: 'SUCCESS', method })
+      apiSend('/api/payments', 'PUT', { id: payment.id, method })
         .then(() => {
           setStep('success')
           onPaid()
@@ -268,51 +269,30 @@ function PaymentDialog({
 
             {step === 'success' && (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
-                <span className="grid size-14 place-items-center rounded-full bg-emerald-100">
-                  <CircleCheck className="size-8 text-emerald-600" />
+                <span className="grid size-14 place-items-center rounded-full bg-teal-100">
+                  <CheckCircle2 className="size-8 text-teal-600" />
                 </span>
                 <div>
-                  <p className="text-lg font-bold text-stone-800">Pembayaran Berhasil!</p>
+                  <p className="text-lg font-bold text-stone-800">Bukti Pembayaran Terkirim!</p>
                   <p className="mt-0.5 text-sm text-stone-500">
                     {formatRupiah(payment.amount)} · {methodLabel} · {payment.invoiceNo}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                  <CheckCircle2 className="size-4 shrink-0" />
-                  WhatsApp konfirmasi terkirim ke wali.
+                <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <Loader2 className="size-4 shrink-0 animate-none" />
+                  Menunggu konfirmasi bendahara/pengurus. Struk tersedia setelah tagihan dikonfirmasi.
                 </div>
-                <div className="mt-1 grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setReceiptOpen(true)}
-                    className="min-h-11 rounded-xl"
-                  >
-                    <Printer className="size-4" />
-                    Cetak Struk
-                  </Button>
-                  <Button
-                    onClick={onDismiss}
-                    className="min-h-11 rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
-                  >
-                    Selesai
-                  </Button>
-                </div>
+                <Button
+                  onClick={onDismiss}
+                  className="mt-1 min-h-11 w-full rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+                >
+                  Selesai
+                </Button>
               </div>
             )}
           </>
         )}
 
-        {/* Printable struk — a sibling portal dialog. The payment object here is
-        stale after the simulated gateway round-trip (the PUT writes method +
-        paidAt server-side), so the receipt patches in the locally chosen method
-        and falls back to "now" for paidAt. */}
-        <ReceiptDialog
-          payment={payment ? { ...payment, method: method ?? payment.method } : null}
-          studentName={studentName}
-          studentNis={studentNis}
-          open={receiptOpen}
-          onOpenChange={setReceiptOpen}
-        />
       </DialogContent>
     </Dialog>
   )
