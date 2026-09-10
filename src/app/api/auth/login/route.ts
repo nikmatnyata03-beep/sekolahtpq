@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { verifyPassword } from '@/lib/password'
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +10,8 @@ export async function POST(req: NextRequest) {
       where: { email: String(email).toLowerCase().trim() },
       include: { teacherProfile: { select: { id: true, fullName: true } } },
     })
-    if (!user || user.password !== password) return bad('Email atau password salah', 401)
+    const valid = user ? await verifyPassword(String(password), user.password) : false
+    if (!user || !valid) return bad('Email atau password salah', 401)
     return ok({
       user: {
         id: user.id,

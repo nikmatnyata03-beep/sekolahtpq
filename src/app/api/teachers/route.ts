@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { hashPassword } from '@/lib/password'
 
 function parseJsonField(v: unknown, fallback = '[]') {
   if (typeof v === 'string') return v
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
       const exists = await db.user.findUnique({ where: { email: String(b.email).toLowerCase() } })
       if (!exists) {
         await db.user.create({
-          data: { email: String(b.email).toLowerCase(), name: b.fullName, phone: b.phone || null, password: b.password, role: 'GURU', teacherId: teacher.id },
+          data: { email: String(b.email).toLowerCase(), name: b.fullName, phone: b.phone || null, password: hashPassword(String(b.password)), role: 'GURU', teacherId: teacher.id },
         })
       }
     }

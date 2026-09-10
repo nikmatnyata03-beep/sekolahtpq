@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { hashPassword } from '@/lib/password'
 
 export async function GET() {
   const users = await db.user.findMany({
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
         name: body.name,
         email: String(body.email).toLowerCase(),
         phone: body.phone || null,
-        password: body.password,
+        password: hashPassword(String(body.password)),
         role: body.role,
       },
       select: { id: true, email: true, name: true, phone: true, role: true },
@@ -39,7 +40,7 @@ export async function PUT(req: NextRequest) {
     if (body.name) data.name = body.name
     if (body.phone !== undefined) data.phone = body.phone
     if (body.role) data.role = body.role
-    if (body.password) data.password = body.password
+    if (body.password) data.password = hashPassword(String(body.password))
     const user = await db.user.update({ where: { id: body.id }, data, select: { id: true, email: true, name: true, phone: true, role: true } })
     return ok(user)
   } catch {

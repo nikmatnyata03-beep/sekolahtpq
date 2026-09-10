@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { hashPassword } from '@/lib/password'
+
+const DEFAULT_ORtu_PASSWORD = 'ortu123'
 
 export async function GET() {
   const regs = await db.registration.findMany({ orderBy: { createdAt: 'desc' } })
@@ -56,7 +59,7 @@ export async function PUT(req: NextRequest) {
         let parent = await db.user.findUnique({ where: { email: emailGuess.toLowerCase() } })
         if (!parent) {
           parent = await db.user.create({
-            data: { email: emailGuess.toLowerCase(), name: reg.parentName, phone: reg.phone, password: 'ortu123', role: 'ORANG_TUA' },
+            data: { email: emailGuess.toLowerCase(), name: reg.parentName, phone: reg.phone, password: hashPassword(DEFAULT_ORtu_PASSWORD), role: 'ORANG_TUA' },
           })
         }
         const student = await db.student.create({

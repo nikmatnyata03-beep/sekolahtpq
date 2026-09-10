@@ -1,5 +1,6 @@
 /* Seed script — SIMADJI TPQ Darul Jinan */
 import { PrismaClient, type Teacher, type User, type Student } from '@prisma/client'
+import { hashPassword } from '../src/lib/password'
 
 const db = new PrismaClient()
 
@@ -24,7 +25,7 @@ async function main() {
 
   // ===== USERS =====
   const admin = await db.user.create({
-    data: { email: 'admin@daruljinan.sch.id', name: 'H. Ahmad Fauzi, S.Pd.I', phone: '081234567890', password: 'admin123', role: 'ADMIN' },
+    data: { email: 'admin@daruljinan.sch.id', name: 'H. Ahmad Fauzi, S.Pd.I', phone: '081234567890', password: hashPassword('admin123'), role: 'ADMIN' },
   })
 
   const guruUsers = [
@@ -117,7 +118,7 @@ async function main() {
     await db.user.create({
       data: {
         email: guruUsers[i].email, name: guruUsers[i].name, phone: guruUsers[i].phone,
-        password: guruUsers[i].password, role: 'GURU', teacherId: teacher.id,
+        password: hashPassword(guruUsers[i].password), role: 'GURU', teacherId: teacher.id,
       },
     })
   }
@@ -139,7 +140,7 @@ async function main() {
   ]
   const parentUsers: User[] = []
   for (const p of parents) {
-    parentUsers.push(await db.user.create({ data: { ...p, role: 'ORANG_TUA' } }))
+    parentUsers.push(await db.user.create({ data: { ...p, password: hashPassword(p.password), role: 'ORANG_TUA' } }))
   }
 
   // ===== STUDENTS =====
