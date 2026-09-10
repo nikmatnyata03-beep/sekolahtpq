@@ -71,3 +71,4 @@ server.log
 /src/generated/
 .open-next/
 .wrangler/
+.github-token.local
