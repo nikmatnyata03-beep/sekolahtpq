@@ -52,3 +52,18 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# sandbox / dev-tool artifacts
+/tool-results/
+/download/
+/upload/
+/worklog.md
+/agent-ctx/
+/examples/
+/tests/
+
+# database (SQLite berisi data user + password hash — JANGAN di-push)
+/db/
+
+# file upload user (foto guru, dll)
+/public/uploads/
