@@ -24,7 +24,11 @@ function extractResponse(res: unknown): string {
   return ''
 }
 
-async function workersAiChat(system: string, user: string, maxTokens: number): Promise<string | null> {
+async function workersAiChat(
+  system: string,
+  user: string,
+  maxTokens: number,
+): Promise<{ ok: true; text: string } | { ok: false; error: string } | null> {
   try {
     const { env } = getCloudflareContext()
     const ai = (env as { AI?: WorkersAiLike } | undefined)?.AI
@@ -38,10 +42,12 @@ async function workersAiChat(system: string, user: string, maxTokens: number): P
       temperature: 0.4,
     })
     const text = extractResponse(res)
-    return text || null
+    if (!text) return { ok: false, error: 'Workers AI mengembalikan respons kosong' }
+    return { ok: true, text }
   } catch (e) {
-    console.error('[ai] Workers AI gagal, mencoba fallback SDK:', e instanceof Error ? e.message : e)
-    return null
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[ai] Workers AI gagal:', msg)
+    return { ok: false, error: msg.slice(0, 200) }
   }
 }
 
@@ -63,8 +69,14 @@ async function sdkChat(system: string, user: string): Promise<string> {
 /** Jalankan chat AI: Workers AI dulu, fallback z-ai-web-dev-sdk (lokal). */
 export async function runAi(system: string, user: string, maxTokens = 1500): Promise<string> {
   const viaWorkers = await workersAiChat(system, user, maxTokens)
-  if (viaWorkers) return viaWorkers
-  return sdkChat(system, user)
+  if (viaWorkers?.ok) return viaWorkers.text
+  const workersErr = viaWorkers ? viaWorkers.error : 'binding AI tidak tersedia di runtime ini'
+  try {
+    return await sdkChat(system, user)
+  } catch (e) {
+    const sdkErr = e instanceof Error ? e.message : String(e)
+    throw new Error(`Workers AI: ${workersErr} | fallback SDK: ${sdkErr.slice(0, 160)}`)
+  }
 }
 
 export function aiErrorMessage(e: unknown): string {
