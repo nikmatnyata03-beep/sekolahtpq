@@ -3,9 +3,15 @@ import { db, ok, bad } from '@/lib/api'
 import { verifyPassword } from '@/lib/password'
 import { createSessionToken, sessionCookieHeader, isSecureRequest, type SessionUser } from '@/lib/session'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { ensureDevSchema } from '@/lib/pentest/bootstrap'
 
 export async function POST(req: NextRequest) {
   try {
+    // Bootstrap skema tabel pentest/dev + akun developer (idempoten, cached
+    // per isolate) — dijalankan sebelum pencarian user agar akun dev selalu
+    // bisa login di produksi tanpa migrasi manual.
+    await ensureDevSchema().catch(() => {})
+
     const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null
     if (!body) return bad('Permintaan tidak valid', 400)
 
