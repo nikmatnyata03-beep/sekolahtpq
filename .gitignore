@@ -67,3 +67,7 @@ server.log
 
 # file upload user (foto guru, dll)
 /public/uploads/
+# prisma client generator baru (untuk Cloudflare Workers, dihasilkan saat build)
+/src/generated/
+.open-next/
+.wrangler/

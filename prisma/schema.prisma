@@ -1,5 +1,9 @@
+// PENTING: JANGAN menambahkan `output` pada generator ini — generated client
+// perlu di-patch oleh OpenNext agar berjalan di Cloudflare Workers (workerd).
+// Lihat serverExternalPackages di next.config.ts.
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {

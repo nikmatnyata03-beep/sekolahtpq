@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Nama worker = subdomain: simadji.<account>.workers.dev
+  "name": "simadji",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Database: Cloudflare D1 (SQLite serverless)
+  // Jalankan `bun run cf:setup` untuk membuat database & mengisi id otomatis
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "simadji-db",
+      "database_id": "GANTI-DENGAN-ID-DARI-wrangler-d1-create"
+    }
+  ],
+  // Storage file upload (foto guru, dll): Cloudflare R2
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "simadji-uploads"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
