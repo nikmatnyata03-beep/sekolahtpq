@@ -8,12 +8,38 @@ function parseJsonField(v: unknown, fallback = '[]') {
   return JSON.stringify(v ?? [])
 }
 
+/**
+ * Sinkronisasi penugasan kelas seorang guru (Task 36).
+ * - Kelas yang sebelumnya diampu guru ini tapi tidak ada di classIds → teacherId null.
+ * - Kelas di classIds → teacherId = guru ini (menimpa pengampu lama secara eksplisit).
+ * ID yang tidak dikenal diabaikan agar payload bocor tidak merusak data.
+ */
+async function syncTeacherClasses(teacherId: string, classIds: unknown) {
+  if (!Array.isArray(classIds)) return
+  const wanted = [...new Set(classIds.filter((v): v is string => typeof v === 'string' && v.trim() !== ''))]
+  const valid = wanted.length
+    ? await db.class.findMany({ where: { id: { in: wanted } }, select: { id: true } })
+    : []
+  const validIds = new Set(valid.map((c) => c.id))
+  const current = await db.class.findMany({ where: { teacherId }, select: { id: true } })
+  const toRemove = current.filter((c) => !validIds.has(c.id)).map((c) => c.id)
+  await db.$transaction([
+    ...(toRemove.length ? [db.class.updateMany({ where: { id: { in: toRemove } }, data: { teacherId: null } })] : []),
+    ...(validIds.size ? [db.class.updateMany({ where: { id: { in: [...validIds] } }, data: { teacherId } })] : []),
+  ])
+}
+
 export async function GET(req: NextRequest) {
   const session = await getSession(req)
   const canViewPrivateData = session?.role === 'ADMIN' || session?.role === 'DEVELOPER'
   const teachers = canViewPrivateData
     ? await db.teacher.findMany({
-        include: { classes: { select: { id: true, name: true } }, _count: { select: { materials: true, posts: true } } },
+        // sertakan akun login terlink (Task 36) agar UI Penugasan tahu guru mana yang sudah punya akun
+        include: {
+          classes: { select: { id: true, name: true } },
+          _count: { select: { materials: true, posts: true } },
+          user: { select: { id: true, email: true } },
+        },
         orderBy: { joinDate: 'asc' },
       })
     : await db.teacher.findMany({
@@ -61,6 +87,8 @@ export async function POST(req: NextRequest) {
         joinDate: b.joinDate ? new Date(b.joinDate) : new Date(),
       },
     })
+    // Task 36: penugasan kelas saat pembuatan — classIds: string[]
+    await syncTeacherClasses(teacher.id, b.classIds)
     // optionally create login account
     if (b.email && b.password) {
       const exists = await db.user.findUnique({ where: { email: String(b.email).toLowerCase() } })
@@ -101,6 +129,8 @@ export async function PUT(req: NextRequest) {
         ...(b.isActive !== undefined && { isActive: b.isActive }),
       },
     })
+    // Task 36: sinkronisasi kelas yang diampu saat edit
+    await syncTeacherClasses(teacher.id, b.classIds)
     return ok(teacher)
   } catch {
     return bad('Gagal memperbarui guru')

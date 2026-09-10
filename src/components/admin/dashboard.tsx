@@ -170,7 +170,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
       case 'classes':
         return <ClassesAdmin canManage={isAdmin} />
       case 'attendance':
-        return <AttendanceAdmin />
+        return <AttendanceAdmin user={user} />
       case 'presensi-live':
         return <PresenceLivePanel />
       case 'hafalan':

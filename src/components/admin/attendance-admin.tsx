@@ -19,7 +19,7 @@ import {
   Lock,
   X,
 } from 'lucide-react'
-import type { AttendanceRecord, ClassRoom, SessionItem, Student } from '@/lib/types'
+import type { AttendanceRecord, AuthUser, ClassRoom, SessionItem, Student } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
@@ -136,7 +136,7 @@ interface RecapRow {
   pct: number
 }
 
-export function AttendanceAdmin() {
+export function AttendanceAdmin({ user }: { user?: AuthUser }) {
   const { toast } = useToast()
   const [classes, setClasses] = useState<ClassRoom[]>([])
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -197,7 +197,19 @@ export function AttendanceAdmin() {
   const [recapError, setRecapError] = useState<string | null>(null)
   const [recapRetry, setRecapRetry] = useState(0)
 
-  const activeSessions = sessions.filter((s) => s.isActive)
+  // Task 36: guru hanya melihat & membuka sesi untuk kelas yang DIAMANAHKAN kepadanya
+  // (server menolak 403 kelas lain — UI diselaraskan agar tidak membingungkan).
+  const isGuru = user?.role === 'GURU'
+  const guruClasses = useMemo(
+    () => (isGuru ? classes.filter((c) => c.teacherId && c.teacherId === user?.teacherId) : classes),
+    [classes, isGuru, user?.teacherId],
+  )
+  const visibleSessions = useMemo(
+    () => (isGuru ? sessions.filter((s) => guruClasses.some((c) => c.id === s.classId)) : sessions),
+    [sessions, isGuru, guruClasses],
+  )
+
+  const activeSessions = visibleSessions.filter((s) => s.isActive)
   const selectedSession = sessions.find((s) => s.id === sessionId) ?? null
 
   // Opsi 6 bulan terakhir — dihitung SEKALI per mount (tidak dibaca ulang wall-clock saat render hasil).
@@ -548,7 +560,7 @@ export function AttendanceAdmin() {
     }
   }
 
-  const sessionOptions = sessions.slice(0, 30)
+  const sessionOptions = visibleSessions.slice(0, 30)
 
   return (
     <div className="space-y-5">
@@ -578,17 +590,28 @@ export function AttendanceAdmin() {
               <CardDescription>Buat sesi kehadiran, sistem akan menutup sesi aktif kelas yang sama.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {isGuru && guruClasses.length === 0 ? (
+                <Alert className="rounded-2xl border-amber-200 bg-amber-50">
+                  <AlertCircle className="size-4 text-amber-700" />
+                  <AlertTitle className="text-amber-900">Belum ada penugasan kelas</AlertTitle>
+                  <AlertDescription className="text-amber-800">
+                    Anda belum ditugaskan sebagai pengampu kelas mana pun, sehingga tidak bisa membuka sesi absensi.
+                    Minta admin membuka menu <span className="font-semibold">Guru → Edit → Kelas yang Diampu</span> dan mencentang kelas Anda.
+                  </AlertDescription>
+                </Alert>
+              ) : (
               <div className="grid gap-1.5">
                 <Label>Kelas</Label>
                 <Select value={classId} onValueChange={setClassId}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>
                   <SelectContent>
-                    {classes.map((c) => (
+                    {guruClasses.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label htmlFor="att-topic">Topik / Materi</Label>
@@ -953,7 +976,7 @@ export function AttendanceAdmin() {
                 <SelectValue placeholder="Pilih kelas" />
               </SelectTrigger>
               <SelectContent>
-                {classes.map((c) => (
+                {guruClasses.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>

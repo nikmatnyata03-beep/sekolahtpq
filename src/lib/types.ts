@@ -30,6 +30,8 @@ export interface Teacher {
   joinDate: string
   isActive: boolean
   classes?: { id: string; name: string }[]
+  /** Akun login terlink (hanya untuk ADMIN/DEVELOPER — Task 36) */
+  user?: { id: string; email: string } | null
   _count?: { materials: number; posts: number }
 }
 

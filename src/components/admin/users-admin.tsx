@@ -14,7 +14,7 @@ import {
   KeyRound,
   ShieldAlert,
 } from 'lucide-react'
-import type { AppUser, AuthUser, Role } from '@/lib/types'
+import type { AppUser, AuthUser, Role, Teacher } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -86,9 +86,10 @@ interface UserFormState {
   phone: string
   password: string
   role: string
+  teacherId: string
 }
 
-const EMPTY_FORM: UserFormState = { name: '', email: '', phone: '', password: '', role: 'ORANG_TUA' }
+const EMPTY_FORM: UserFormState = { name: '', email: '', phone: '', password: '', role: 'ORANG_TUA', teacherId: 'none' }
 
 export function UsersAdmin({ user }: { user?: AuthUser }) {
   const { toast } = useToast()
@@ -101,6 +102,8 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM)
+  // Task 36: daftar profil guru (utk penautan akun GURU → profil guru)
+  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [resetTarget, setResetTarget] = useState<AppUser | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null)
@@ -123,6 +126,14 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
     if (isAdmin) void load()
     else setLoading(false)
   }, [isAdmin, load])
+
+  // Task 36: muat profil guru saat dialog tambah dibuka (utk pilihan penautan)
+  useEffect(() => {
+    if (!createOpen) return
+    void apiGet<Teacher[]>('/api/teachers')
+      .then(setTeachers)
+      .catch(() => setTeachers([]))
+  }, [createOpen])
 
   const filtered = users.filter((u) => {
     const q = search.trim().toLowerCase()
@@ -185,8 +196,15 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
         phone: form.phone.trim() || null,
         password: form.password,
         role: form.role,
+        ...(form.role === 'GURU' && { teacherId: form.teacherId === 'none' ? null : form.teacherId }),
       })
-      toast({ title: 'Pengguna ditambahkan', description: `${form.name} dapat login dengan akun barunya.` })
+      toast({
+        title: 'Pengguna ditambahkan',
+        description:
+          form.role === 'GURU'
+            ? `${form.name} dapat login. Tugaskan kelasnya lewat menu Guru → Edit → Kelas yang Diampu.`
+            : `${form.name} dapat login dengan akun barunya.`,
+      })
       setCreateOpen(false)
       setForm(EMPTY_FORM)
       await load()
@@ -348,7 +366,7 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
             </div>
             <div className="grid gap-1.5">
               <Label>Peran</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v, teacherId: 'none' })}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
@@ -358,6 +376,27 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
                 </SelectContent>
               </Select>
             </div>
+            {/* Task 36: akun guru wajib terhubung profil guru agar bisa ditugaskan kelas */}
+            {form.role === 'GURU' && (
+              <div className="grid gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                <Label htmlFor="u-teacher">Profil Guru</Label>
+                <Select value={form.teacherId} onValueChange={(v) => setForm({ ...form, teacherId: v })}>
+                  <SelectTrigger id="u-teacher" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Buat profil baru otomatis</SelectItem>
+                    {teachers.map((t) => (
+                      <SelectItem key={t.id} value={t.id} disabled={!!t.user}>
+                        {t.fullName}
+                        {t.user ? ' — sudah punya akun' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-amber-800">
+                  Setelah akun dibuat, tetapkan kelas &amp; jenjang lewat menu <span className="font-semibold">Guru → Edit → Kelas yang Diampu</span> agar guru bisa membuka sesi absensi.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={isPending}>Batal</Button>
