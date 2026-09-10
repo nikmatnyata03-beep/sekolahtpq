@@ -2,12 +2,17 @@
 // GET /api/dev/health → jalankan pemeriksaan menyeluruh: database + seluruh
 // endpoint API (validitas JSON termasuk!) → simpan riwayat + buat DevIssue.
 // Inilah detektor "web gagal load json pada panel admin".
+//
+// Pemeriksaan endpoint memakai INTERNAL DISPATCH (handler dipanggil langsung,
+// tanpa HTTP) karena Cloudflare Workers memblokir self-fetch (error 1042).
+// Cookie sesi developer diteruskan sehingga endpoint terlindungi pun terverifikasi.
 // Akses: DEVELOPER saja.
 
 import { NextRequest } from 'next/server'
 import { db, ok } from '@/lib/api'
 import { guard } from '@/lib/session'
 import { ensureDevSchema } from '@/lib/pentest/bootstrap'
+import { hasInternalHandler, internalFetch } from '@/lib/pentest/dispatch'
 
 interface EndpointResult {
   path: string
@@ -19,7 +24,6 @@ interface EndpointResult {
 }
 
 const JSON_ENDPOINTS = ['/api/stats', '/api/settings', '/api/announcements', '/api/posts', '/api/teachers', '/api/classes', '/api/curriculum', '/api/notifications']
-const HTML_ENDPOINTS = ['/']
 
 export async function GET(req: NextRequest) {
   const g = await guard(req, ['DEVELOPER'])
@@ -45,25 +49,32 @@ export async function GET(req: NextRequest) {
     await raiseIssue('DB_ERROR', null, 'Database tidak dapat diakses', dbDetail)
   }
 
-  // 2. Endpoint checks (paralel, timeout 10s)
-  const targets = [
-    ...JSON_ENDPOINTS.map((p) => ({ path: p, kind: 'JSON' as const })),
-    ...HTML_ENDPOINTS.map((p) => ({ path: p, kind: 'HTML' as const })),
-  ]
+  // 2. Endpoint checks — internal dispatch dengan cookie sesi developer
+  const cookieValue = req.cookies.get('simadji_session')?.value
+  const cookie = cookieValue ? `simadji_session=${cookieValue}` : undefined
+
   await Promise.all(
-    targets.map(async ({ path, kind }) => {
+    JSON_ENDPOINTS.map(async (path) => {
       const started = Date.now()
       let status = 0
       let full = ''
+      let usedInternal = hasInternalHandler('GET', path)
       try {
-        const ctrl = new AbortController()
-        const timer = setTimeout(() => ctrl.abort(), 10_000)
-        const res = await fetch(origin + path, { signal: ctrl.signal, headers: { 'User-Agent': 'SIMADJI-DevConsole/1.0' } })
-        clearTimeout(timer)
-        status = res.status
-        full = await res.text()
+        if (usedInternal) {
+          const r = await internalFetch('GET', path, { cookie })
+          status = r.status
+          full = r.text
+        } else {
+          const ctrl = new AbortController()
+          const timer = setTimeout(() => ctrl.abort(), 10_000)
+          const res = await fetch(origin + path, { signal: ctrl.signal, headers: { 'User-Agent': 'SIMADJI-DevConsole/1.0' } })
+          clearTimeout(timer)
+          status = res.status
+          full = await res.text()
+        }
       } catch (e) {
         full = e instanceof Error ? e.message : 'fetch gagal'
+        usedInternal = false
       }
       const body = full.slice(0, 2000)
       const latencyMs = Date.now() - started
@@ -72,26 +83,26 @@ export async function GET(req: NextRequest) {
       let detail = `HTTP ${status}`
       if (status === 401 || status === 403) {
         detail = `HTTP ${status} · terlindungi sesi (normal)`
-      } else if (healthy && kind === 'JSON') {
+      } else if (healthy) {
         try {
           JSON.parse(full) // parse body PENUH — bukan versi terpotong
-          detail = `HTTP ${status} · JSON valid`
+          detail = `HTTP ${status} · JSON valid${usedInternal ? ' · in-process' : ''}`
         } catch {
           healthy = false
           detail = `HTTP ${status} tetapi respons BUKAN JSON valid — panel admin akan gagal memuat. Awal: ${body.slice(0, 120).replace(/\s+/g, ' ')}`
         }
-      } else if (!healthy) {
+      } else {
         detail = `HTTP ${status} · ${body.slice(0, 120).replace(/\s+/g, ' ')}`
       }
 
-      results.push({ path, status, latencyMs, healthy, kind, detail })
+      results.push({ path, status, latencyMs, healthy, kind: 'JSON', detail })
       await db.healthCheck.create({
         data: { endpoint: path, healthy, status, latencyMs, detail: detail.slice(0, 500) },
       })
 
       if (!healthy) {
         await raiseIssue(
-          kind === 'JSON' ? 'JSON_PARSE' : 'ENDPOINT_FAIL',
+          'JSON_PARSE',
           path,
           `Endpoint ${path} tidak sehat (${detail.slice(0, 80)})`,
           detail,

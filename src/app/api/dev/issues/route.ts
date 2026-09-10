@@ -9,6 +9,7 @@ import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { guard } from '@/lib/session'
 import { ensureDevSchema } from '@/lib/pentest/bootstrap'
+import { hasInternalHandler, internalFetch } from '@/lib/pentest/dispatch'
 
 export async function GET(req: NextRequest) {
   const g = await guard(req, ['DEVELOPER'])
@@ -23,27 +24,36 @@ export async function GET(req: NextRequest) {
   return ok({ issues, counts: { open, diagnosing, fixed } })
 }
 
-async function verifyEndpointNow(origin: string, path: string, kind: 'JSON' | 'HTML'): Promise<{ healthy: boolean; detail: string }> {
+async function verifyEndpointNow(path: string, kind: 'JSON' | 'HTML', cookie?: string): Promise<{ healthy: boolean; detail: string }> {
   try {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 10_000)
-    const res = await fetch(origin + path, { signal: ctrl.signal })
-    clearTimeout(timer)
-    const full = await res.text()
-    const body = full.slice(0, 2000)
-    if (res.status === 401 || res.status === 403) {
-      return { healthy: true, detail: `HTTP ${res.status} · terlindungi sesi (normal)` }
+    let status = 0
+    let full = ''
+    if (hasInternalHandler('GET', path)) {
+      const r = await internalFetch('GET', path, { cookie })
+      status = r.status
+      full = r.text
+    } else {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 10_000)
+      const res = await fetch(path, { signal: ctrl.signal })
+      clearTimeout(timer)
+      status = res.status
+      full = await res.text()
     }
-    if (res.status >= 200 && res.status < 400) {
-      if (kind === 'HTML') return { healthy: true, detail: `HTTP ${res.status}` }
+    const body = full.slice(0, 2000)
+    if (status === 401 || status === 403) {
+      return { healthy: true, detail: `HTTP ${status} · terlindungi sesi (normal)` }
+    }
+    if (status >= 200 && status < 400) {
+      if (kind === 'HTML') return { healthy: true, detail: `HTTP ${status}` }
       try {
         JSON.parse(full) // parse body penuh
-        return { healthy: true, detail: `HTTP ${res.status} · JSON valid` }
+        return { healthy: true, detail: `HTTP ${status} · JSON valid` }
       } catch {
-        return { healthy: false, detail: `HTTP ${res.status} · respons bukan JSON: ${body.slice(0, 100)}` }
+        return { healthy: false, detail: `HTTP ${status} · respons bukan JSON: ${body.slice(0, 100)}` }
       }
     }
-    return { healthy: false, detail: `HTTP ${res.status} · ${body.slice(0, 100)}` }
+    return { healthy: false, detail: `HTTP ${status} · ${body.slice(0, 100)}` }
   } catch (e) {
     return { healthy: false, detail: e instanceof Error ? e.message : 'fetch gagal' }
   }
@@ -66,7 +76,8 @@ export async function POST(req: NextRequest) {
 
     if (b.action !== 'autofix') return bad('Aksi tidak dikenal')
 
-    const origin = new URL(req.url).origin
+    const cookieValueRaw = req.cookies.get('simadji_session')?.value
+    const cookieValue = cookieValueRaw ? `simadji_session=${cookieValueRaw}` : undefined
     const fixLog: string[] = []
 
     // ===== AUTO-FIX #1: SiteSetting JSON rusak → hapus baris rusak (default merge kembali) =====
@@ -112,7 +123,7 @@ export async function POST(req: NextRequest) {
     let verify = { healthy: false, detail: 'tidak diverifikasi' }
     if (issue.endpoint) {
       const kind = issue.endpoint.endsWith('.json') || issue.endpoint.startsWith('/api/') ? 'JSON' : 'HTML'
-      verify = await verifyEndpointNow(origin, issue.endpoint, kind)
+      verify = await verifyEndpointNow(issue.endpoint, kind, cookieValue)
       fixLog.push(`Verifikasi ulang ${issue.endpoint}: ${verify.detail}`)
     }
 
