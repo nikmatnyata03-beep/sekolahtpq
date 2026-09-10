@@ -1,7 +1,7 @@
 'use client'
 
 // Editor Landing Page (CMS portal publik) — mengedit seluruh konten halaman depan:
-// Hero, Tentang, Kontak, FAQ, dan Testimoni via GET/PUT /api/settings.
+// Hero, Tentang, Galeri, Kontak, FAQ, dan Testimoni via GET/PUT /api/settings.
 
 import { useEffect, useState } from 'react'
 import {
@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Images,
   LayoutDashboard,
   Loader2,
   MessageSquareQuote,
@@ -25,6 +26,7 @@ import type {
   AboutSettings,
   ContactSettings,
   FaqItem,
+  GalleryItem,
   HeroSettings,
   PortalSettings,
   TestimonialItem,
@@ -52,6 +54,7 @@ const SECTION_DEFAULTS = {
   contact: { ...DEFAULT_PORTAL_SETTINGS.contact },
   faqs: DEFAULT_PORTAL_SETTINGS.faqs.map((f) => ({ ...f })),
   testimonials: DEFAULT_PORTAL_SETTINGS.testimonials.map((t) => ({ ...t })),
+  gallery: DEFAULT_PORTAL_SETTINGS.gallery.map((g) => ({ ...g })),
 } as const
 
 type SectionKey = keyof typeof SECTION_DEFAULTS
@@ -142,6 +145,9 @@ export function LandingEditor() {
   function updateTestimonial(index: number, patch: Partial<TestimonialItem>) {
     setSettings((s) => (s ? { ...s, testimonials: s.testimonials.map((t, i) => (i === index ? { ...t, ...patch } : t)) } : s))
   }
+  function updateGallery(index: number, patch: Partial<GalleryItem>) {
+    setSettings((s) => (s ? { ...s, gallery: s.gallery.map((g, i) => (i === index ? { ...g, ...patch } : g)) } : s))
+  }
 
   function resetSection(key: SectionKey) {
     const def = SECTION_DEFAULTS[key]
@@ -159,6 +165,7 @@ export function LandingEditor() {
         contact: settings.contact,
         faqs: settings.faqs.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })),
         testimonials: settings.testimonials.map((t) => ({ quote: t.quote.trim(), name: t.name.trim(), role: t.role.trim() })),
+        gallery: settings.gallery.map((g) => ({ imageUrl: g.imageUrl.trim(), caption: g.caption.trim() })),
       }
       const saved = await apiSend<PortalSettings>('/api/settings', 'PUT', payload)
       setSettings(saved)
@@ -254,6 +261,7 @@ export function LandingEditor() {
         <TabsList className="h-auto min-h-9 flex-wrap justify-start">
           <TabsTrigger value="hero">Hero</TabsTrigger>
           <TabsTrigger value="tentang">Tentang</TabsTrigger>
+          <TabsTrigger value="galeri">Galeri</TabsTrigger>
           <TabsTrigger value="kontak">Kontak</TabsTrigger>
           <TabsTrigger value="faq">FAQ</TabsTrigger>
           <TabsTrigger value="testimoni">Testimoni</TabsTrigger>
@@ -354,6 +362,99 @@ export function LandingEditor() {
               <div className="space-y-2">
                 <ImageUpload url={settings.about.imageUrl} onChange={(url) => patchAbout({ imageUrl: url })} label="Foto Kegiatan" aspect="video" />
                 <p className="text-xs text-stone-400">Kosongkan untuk memakai ilustrasi serambi bawaan.</p>
+              </div>
+              <ResetWarning />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============ GALERI ============ */}
+        <TabsContent value="galeri">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Images className="size-4 text-emerald-700" />
+                Galeri Kegiatan
+              </CardTitle>
+              <CardDescription>Foto momen kegiatan santri — tampil sebagai galeri di portal publik.</CardDescription>
+              <CardAction>
+                <ResetSectionButton onClick={() => resetSection('gallery')} />
+              </CardAction>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {settings.gallery.length === 0 && (
+                <p className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4 text-center text-sm text-stone-400">
+                  Belum ada foto. Tambahkan foto kegiatan pertama Anda.
+                </p>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {settings.gallery.map((g, i) => (
+                  <div key={i} className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/50 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Foto {i + 1}</Badge>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          aria-label={`Naikkan foto ${i + 1}`}
+                          disabled={i === 0}
+                          onClick={() => setSettings((s) => (s ? { ...s, gallery: moveItem(s.gallery, i, -1) } : s))}
+                        >
+                          <ChevronUp className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          aria-label={`Turunkan foto ${i + 1}`}
+                          disabled={i === settings.gallery.length - 1}
+                          onClick={() => setSettings((s) => (s ? { ...s, gallery: moveItem(s.gallery, i, 1) } : s))}
+                        >
+                          <ChevronDown className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          aria-label={`Hapus foto ${i + 1}`}
+                          onClick={() => setSettings((s) => (s ? { ...s, gallery: s.gallery.filter((_, idx) => idx !== i) } : s))}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <ImageUpload url={g.imageUrl} onChange={(url) => updateGallery(i, { imageUrl: url })} label="Berkas Foto" aspect="video" />
+                    <div className="space-y-2">
+                      <Label htmlFor={`gallery-caption-${i}`}>Keterangan Foto</Label>
+                      <Input
+                        id={`gallery-caption-${i}`}
+                        value={g.caption}
+                        onChange={(e) => updateGallery(i, { caption: e.target.value })}
+                        placeholder="Contoh: Halaqah sore di serambi masjid"
+                        maxLength={200}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                  disabled={settings.gallery.length >= 24}
+                  onClick={() => setSettings((s) => (s ? { ...s, gallery: [...s.gallery, { imageUrl: '', caption: '' }] } : s))}
+                >
+                  <Plus className="size-4" />
+                  Tambah Foto
+                </Button>
+                <p className="text-xs text-stone-400">
+                  {settings.gallery.length}/24 foto · foto tanpa berkas gambar otomatis disembunyikan dari portal.
+                </p>
               </div>
               <ResetWarning />
             </CardContent>

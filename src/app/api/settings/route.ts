@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { mergePortalSettings, SETTING_KEYS, type SettingKey } from '@/lib/portal-settings'
 import { guard } from '@/lib/session'
@@ -18,7 +18,9 @@ export async function GET() {
         // lewati nilai rusak — fallback default
       }
     }
-    return ok(mergePortalSettings(raw))
+    return NextResponse.json(mergePortalSettings(raw), {
+      headers: { 'Cache-Control': 'no-store' },
+    })
   } catch {
     return bad('Gagal memuat pengaturan', 500)
   }

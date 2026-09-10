@@ -44,12 +44,19 @@ export interface TestimonialItem {
   role: string
 }
 
+export interface GalleryItem {
+  /** '' → item dilewati saat merge */
+  imageUrl: string
+  caption: string
+}
+
 export interface PortalSettings {
   hero: HeroSettings
   about: AboutSettings
   contact: ContactSettings
   faqs: FaqItem[]
   testimonials: TestimonialItem[]
+  gallery: GalleryItem[]
 }
 
 export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
@@ -118,6 +125,12 @@ export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
       a: 'Ya. Melalui Portal Wali, orang tua dapat memantau kehadiran (absensi), progres hafalan beserta nilai dan catatan ustadz/ustadzah, serta tagihan bulanan. Rapor perkembangan juga dibagikan setiap akhir semester.',
     },
   ].map((f) => ({ question: f.q, answer: f.a })),
+  gallery: [
+    { imageUrl: '/images/gallery-halaqah.jpg', caption: 'Halaqah baca Al-Qur\u2019an setiap sore' },
+    { imageUrl: '/images/gallery-khataman.jpg', caption: 'Khataman & wisata hafalan santri' },
+    { imageUrl: '/images/gallery-shalat.jpg', caption: 'Latihan shalat berjamaah' },
+    { imageUrl: '/images/gallery-outdoor.jpg', caption: 'Edukasi luar kelas — jelajah alam' },
+  ],
   testimonials: [
     {
       quote:
@@ -146,20 +159,69 @@ export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
   ],
 }
 
-export const SETTING_KEYS = ['hero', 'about', 'contact', 'faqs', 'testimonials'] as const
+export const SETTING_KEYS = ['hero', 'about', 'contact', 'faqs', 'testimonials', 'gallery'] as const
 export type SettingKey = (typeof SETTING_KEYS)[number]
 
-function str(v: unknown, fallback: string): string {
-  return typeof v === 'string' && v.trim() ? v : fallback
+// ===== Batas keamanan (defense in depth) — cegah payload raksasa & injeksi URL =====
+const LIMITS = {
+  text: 400,
+  textarea: 2000,
+  url: 500,
+  caption: 200,
+  missions: 20,
+  missionItem: 300,
+  faqs: 30,
+  faqQuestion: 300,
+  faqAnswer: 1500,
+  testimonials: 20,
+  quote: 600,
+  gallery: 24,
+} as const
+
+/**
+ * Validasi URL gambar dari CMS: hanya path relatif sama-origin (mulai '/') atau
+ * https:// absolut. Memblokir javascript:, data:, vbscript:, //cdn dsb. —
+ * mencegah injeksi URL berbahaya pada <img src> / <a href> di portal publik.
+ */
+function safeImageUrl(v: unknown, fallback: string): string {
+  if (typeof v !== 'string') return fallback
+  const url = v.trim().slice(0, LIMITS.url)
+  if (!url) return fallback
+  if (url.startsWith('/') && !url.startsWith('//')) return url
+  try {
+    const u = new URL(url)
+    if (u.protocol === 'https:' && !!u.hostname) return url
+  } catch {
+    /* bukan URL absolut valid */
+  }
+  return fallback
 }
 
-function optStr(v: unknown): string {
-  return typeof v === 'string' ? v : ''
+/** Seperti safeImageUrl tapi mengizinkan string kosong (opsional). */
+function optSafeImageUrl(v: unknown): string {
+  if (typeof v !== 'string') return ''
+  const url = v.trim().slice(0, LIMITS.url)
+  if (!url) return ''
+  if (url.startsWith('/') && !url.startsWith('//')) return url
+  try {
+    const u = new URL(url)
+    if (u.protocol === 'https:' && !!u.hostname) return url
+  } catch {
+    /* bukan URL absolut valid */
+  }
+  return ''
+}
+
+function str(v: unknown, fallback: string): string {
+  return typeof v === 'string' && v.trim() ? v.slice(0, LIMITS.textarea).trim() : fallback
 }
 
 function strArray(v: unknown, fallback: string[]): string[] {
   if (!Array.isArray(v)) return fallback
-  const out = v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+  const out = (v as unknown[])
+    .slice(0, LIMITS.missions)
+    .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+    .map((x) => x.trim().slice(0, LIMITS.missionItem))
   return out.length > 0 ? out : fallback
 }
 
@@ -174,10 +236,11 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
 
   const faqs: FaqItem[] = Array.isArray(r.faqs)
     ? (r.faqs as unknown[])
+        .slice(0, LIMITS.faqs)
         .map((x): FaqItem | null => {
           const o = (x ?? {}) as Record<string, unknown>
-          const q = typeof o.question === 'string' ? o.question.trim() : ''
-          const a = typeof o.answer === 'string' ? o.answer.trim() : ''
+          const q = typeof o.question === 'string' ? o.question.trim().slice(0, LIMITS.faqQuestion) : ''
+          const a = typeof o.answer === 'string' ? o.answer.trim().slice(0, LIMITS.faqAnswer) : ''
           return q && a ? { question: q, answer: a } : null
         })
         .filter((x): x is FaqItem => x !== null)
@@ -185,15 +248,28 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
 
   const testimonials: TestimonialItem[] = Array.isArray(r.testimonials)
     ? (r.testimonials as unknown[])
+        .slice(0, LIMITS.testimonials)
         .map((x): TestimonialItem | null => {
           const o = (x ?? {}) as Record<string, unknown>
-          const quote = typeof o.quote === 'string' ? o.quote.trim() : ''
-          const name = typeof o.name === 'string' ? o.name.trim() : ''
-          const role = typeof o.role === 'string' ? o.role.trim() : ''
+          const quote = typeof o.quote === 'string' ? o.quote.trim().slice(0, LIMITS.quote) : ''
+          const name = typeof o.name === 'string' ? o.name.trim().slice(0, LIMITS.text) : ''
+          const role = typeof o.role === 'string' ? o.role.trim().slice(0, LIMITS.text) : ''
           return quote && name ? { quote, name, role } : null
         })
         .filter((x): x is TestimonialItem => x !== null)
     : d.testimonials
+
+  const gallery: GalleryItem[] = Array.isArray(r.gallery)
+    ? (r.gallery as unknown[])
+        .slice(0, LIMITS.gallery)
+        .map((x): GalleryItem | null => {
+          const o = (x ?? {}) as Record<string, unknown>
+          const imageUrl = optSafeImageUrl(o.imageUrl)
+          const caption = typeof o.caption === 'string' ? o.caption.trim().slice(0, LIMITS.caption) : ''
+          return imageUrl ? { imageUrl, caption } : null
+        })
+        .filter((x): x is GalleryItem => x !== null)
+    : d.gallery
 
   return {
     hero: {
@@ -202,8 +278,8 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
       title: str(heroRaw.title, d.hero.title),
       tagline: str(heroRaw.tagline, d.hero.tagline),
       showStats: typeof heroRaw.showStats === 'boolean' ? heroRaw.showStats : d.hero.showStats,
-      logoUrl: optStr(heroRaw.logoUrl),
-      backgroundUrl: str(heroRaw.backgroundUrl, d.hero.backgroundUrl),
+      logoUrl: optSafeImageUrl(heroRaw.logoUrl),
+      backgroundUrl: safeImageUrl(heroRaw.backgroundUrl, d.hero.backgroundUrl),
     },
     about: {
       badge: str(aboutRaw.badge, d.about.badge),
@@ -211,7 +287,7 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
       tagline: str(aboutRaw.tagline, d.about.tagline),
       vision: str(aboutRaw.vision, d.about.vision),
       missions: strArray(aboutRaw.missions, d.about.missions),
-      imageUrl: str(aboutRaw.imageUrl, d.about.imageUrl),
+      imageUrl: safeImageUrl(aboutRaw.imageUrl, d.about.imageUrl),
     },
     contact: {
       address: str(contactRaw.address, d.contact.address),
@@ -222,5 +298,6 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
     },
     faqs,
     testimonials,
+    gallery,
   }
 }

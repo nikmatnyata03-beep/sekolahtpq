@@ -25,6 +25,7 @@ import { TeachersSection } from './teachers-section'
 import { MaterialsSection } from './materials-section'
 import { NewsSection } from './news-section'
 import { AnnouncementsSection } from './announcements-section'
+import { GallerySection } from './gallery-section'
 import { TestimonialsSection } from './testimonials-section'
 import { FaqSection } from './faq-section'
 import { PpdbSection } from './ppdb-section'
@@ -39,6 +40,7 @@ const NAV_ITEMS = [
   { id: 'materi', label: 'Materi' },
   { id: 'berita', label: 'Berita' },
   { id: 'pengumuman', label: 'Pengumuman' },
+  { id: 'galeri', label: 'Galeri' },
   { id: 'ppdb', label: 'PPDB' },
 ]
 
@@ -185,6 +187,7 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
         <MaterialsSection />
         <NewsSection />
         <AnnouncementsSection />
+        <GallerySection />
         <TestimonialsSection />
         <FaqSection />
         <PpdbSection />
