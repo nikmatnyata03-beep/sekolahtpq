@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "tpqdarussolah",
-      "database_id": "GANTI-DENGAN-ID-DARI-wrangler-d1-create"
+      "database_id": "27d11454-3a54-44c3-9009-54a4d2befd11"
     }
   ],
   // Storage file upload (foto guru, dll): Cloudflare R2
