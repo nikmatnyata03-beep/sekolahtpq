@@ -49,22 +49,38 @@ export async function POST(req: NextRequest) {
 
   try {
     if (kind === 'KUIS') {
-      const raw = await runAi(
-        SYSTEM +
-          `\n\nATURAN OUTPUT — WAJIB JSON MURNI (tanpa markdown fence, tanpa teks lain): array berisi 5 objek soal:
-[{"question":"pertanyaan","options":["A. ...","B. ...","C. ...","D. ..."],"answerIndex":0,"note":"penjelasan singkat 1 kalimat"}]
-- answerIndex = indeks (0-3) jawaban benar.
-- Sebar jawaban benar tidak selalu di posisi yang sama.
-- Soal sesuai jenjang dan surah yang diminta (isi, nomor ayat, hukum tajwid, atau makna umum).`,
-        `Buat 5 soal kuis untuk santri dengan data berikut.\n${konteks}`,
-        1600,
-      )
+      const KUIS_RULES =
+        `\n\nATURAN OUTPUT — WAJIB JSON MURNI (tanpa markdown fence, tanpa teks lain): array berisi 5 objek soal:\n` +
+        `[{"question":"pertanyaan","options":["A. ...","B. ...","C. ...","D. ..."],"answerIndex":0,"note":"penjelasan singkat 1 kalimat"}]\n` +
+        `- answerIndex = indeks (0-3) jawaban benar.\n` +
+        `- Sebar jawaban benar tidak selalu di posisi yang sama.\n` +
+        `- Soal sesuai jenjang dan surah yang diminta (isi, nomor ayat, hukum tajwid, atau makna umum).`
+      const userPrompt = `Buat 5 soal kuis untuk santri dengan data berikut.\n${konteks}`
+
+      // Model kadang mengembalikan respons kosong (transient) — coba maksimal 2x.
+      // Percobaan ke-2 memakai bentuk objek {"questions":[...]} yang lebih stabil.
+      let raw = ''
+      for (let attempt = 0; attempt < 2 && !raw; attempt++) {
+        const msg =
+          attempt === 0
+            ? userPrompt
+            : userPrompt +
+              '\n\nBalas dengan OBJEK JSON tunggal berformat {"questions":[ ...5 soal... ]} — tanpa markdown, tanpa teks lain, mulai langsung dengan karakter {.'
+        raw = await runAi(SYSTEM + KUIS_RULES, msg, 1600).catch(() => '')
+      }
+      if (!raw) throw new Error('Model AI memberikan respons kosong — coba lagi sebentar')
+
       const json = extractJsonBlock(raw)
       let questions: Array<{ question: string; options: string[]; answerIndex: number; note?: string }> = []
       if (json) {
         try {
-          const parsed = JSON.parse(json)
-          if (Array.isArray(parsed)) questions = parsed
+          const parsed: unknown = JSON.parse(json)
+          if (Array.isArray(parsed)) {
+            questions = parsed as typeof questions
+          } else if (parsed && typeof parsed === 'object') {
+            const q = (parsed as { questions?: unknown }).questions
+            if (Array.isArray(q)) questions = q as typeof questions
+          }
         } catch {
           // biarkan kosong → fallback ke teks mentah di bawah
         }
