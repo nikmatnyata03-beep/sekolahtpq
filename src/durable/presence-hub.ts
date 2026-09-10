@@ -117,15 +117,23 @@ export class PresenceHub extends DurableObject {
       if (!user || !ALLOWED_ROLES.includes(user.role)) {
         return new Response('Tidak diizinkan', { status: 401 })
       }
-      await this.load()
-      const pair = new WebSocketPair()
-      this.st.acceptWebSocket(pair.server)
       try {
-        pair.server.send(JSON.stringify({ kind: 'snapshot', events: this.events } satisfies HubMessage))
-      } catch {
-        /* klien sudah pergi */
+        await this.load()
+        const pair = new WebSocketPair()
+        this.st.acceptWebSocket(pair.server)
+        try {
+          pair.server.send(JSON.stringify({ kind: 'snapshot', events: this.events } satisfies HubMessage))
+        } catch {
+          /* klien sudah pergi */
+        }
+        return new Response(null, { status: 101, webSocket: pair.client } as unknown as ResponseInit)
+      } catch (e) {
+        // Diagnostik: pesan error asli ikut dikirim supaya masalah upgrade
+        // terlihat dari uji curl tanpa harus membuka log dashboard.
+        const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+        console.error('[presence-hub] upgrade gagal:', msg)
+        return new Response(`DO-UPGRADE-ERR: ${msg.slice(0, 280)}`, { status: 500 })
       }
-      return new Response(null, { status: 101, webSocket: pair.client } as unknown as ResponseInit)
     }
 
     // 2) Broadcast dari route server (binding internal)
