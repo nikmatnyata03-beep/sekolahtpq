@@ -81,7 +81,7 @@ cd simadji
 bun install
 
 # 3. Siapkan environment
-echo 'DATABASE_URL=file:./db/custom.db' > .env
+echo 'DATABASE_URL=file:../db/custom.db' > .env
 
 # 4. Buat schema database
 bun run db:push
