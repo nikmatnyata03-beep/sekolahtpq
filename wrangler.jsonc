@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Nama worker = subdomain: simadji.<account>.workers.dev
-  "name": "simadji",
+  // Nama worker = subdomain: tpqdarussolah.<account>.workers.dev
+  "name": "tpqdarussolah",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -14,7 +14,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "simadji-db",
+      "database_name": "tpqdarussolah",
       "database_id": "GANTI-DENGAN-ID-DARI-wrangler-d1-create"
     }
   ],
@@ -22,7 +22,7 @@
   "r2_buckets": [
     {
       "binding": "UPLOADS",
-      "bucket_name": "simadji-uploads"
+      "bucket_name": "tpqdarussolah-uploads"
     }
   ],
   "observability": {
