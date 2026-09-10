@@ -15,6 +15,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp, rupiah } from '@/lib/api'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
+import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -122,9 +123,11 @@ async function handle(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  await ensureAttendanceSchema()
   return handle(req)
 }
 
 export async function POST(req: NextRequest) {
+  await ensureAttendanceSchema()
   return handle(req)
 }

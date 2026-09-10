@@ -11,12 +11,14 @@ import { guard } from '@/lib/session'
 import { rateLimit } from '@/lib/rate-limit'
 import { runAi, aiErrorMessage } from '@/lib/ai'
 import { rupiah } from '@/lib/api'
+import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 
 export const dynamic = 'force-dynamic'
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 
 export async function POST(req: NextRequest) {
+  await ensureAttendanceSchema()
   const g = await guard(req, ['ADMIN', 'DEVELOPER'])
   if ('res' in g) return g.res
 

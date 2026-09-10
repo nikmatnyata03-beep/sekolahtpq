@@ -3,6 +3,7 @@ import { db, ok } from '@/lib/api'
 import { guard } from '@/lib/session'
 import { wibDayStart } from '@/lib/wib'
 import type { PresenceEvent } from '@/durable/presence-hub'
+import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 
 /**
  * Snapshot presensi hari ini (WIB) — sumber data mode POLLING ketika
@@ -11,6 +12,7 @@ import type { PresenceEvent } from '@/durable/presence-hub'
  * Guard: ADMIN, GURU, DEVELOPER.
  */
 export async function GET(req: NextRequest) {
+  await ensureAttendanceSchema()
   const g = await guard(req, ['ADMIN', 'GURU', 'DEVELOPER'])
   if ('res' in g) return g.res
 

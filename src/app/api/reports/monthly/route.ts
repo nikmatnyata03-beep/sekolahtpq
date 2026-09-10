@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { db, ok } from '@/lib/api'
 import { guard } from '@/lib/session'
+import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 
 /**
  * GET /api/reports/monthly?month=YYYY-MM
@@ -26,6 +27,7 @@ function sum<T>(rows: T[], pick: (row: T) => number): number {
 }
 
 export async function GET(req: NextRequest) {
+  await ensureAttendanceSchema()
   const g = await guard(req, ['ADMIN'])
   if ('res' in g) return g.res
 

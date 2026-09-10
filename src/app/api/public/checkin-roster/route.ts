@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 
 /**
  * Daftar santri untuk check-in PUBLIK — kuncinya KODE SESI.
@@ -13,6 +14,7 @@ import { rateLimit, clientIp } from '@/lib/rate-limit'
  * divalidasi ulang di /api/attendance/checkin (defense in depth).
  */
 export async function GET(req: NextRequest) {
+  await ensureAttendanceSchema()
   if (!rateLimit(`roster:${clientIp(req)}`, 20, 60 * 1000)) {
     return bad('Terlalu banyak percobaan. Tunggu sebentar.', 429)
   }

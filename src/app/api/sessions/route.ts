@@ -6,6 +6,7 @@ import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 import { parseGps, validateGpsQuality, roundCoord, MAX_SESSION_ACCURACY_M } from '@/lib/geo'
 
 export async function GET(req: NextRequest) {
+  await ensureAttendanceSchema()
   // Daftar sesi dipakai halaman cek-in publik -> tetap terbuka, NAMAI kode
   // kerahasiaan QR: admin/guru melihat semua; WALI hanya kode sesi kelas
   // tempat anaknya terdaftar (dipakai check-in anak di portal wali);

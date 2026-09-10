@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/api'
 import { guard } from '@/lib/session'
+import { ensureAttendanceSchema } from '@/lib/attendance-schema'
 
 export async function GET(req: NextRequest) {
+  await ensureAttendanceSchema()
   const g = await guard(req, ['ADMIN'])
   if ('res' in g) return g.res
   const [students, teachers, classes, registrationsPending, payments, todayAttendances, activeSessions, hafalan, materials] =
