@@ -17,6 +17,7 @@ import {
   History,
   MapPin,
   Lock,
+  X,
 } from 'lucide-react'
 import type { AttendanceRecord, ClassRoom, SessionItem, Student } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
@@ -50,6 +51,8 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { statusBadgeClass, downloadCsv, checkinUrl } from './overview'
+import { AnchorMapDialog } from '@/components/shared/anchor-map-dialog'
+import { formatMapPoint, type MapPoint } from '@/components/shared/map-picker'
 
 /**
  * QR memuat URL portal dgn kode terisi otomatis (?absen=KODE#checkin) —
@@ -156,6 +159,11 @@ export function AttendanceAdmin() {
   const [gpsState, setGpsState] = useState<'locating' | 'ok' | 'error'>('locating')
   const [gpsError, setGpsError] = useState<string | null>(null)
   const [refreshingLoc, setRefreshingLoc] = useState(false)
+  // Task 35: alternatif titik anchor via PETA — koordinat eksak, tak tergantung
+  // GPS perangkat. Bila diisi, dipakai menggantikan sessionGps saat buka sesi.
+  const [mapAnchor, setMapAnchor] = useState<MapPoint | null>(null)
+  const [mapDialogOpen, setMapDialogOpen] = useState(false)
+  const [qrMapOpen, setQrMapOpen] = useState(false)
   const acquireGps = useCallback(async () => {
     setGpsState('locating')
     setGpsError(null)
@@ -285,22 +293,26 @@ export function AttendanceAdmin() {
       toast({ title: 'Pilih kelas', description: 'Tentukan kelas yang akan dibuka sesinya.' })
       return
     }
-    if (!sessionGps) {
+    if (!mapAnchor && !sessionGps) {
       toast({
-        title: 'GPS belum siap',
-        description: 'Titik lokasi wajib agar check-in santri tervalidasi ≤ 20 m. Tunggu GPS terkunci lalu coba lagi.',
+        title: 'Titik lokasi belum siap',
+        description:
+          'Pilih titik kelas di peta / tempel koordinat, atau tunggu GPS perangkat terkunci — check-in santri tervalidasi ≤ 20 m dari titik ini.',
         variant: 'destructive',
       })
       return
     }
     setIsOpening(true)
     try {
-      await apiSend('/api/sessions', 'POST', {
+      const payload: Record<string, unknown> = {
         classId,
         topic: topic.trim() || undefined,
         date: date || undefined,
-        gps: { lat: sessionGps.lat, lng: sessionGps.lng, accuracy: sessionGps.accuracy, posTs: sessionGps.posTs },
-      })
+      }
+      if (mapAnchor) payload.mapAnchor = mapAnchor
+      else if (sessionGps)
+        payload.gps = { lat: sessionGps.lat, lng: sessionGps.lng, accuracy: sessionGps.accuracy, posTs: sessionGps.posTs }
+      await apiSend('/api/sessions', 'POST', payload)
       const refreshed = await apiGet<SessionItem[]>('/api/sessions')
       setSessions(refreshed)
       const created = refreshed.find((s) => s.isActive && s.classId === classId) ?? null
@@ -426,26 +438,35 @@ export function AttendanceAdmin() {
     })
   }
 
-  // Task 33: perbarui titik GPS anchor sesi (ustadz pindah ruangan / sesi lama
-  // belum punya titik). Dipanggil dari dialog QR.
-  async function refreshAnchor(s: SessionItem) {
+  // Task 33/35: perbarui titik anchor sesi (ustadz pindah ruangan / sesi lama
+  // belum punya titik). Dipanggil dari dialog QR — via GPS perangkat ATAU peta.
+  async function refreshAnchor(s: SessionItem, point?: MapPoint) {
     setRefreshingLoc(true)
     try {
-      const fix = await getGpsFix()
-      await apiSend('/api/sessions', 'PUT', {
-        id: s.id,
-        action: 'lokasi',
-        gps: { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, posTs: fix.posTs },
-      })
+      if (point) {
+        await apiSend('/api/sessions', 'PUT', { id: s.id, action: 'lokasi', mapAnchor: point })
+      } else {
+        const fix = await getGpsFix()
+        await apiSend('/api/sessions', 'PUT', {
+          id: s.id,
+          action: 'lokasi',
+          gps: { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, posTs: fix.posTs },
+        })
+      }
       const refreshed = await apiGet<SessionItem[]>('/api/sessions')
       setSessions(refreshed)
       const updated = refreshed.find((x) => x.id === s.id) ?? null
       setQrSession((prev) => (prev?.id === s.id ? (updated ?? prev) : prev))
       setCreatedSession((prev) => (prev?.id === s.id ? (updated ?? prev) : prev))
-      toast({ title: 'Titik GPS diperbarui', description: `Check-in kini divalidasi ≤ 20 m dari posisi Anda sekarang.` })
+      toast({
+        title: point ? 'Titik absen diperbarui (peta)' : 'Titik GPS diperbarui',
+        description: point
+          ? `Check-in kini divalidasi ≤ 20 m dari titik peta ${formatMapPoint(point)}.`
+          : 'Check-in kini divalidasi ≤ 20 m dari posisi Anda sekarang.',
+      })
     } catch (e) {
       toast({
-        title: 'Gagal memperbarui titik GPS',
+        title: 'Gagal memperbarui titik absen',
         description: e instanceof Error ? e.message : 'Terjadi kesalahan',
         variant: 'destructive',
       })
@@ -578,38 +599,67 @@ export function AttendanceAdmin() {
                   <Input id="att-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </div>
-              {/* ==== Status GPS titik absen (wajib, Task 33) ==== */}
+              {/* ==== Titik absen (wajib): peta ATAU GPS perangkat (Task 33/35) ==== */}
               <div className="rounded-xl border p-3 text-xs" data-testid="session-gps-status">
-                {gpsState === 'locating' && (
-                  <div className="flex items-center gap-2 text-stone-600">
-                    <Loader2 className="size-3.5 animate-spin text-emerald-600" />
-                    Mengunci titik GPS perangkat Anda…
-                  </div>
-                )}
-                {gpsState === 'ok' && sessionGps && (
-                  <div className="flex items-center justify-between gap-2 text-emerald-800">
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="size-3.5" />
-                      Titik absen siap{sessionGps.accuracy != null ? ` (±${Math.round(sessionGps.accuracy)} m)` : ''} — check-in santri tervalidasi ≤ 20 m dari sini.
+                {mapAnchor ? (
+                  <div className="flex items-start justify-between gap-2 text-emerald-800">
+                    <span className="inline-flex items-start gap-1.5">
+                      <MapPin className="mt-0.5 size-3.5 shrink-0" />
+                      <span>
+                        Titik absen (peta): <span className="font-mono">{formatMapPoint(mapAnchor)}</span> — check-in
+                        santri tervalidasi ≤ 20 m dari sini.
+                      </span>
                     </span>
-                    <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-emerald-700 hover:bg-emerald-50" onClick={() => void acquireGps()} aria-label="Ambil ulang titik GPS">
-                      <RefreshCw className="size-3" />
-                    </Button>
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-emerald-700 hover:bg-emerald-50" onClick={() => setMapDialogOpen(true)} aria-label="Ubah titik di peta">
+                        <RefreshCw className="size-3" /> Ubah
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-stone-400 hover:bg-stone-100" onClick={() => setMapAnchor(null)} aria-label="Hapus titik peta, kembali pakai GPS perangkat">
+                        <X className="size-3" />
+                      </Button>
+                    </span>
                   </div>
-                )}
-                {gpsState === 'error' && (
-                  <div className="space-y-2 text-red-700">
-                    <div className="flex items-start gap-1.5">
-                      <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                      {gpsError}
-                    </div>
-                    <Button size="sm" variant="outline" className="h-7 border-red-300 text-red-700 hover:bg-red-50" onClick={() => void acquireGps()}>
-                      <RefreshCw className="size-3" /> Coba Lagi
-                    </Button>
-                  </div>
+                ) : (
+                  <>
+                    {gpsState === 'locating' && (
+                      <div className="flex items-center gap-2 text-stone-600">
+                        <Loader2 className="size-3.5 animate-spin text-emerald-600" />
+                        Mengunci titik GPS perangkat Anda…
+                      </div>
+                    )}
+                    {gpsState === 'ok' && sessionGps && (
+                      <div className="flex items-center justify-between gap-2 text-emerald-800">
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPin className="size-3.5" />
+                          Titik absen siap{sessionGps.accuracy != null ? ` (±${Math.round(sessionGps.accuracy)} m)` : ''} — check-in santri tervalidasi ≤ 20 m dari sini.
+                        </span>
+                        <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-emerald-700 hover:bg-emerald-50" onClick={() => void acquireGps()} aria-label="Ambil ulang titik GPS">
+                          <RefreshCw className="size-3" />
+                        </Button>
+                      </div>
+                    )}
+                    {gpsState === 'error' && (
+                      <div className="space-y-2 text-red-700">
+                        <div className="flex items-start gap-1.5">
+                          <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                          {gpsError}
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 border-red-300 text-red-700 hover:bg-red-50" onClick={() => void acquireGps()}>
+                          <RefreshCw className="size-3" /> Coba Lagi
+                        </Button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 underline-offset-2 hover:underline"
+                      onClick={() => setMapDialogOpen(true)}
+                    >
+                      <MapPin className="size-3" /> atau tandai titik kelas di peta / tempel koordinat Google Maps
+                    </button>
+                  </>
                 )}
               </div>
-              <Button onClick={() => void openSession()} disabled={isOpening || gpsState !== 'ok'} className="w-full bg-emerald-700 hover:bg-emerald-800">
+              <Button onClick={() => void openSession()} disabled={isOpening || (!mapAnchor && gpsState !== 'ok')} className="w-full bg-emerald-700 hover:bg-emerald-800">
                 {isOpening ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />} Buka Sesi &amp; Buat QR
               </Button>
 
@@ -1054,26 +1104,38 @@ export function AttendanceAdmin() {
                     <MapPin className="mt-0.5 size-3.5 shrink-0" />
                     {qrSession.lat != null ? (
                       <span>
-                        Titik absen aktif{qrSession.locAccuracy != null ? ` (±${Math.round(qrSession.locAccuracy)} m)` : ''} — santri hanya bisa check-in ≤ 20 m dari sini.
+                        Titik absen aktif{qrSession.locAccuracy != null ? ` (±${Math.round(qrSession.locAccuracy)} m)` : ' (titik peta)'} — santri hanya bisa check-in ≤ 20 m dari sini.
                       </span>
                     ) : (
                       <span>
-                        Sesi belum punya titik GPS — check-in santri akan DITOLAK. Tekan
-                        "Perbarui Titik GPS" dari posisi Anda di kelas.
+                        Sesi belum punya titik absen — check-in santri akan DITOLAK. Tekan
+                        "Perbarui Titik GPS" dari posisi Anda di kelas, atau pilih titiknya di peta.
                       </span>
                     )}
                   </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 shrink-0 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
-                    disabled={refreshingLoc}
-                    onClick={() => void refreshAnchor(qrSession)}
-                    aria-label="Perbarui titik GPS sesi"
-                  >
-                    {refreshingLoc ? <Loader2 className="size-3 animate-spin" /> : <MapPin className="size-3" />}
-                    Perbarui Titik GPS
-                  </Button>
+                  <span className="flex shrink-0 flex-col gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                      disabled={refreshingLoc}
+                      onClick={() => void refreshAnchor(qrSession)}
+                      aria-label="Perbarui titik GPS sesi"
+                    >
+                      {refreshingLoc ? <Loader2 className="size-3 animate-spin" /> : <MapPin className="size-3" />}
+                      Perbarui Titik GPS
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                      disabled={refreshingLoc}
+                      onClick={() => setQrMapOpen(true)}
+                      aria-label="Pilih titik absen di peta"
+                    >
+                      <MapPin className="size-3" /> Pilih di Peta
+                    </Button>
+                  </span>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => copyCode(qrSession.code)}>
@@ -1083,6 +1145,36 @@ export function AttendanceAdmin() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Dialog pilih titik di peta — utk sesi BARU (menggantikan GPS perangkat) */}
+      <AnchorMapDialog
+        open={mapDialogOpen}
+        onOpenChange={setMapDialogOpen}
+        initial={mapAnchor}
+        title="Pilih Titik Absen di Peta"
+        description="Tandai lokasi kelas pada peta, tekan GPS saya, atau tempel koordinat/URL Google Maps — check-in santri divalidasi ≤ 20 m dari titik ini."
+        confirmLabel="Pakai Titik Ini"
+        onConfirm={(p) => {
+          setMapAnchor(p)
+          setMapDialogOpen(false)
+          toast({ title: 'Titik absen siap', description: `Check-in santri akan divalidasi ≤ 20 m dari ${formatMapPoint(p)}.` })
+        }}
+      />
+
+      {/* Dialog pilih titik di peta — perbarui anchor sesi aktif (dialog QR) */}
+      <AnchorMapDialog
+        open={qrMapOpen}
+        onOpenChange={setQrMapOpen}
+        initial={qrSession && qrSession.lat != null && qrSession.lng != null ? { lat: qrSession.lat, lng: qrSession.lng } : null}
+        title={qrSession ? `Perbarui Titik Absen — ${qrSession.className}` : 'Perbarui Titik Absen'}
+        description="Tandai lokasi kelas pada peta — check-in santri sesi ini divalidasi ulang ≤ 20 m dari titik baru."
+        confirmLabel="Simpan Titik Sesi"
+        busy={refreshingLoc}
+        onConfirm={(p) => {
+          if (qrSession) void refreshAnchor(qrSession, p)
+          setQrMapOpen(false)
+        }}
+      />
     </div>
   )
 }

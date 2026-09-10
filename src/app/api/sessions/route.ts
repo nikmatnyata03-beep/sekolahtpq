@@ -65,10 +65,12 @@ export async function POST(req: NextRequest) {
     await ensureAttendanceSchema()
     const b = await req.json()
     if (!b.classId) return bad('Kelas wajib dipilih')
-    // GPS WAJIB — titik anchor tempat QR dibuat; check-in santri divalidasi
-    // server-side maksimal 20 m dari titik ini (anti absen palsu).
-    const gps = parseGps(b.gps)
-    if (!gps) return bad('Lokasi GPS wajib. Izinkan akses lokasi pada browser lalu coba lagi.')
+    // Titik anchor WAJIB — dua cara (Task 35):
+    //  1. gps        — GPS perangkat ustadz saat QR dibuat (accuracy + freshness divalidasi)
+    //  2. mapAnchor  — titik dipilih di peta / koordinat tempelan (exact, tanpa ±akurasi)
+    // Check-in santri selalu dihitung SERVER ≤ 20 m dari titik ini (anti absen palsu).
+    const gps = parseGps(b.mapAnchor) ?? parseGps(b.gps)
+    if (!gps) return bad('Titik lokasi wajib. Pilih titik di peta, tempel koordinat, atau izinkan GPS perangkat.')
     const gpsErr = validateGpsQuality(gps, { maxAccuracy: MAX_SESSION_ACCURACY_M, requireFresh: true })
     if (gpsErr) return bad(gpsErr)
     const cls = await db.class.findUnique({ where: { id: b.classId } })
@@ -122,8 +124,9 @@ export async function PUT(req: NextRequest) {
     // Aksi "lokasi": perbarui titik GPS anchor (ustadz pindah ruangan / sesi lama
     // belum punya titik). Check-in santri selanjutnya dihitung dari titik baru.
     if (b.action === 'lokasi') {
-      const gps = parseGps(b.gps)
-      if (!gps) return bad('Lokasi GPS wajib. Izinkan akses lokasi pada browser lalu coba lagi.')
+      // Titik baru bisa dari GPS perangkat (gps) atau peta (mapAnchor) — lihat POST.
+      const gps = parseGps(b.mapAnchor) ?? parseGps(b.gps)
+      if (!gps) return bad('Titik lokasi wajib. Pilih titik di peta, tempel koordinat, atau izinkan GPS perangkat.')
       const gpsErr = validateGpsQuality(gps, { maxAccuracy: MAX_SESSION_ACCURACY_M, requireFresh: true })
       if (gpsErr) return bad(gpsErr)
       const session = await db.session.update({
