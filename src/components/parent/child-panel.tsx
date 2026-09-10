@@ -14,6 +14,7 @@ import {
   Landmark,
   Loader2,
   Printer,
+  Download,
   QrCode,
   ReceiptText,
   ScanLine,
@@ -39,6 +40,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
+import { buildRaporSantriPdf, buildStrukPdf, downloadBlob } from '@/lib/rapor-pdf'
 import type { Hafalan, Payment, ParentPortalData, SessionItem } from '@/lib/types'
 import { HafalanProgress } from './hafalan-chart'
 import { AttendanceRecap } from './attendance-recap'
@@ -439,6 +441,9 @@ function ReceiptDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { toast } = useToast()
+  const [pdfBusy, setPdfBusy] = useState(false)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl sm:max-w-md">
@@ -456,14 +461,44 @@ function ReceiptDialog({
           <>
             <ReceiptContent key={payment.id} payment={payment} studentName={studentName} studentNis={studentNis} />
 
-            <div className="no-print grid grid-cols-2 gap-2">
+            <div className="no-print grid grid-cols-3 gap-2">
+              <Button
+                onClick={async () => {
+                  if (!payment) return
+                  setPdfBusy(true)
+                  try {
+                    const blob = await buildStrukPdf({
+                      invoiceNo: payment.invoiceNo,
+                      title: payment.title,
+                      amount: payment.amount,
+                      studentName,
+                      studentNis,
+                      method: payment.method,
+                      paidAt: payment.paidAt ? new Date(payment.paidAt) : new Date(),
+                    })
+                    downloadBlob(blob, `Struk-${payment.invoiceNo}.pdf`)
+                    toast({ title: 'PDF berhasil diunduh', description: `Struk ${payment.invoiceNo} tersimpan di perangkat Anda.` })
+                  } catch (e) {
+                    console.error(e)
+                    toast({ title: 'Gagal membuat PDF', description: 'Terjadi kesalahan saat menyusun struk.', variant: 'destructive' })
+                  } finally {
+                    setPdfBusy(false)
+                  }
+                }}
+                disabled={pdfBusy || !payment}
+                className="min-h-11 rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+              >
+                {pdfBusy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                Unduh PDF
+              </Button>
               <Button variant="outline" onClick={() => window.print()} className="min-h-11 rounded-xl">
                 <Printer className="size-4" />
                 Cetak
               </Button>
               <Button
+                variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="min-h-11 rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+                className="min-h-11 rounded-xl"
               >
                 Tutup
               </Button>
@@ -536,6 +571,8 @@ function RaporDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { toast } = useToast()
+  const [pdfBusy, setPdfBusy] = useState(false)
   const summary = child.attendanceSummary
   const rate = attendanceRate(child)
   const avgGrade = averageHafalanGrade(child.hafalans)
@@ -730,12 +767,29 @@ function RaporDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
             Tutup
           </Button>
+          <Button variant="outline" onClick={() => window.print()} className="rounded-xl">
+            <Printer className="size-4" />
+            Cetak
+          </Button>
           <Button
-            onClick={() => window.print()}
+            onClick={async () => {
+              setPdfBusy(true)
+              try {
+                const blob = await buildRaporSantriPdf(child)
+                downloadBlob(blob, `Rapor-${child.fullName}-TPQ-Darul-Jinan-${reportYear}.pdf`)
+                toast({ title: 'PDF berhasil diunduh', description: `Rapor ${child.fullName} tersimpan utuh di perangkat Anda.` })
+              } catch (e) {
+                console.error(e)
+                toast({ title: 'Gagal membuat PDF', description: 'Terjadi kesalahan saat menyusun rapor.', variant: 'destructive' })
+              } finally {
+                setPdfBusy(false)
+              }
+            }}
+            disabled={pdfBusy}
             className="rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
           >
-            <Printer className="size-4" />
-            Cetak / Simpan PDF
+            {pdfBusy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            Unduh PDF
           </Button>
         </div>
       </DialogContent>
