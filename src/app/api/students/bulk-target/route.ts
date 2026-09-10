@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
 
     const cls = await db.class.findUnique({ where: { id: classId }, select: { id: true } })
     if (!cls) return bad('Kelas tidak ditemukan', 404)
+    if (g.session.role === 'GURU') {
+      const assigned = await db.class.findUnique({ where: { id: classId }, select: { teacherId: true } })
+      if (assigned?.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas ini', 403)
+    }
 
     let hafalanTarget: string | null = null
     if (b.hafalanTarget !== null && b.hafalanTarget !== undefined) {

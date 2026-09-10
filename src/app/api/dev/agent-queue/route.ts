@@ -1,7 +1,8 @@
 // AI FIX BRIDGE — antrean perbaikan oleh agen AI eksternal (Z.ai Code).
 //
 // Inilah jawaban atas "bagaimana temuan di halaman dev langsung trigger AI":
-//   1. Temuan pentest / error runtime / issue kesehatan berstatus WAITING_AI.
+//   1. Temuan pentest / issue kesehatan berstatus WAITING_AI; laporan runtime
+//      anonim harus ditinjau dan dienqueue secara eksplisit oleh developer.
 //   2. Agen AI (cron 5 menit) login sebagai DEVELOPER → GET antrean ini.
 //   3. claim → perbaiki kode di sandbox → push GitHub (auto-deploy Cloudflare).
 //   4. resolve dengan catatan perbaikan + hash commit → halaman dev menampilkan

@@ -2,7 +2,7 @@
 //
 // Saat panel admin gagal memuat JSON, error JS tak tertangani, atau endpoint
 // balas 5xx — api-client.ts otomatis POST ke sini (tanpa klik apa pun) dan
-// issue masuk antrean agen AI (status WAITING_AI) untuk diperbaiki otomatis.
+// issue masuk daftar review developer (status OPEN), bukan antrean auto-fix.
 //
 // PUBLIK TAPI TERLINDUNGI: rate-limit ketat per IP (8/menit), payload
 // disanitasi & dipotong, dedupe anti-spam (issue serupa aktif di-update,
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         endpoint,
         message: `${TYPES[type].label}: ${message}`,
         detail: detail || null,
-        status: 'WAITING_AI',
+        status: 'OPEN',
         source: 'RUNTIME',
         severity: TYPES[type].severity,
       },

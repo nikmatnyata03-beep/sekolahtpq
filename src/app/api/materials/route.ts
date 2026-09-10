@@ -21,6 +21,16 @@ export async function POST(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.title || !b.url || !b.teacherId) return bad('Judul, tautan file, dan guru pengunggah wajib')
+    const teacherId = String(b.teacherId)
+    const classId = b.classId ? String(b.classId) : null
+    if (g.session.role === 'GURU' && teacherId !== g.session.teacherId) {
+      return bad('Guru hanya dapat mengunggah atas namanya sendiri', 403)
+    }
+    if (classId) {
+      const cls = await db.class.findUnique({ where: { id: classId }, select: { teacherId: true } })
+      if (!cls) return bad('Kelas tidak ditemukan', 404)
+      if (g.session.role === 'GURU' && cls.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas ini', 403)
+    }
     const material = await db.material.create({
       data: {
         title: b.title,
@@ -28,8 +38,8 @@ export async function POST(req: NextRequest) {
         url: b.url,
         description: b.description || null,
         category: b.category || 'TAJWID',
-        classId: b.classId || null,
-        teacherId: b.teacherId,
+        classId,
+        teacherId,
       },
     })
     return ok(material)
@@ -43,6 +53,11 @@ export async function DELETE(req: NextRequest) {
   if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
+  const material = await db.material.findUnique({ where: { id }, select: { teacherId: true } })
+  if (!material) return bad('Materi tidak ditemukan', 404)
+  if (g.session.role === 'GURU' && material.teacherId !== g.session.teacherId) {
+    return bad('Anda bukan pemilik materi ini', 403)
+  }
   await db.material.delete({ where: { id } })
   return ok({ success: true })
 }

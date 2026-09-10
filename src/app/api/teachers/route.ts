@@ -1,18 +1,39 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
-import { guard } from '@/lib/session'
+import { getSession, guard } from '@/lib/session'
 
 function parseJsonField(v: unknown, fallback = '[]') {
   if (typeof v === 'string') return v
   return JSON.stringify(v ?? [])
 }
 
-export async function GET() {
-  const teachers = await db.teacher.findMany({
-    include: { classes: { select: { id: true, name: true } }, _count: { select: { materials: true, posts: true } } },
-    orderBy: { joinDate: 'asc' },
-  })
+export async function GET(req: NextRequest) {
+  const session = await getSession(req)
+  const canViewPrivateData = session?.role === 'ADMIN' || session?.role === 'DEVELOPER'
+  const teachers = canViewPrivateData
+    ? await db.teacher.findMany({
+        include: { classes: { select: { id: true, name: true } }, _count: { select: { materials: true, posts: true } } },
+        orderBy: { joinDate: 'asc' },
+      })
+    : await db.teacher.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          fullName: true,
+          gender: true,
+          photoUrl: true,
+          formalEducation: true,
+          nonFormalEducation: true,
+          certifications: true,
+          expertise: true,
+          philosophy: true,
+          bio: true,
+          joinDate: true,
+          classes: { select: { id: true, name: true } },
+        },
+        orderBy: { joinDate: 'asc' },
+      })
   return ok(teachers)
 }
 

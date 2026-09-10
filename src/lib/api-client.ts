@@ -3,7 +3,8 @@
 // ============================================================
 // AI FIX BRIDGE — pelaporan error runtime otomatis ke /api/dev/errors.
 // Setiap respons bukan JSON, HTTP 5xx, dan error JS tak tertangani
-// masuk antrean agen AI (cron 5 menit) tanpa perlu klik apa pun.
+// masuk daftar review developer tanpa perlu klik apa pun. Developer memilih
+// laporan yang aman untuk diteruskan ke antrean agen AI.
 // ============================================================
 
 const errReported = new Set<string>()
@@ -59,7 +60,7 @@ export async function apiGet<T>(url: string): Promise<T> {
   try {
     data = await res.json()
   } catch {
-    // klasik "web gagal load json" → otomatis masuk antrean AI
+    // klasik "web gagal load json" → otomatis masuk daftar review developer
     reportRuntimeError({ type: 'RUNTIME_FETCH', endpoint: url, message: `Respons bukan JSON (HTTP ${res.status})` })
     throw new Error('Respons server tidak valid (bukan JSON)')
   }

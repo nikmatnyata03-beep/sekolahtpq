@@ -24,9 +24,12 @@
  */
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.classId || !b.title || !b.amount) return bad('Kelas, keterangan, dan nominal wajib')
     const amount = Number(b.amount)

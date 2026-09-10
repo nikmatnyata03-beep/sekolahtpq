@@ -32,6 +32,12 @@ export async function POST(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.fullName || !b.gender || !b.birthDate) return bad('Data tidak lengkap')
+    if (g.session.role === 'GURU') {
+      if (!b.classId) return bad('Guru harus memilih kelas')
+      const targetClass = await db.class.findUnique({ where: { id: String(b.classId) }, select: { teacherId: true } })
+      if (!targetClass) return bad('Kelas tidak ditemukan', 404)
+      if (targetClass.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas ini', 403)
+    }
     let nis = b.nis
     if (!nis) {
       const year = new Date().getFullYear()
@@ -64,6 +70,20 @@ export async function PUT(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
+    const existing = await db.student.findUnique({
+      where: { id: String(b.id) },
+      select: { class: { select: { teacherId: true } } },
+    })
+    if (!existing) return bad('Santri tidak ditemukan', 404)
+    if (g.session.role === 'GURU') {
+      if (existing.class?.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas santri ini', 403)
+      if (b.classId !== undefined) {
+        if (!b.classId) return bad('Guru tidak dapat mengosongkan kelas santri')
+        const targetClass = await db.class.findUnique({ where: { id: String(b.classId) }, select: { teacherId: true } })
+        if (!targetClass) return bad('Kelas tidak ditemukan', 404)
+        if (targetClass.teacherId !== g.session.teacherId) return bad('Anda bukan pengampu kelas tujuan', 403)
+      }
+    }
     const student = await db.student.update({
       where: { id: b.id },
       data: {

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
-import { guard } from '@/lib/session'
+import { getSession, guard } from '@/lib/session'
 
 function slugify(text: string) {
   return text
@@ -12,9 +12,17 @@ function slugify(text: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await getSession(req)
   const published = req.nextUrl.searchParams.get('published')
+  const where = session?.role === 'ADMIN' || session?.role === 'DEVELOPER'
+    ? published === '1' ? { published: true } : {}
+    : session?.role === 'GURU'
+      ? published === '1'
+        ? { published: true }
+        : { OR: [{ published: true }, { authorId: session.teacherId ?? '__no_teacher__' }] }
+      : { published: true }
   const posts = await db.post.findMany({
-    where: published === '1' ? { published: true } : {},
+    where,
     include: { author: { select: { id: true, fullName: true } } },
     orderBy: { createdAt: 'desc' },
   })
@@ -27,6 +35,7 @@ export async function POST(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.title || !b.content) return bad('Judul dan konten wajib diisi')
+    if (g.session.role === 'GURU' && !g.session.teacherId) return bad('Akun guru belum terhubung ke profil guru', 403)
     const baseSlug = slugify(b.title)
     const slugCount = await db.post.count({ where: { slug: { startsWith: baseSlug } } })
     const post = await db.post.create({
@@ -37,7 +46,7 @@ export async function POST(req: NextRequest) {
         category: b.category || 'BERITA',
         coverImage: b.coverImage || null,
         published: !!b.published,
-        authorId: b.authorId || null,
+        authorId: g.session.role === 'GURU' ? g.session.teacherId : b.authorId || null,
       },
       include: { author: { select: { id: true, fullName: true } } },
     })
@@ -53,6 +62,9 @@ export async function PUT(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
+    const existing = await db.post.findUnique({ where: { id: String(b.id) }, select: { authorId: true } })
+    if (!existing) return bad('Artikel tidak ditemukan', 404)
+    if (g.session.role === 'GURU' && existing.authorId !== g.session.teacherId) return bad('Anda bukan penulis artikel ini', 403)
     const post = await db.post.update({
       where: { id: b.id },
       data: {
@@ -61,7 +73,7 @@ export async function PUT(req: NextRequest) {
         ...(b.category && { category: b.category }),
         ...(b.coverImage !== undefined && { coverImage: b.coverImage }),
         ...(b.published !== undefined && { published: b.published }),
-        ...(b.authorId !== undefined && { authorId: b.authorId || null }),
+        ...(g.session.role === 'ADMIN' && b.authorId !== undefined && { authorId: b.authorId || null }),
       },
       include: { author: { select: { id: true, fullName: true } } },
     })
@@ -76,6 +88,9 @@ export async function DELETE(req: NextRequest) {
   if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
+  const existing = await db.post.findUnique({ where: { id }, select: { authorId: true } })
+  if (!existing) return bad('Artikel tidak ditemukan', 404)
+  if (g.session.role === 'GURU' && existing.authorId !== g.session.teacherId) return bad('Anda bukan penulis artikel ini', 403)
   await db.post.delete({ where: { id } })
   return ok({ success: true })
 }
