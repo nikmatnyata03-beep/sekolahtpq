@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
+import { guard } from '@/lib/session'
 
 const MIME_EXT: Record<string, string> = {
   'image/png': 'png',
@@ -42,6 +43,9 @@ function getR2(): R2Bucket | null {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Upload hanya untuk admin/guru (mencegah R2 dipakai hosting file orang lain).
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const body = (await req.json().catch(() => null)) as { dataUrl?: unknown } | null
     const dataUrl = typeof body?.dataUrl === 'string' ? body.dataUrl : ''
 

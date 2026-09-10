@@ -54,6 +54,8 @@ export default function Home() {
     } catch {
       /* ignore */
     }
+    // Hapus cookie sesi di server (fire-and-forget — UI sudah keluar).
+    void fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
   }, [])
 
   const openPublic = useCallback(() => setUser(null), [])

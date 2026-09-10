@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
+  const g = await guard(req, ['ADMIN', 'GURU', 'ORANG_TUA'])
+  if ('res' in g) return g.res
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   const classId = req.nextUrl.searchParams.get('classId')
   const studentId = req.nextUrl.searchParams.get('studentId')
@@ -24,6 +27,8 @@ export async function GET(req: NextRequest) {
 // Bulk mark attendance for a session (teacher/admin)
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const { sessionId, records } = await req.json()
     if (!sessionId || !Array.isArray(records)) return bad('Data absensi tidak valid')
     const session = await db.session.findUnique({ where: { id: sessionId }, include: { class: true } })

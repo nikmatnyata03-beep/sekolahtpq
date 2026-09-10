@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { resolveNorm, targetProgress } from '@/lib/hafalan-utils'
+import { guard } from '@/lib/session'
 
 /**
  * ==== API CONTRACT — /api/hafalan (Task 14-a) ====
@@ -18,6 +19,8 @@ import { resolveNorm, targetProgress } from '@/lib/hafalan-utils'
  */
 
 export async function GET(req: NextRequest) {
+  const g = await guard(req)
+  if ('res' in g) return g.res
   const studentId = req.nextUrl.searchParams.get('studentId')
   const hafalans = await db.hafalan.findMany({
     where: studentId ? { studentId } : {},
@@ -30,6 +33,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.studentId || !b.surahName || !b.ayatRange) return bad('Santri, surah, dan rentang ayat wajib diisi')
     const hafalan = await db.hafalan.create({

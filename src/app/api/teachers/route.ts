@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
+import { guard } from '@/lib/session'
 
 function parseJsonField(v: unknown, fallback = '[]') {
   if (typeof v === 'string') return v
@@ -17,6 +18,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.fullName || !b.birthDate || !b.gender) return bad('Data tidak lengkap')
     const teacher = await db.teacher.create({
@@ -54,6 +57,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const teacher = await db.teacher.update({
@@ -82,6 +87,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   const usedByClass = await db.class.count({ where: { teacherId: id } })

@@ -1,12 +1,17 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 
 /**
  * Simulated QR check-in (per blueprint SantriQ-style flow):
  * student (or parent on behalf) enters the session check-in code -> presence recorded -> parent notified.
+ * PUBLIK by design (kode sesi = kunci), dengan rate limit anti-spam.
  */
 export async function POST(req: NextRequest) {
   try {
+    if (!rateLimit(`checkin:${clientIp(req)}`, 20, 60 * 1000)) {
+      return bad('Terlalu banyak percobaan. Tunggu sebentar.', 429)
+    }
     const { code, studentId } = await req.json()
     if (!code || !studentId) return bad('Kode kehadiran dan santri wajib dipilih')
 

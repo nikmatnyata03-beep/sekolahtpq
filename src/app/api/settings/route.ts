@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { mergePortalSettings, SETTING_KEYS, type SettingKey } from '@/lib/portal-settings'
+import { guard } from '@/lib/session'
 
 // Konten CMS selalu fresco — jangan pernah di-cache oleh route handler.
 export const dynamic = 'force-dynamic'
@@ -23,9 +24,11 @@ export async function GET() {
   }
 }
 
-/** PUT /api/settings — simpan bagian tertentu { hero?, about?, contact?, faqs?, testimonials? }. */
+/** PUT /api/settings — ADMIN saja: simpan bagian tertentu { hero?, about?, contact?, faqs?, testimonials? }. */
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
     if (!body || typeof body !== 'object') return bad('Payload tidak valid')
 

@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
+  const g = await guard(req)
+  if ('res' in g) return g.res
   const userId = req.nextUrl.searchParams.get('userId')
   const notifications = await db.notification.findMany({
     where: userId ? { userId } : {},
@@ -13,6 +16,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.phone || !b.message) return bad('Nomor tujuan dan pesan wajib')
     const notification = await db.notification.create({

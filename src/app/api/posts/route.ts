@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 function slugify(text: string) {
   return text
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.title || !b.content) return bad('Judul dan konten wajib diisi')
     const baseSlug = slugify(b.title)
@@ -46,6 +49,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const post = await db.post.update({
@@ -67,6 +72,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN', 'GURU'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   await db.post.delete({ where: { id } })

@@ -1,7 +1,11 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
+  // Data santri = data pribadi: hanya pengguna ter-autentikasi (admin/guru/wali).
+  const g = await guard(req)
+  if ('res' in g) return g.res
   const parentId = req.nextUrl.searchParams.get('parentId')
   const classId = req.nextUrl.searchParams.get('classId')
   const students = await db.student.findMany({
@@ -21,6 +25,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.fullName || !b.gender || !b.birthDate) return bad('Data tidak lengkap')
     let nis = b.nis
@@ -51,6 +57,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const student = await db.student.update({
@@ -74,6 +82,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   await db.student.delete({ where: { id } })

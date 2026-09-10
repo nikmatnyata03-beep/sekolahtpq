@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function GET() {
   const announcements = await db.announcement.findMany({ orderBy: { createdAt: 'desc' }, take: 20 })
@@ -8,6 +9,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.title || !b.content) return bad('Judul dan isi pengumuman wajib')
     const announcement = await db.announcement.create({
@@ -27,6 +30,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   await db.announcement.delete({ where: { id } })

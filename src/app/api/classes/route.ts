@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function GET() {
   const classes = await db.class.findMany({
@@ -15,6 +16,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.name || !b.level || !b.schedule) return bad('Nama, jenjang, dan jadwal wajib diisi')
     const cls = await db.class.create({
@@ -28,6 +31,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const cls = await db.class.update({
@@ -48,6 +53,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   const studentCount = await db.student.count({ where: { classId: id } })

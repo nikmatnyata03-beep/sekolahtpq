@@ -1,10 +1,14 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
+import { guard } from '@/lib/session'
 
 const DEFAULT_ORtu_PASSWORD = 'ortu123'
 
-export async function GET() {
+// Daftar pendaftar = ADMIN (data pribadi anak & kontak orang tua).
+export async function GET(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const regs = await db.registration.findMany({ orderBy: { createdAt: 'desc' } })
   return ok(regs)
 }
@@ -42,6 +46,9 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    // Verifikasi/keputusan PPDB = ADMIN (POST tetap publik utk formulir pendaftaran).
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id || !b.status) return bad('ID dan status wajib')
     const reg = await db.registration.update({
@@ -94,6 +101,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   await db.registration.delete({ where: { id } })

@@ -1,8 +1,13 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
+import { guard } from '@/lib/session'
 
-export async function GET() {
+// Seluruh manajemen pengguna = ADMIN saja (data email/HP sensitif).
+
+export async function GET(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const users = await db.user.findMany({
     select: { id: true, email: true, name: true, phone: true, role: true, createdAt: true, teacherId: true },
     orderBy: { createdAt: 'desc' },
@@ -12,6 +17,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const body = await req.json()
     if (!body.name || !body.email || !body.password || !body.role) return bad('Data tidak lengkap')
     const exists = await db.user.findUnique({ where: { email: String(body.email).toLowerCase() } })
@@ -34,6 +41,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const body = await req.json()
     if (!body.id) return bad('ID wajib')
     const data: Record<string, string> = {}
@@ -49,6 +58,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   const adminCount = await db.user.count({ where: { role: 'ADMIN' } })

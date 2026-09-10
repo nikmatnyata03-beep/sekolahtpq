@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
+  const g = await guard(req)
+  if ('res' in g) return g.res
   const studentId = req.nextUrl.searchParams.get('studentId')
   const status = req.nextUrl.searchParams.get('status')
   const payments = await db.payment.findMany({
@@ -17,6 +20,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.studentId || !b.title || !b.amount) return bad('Santri, keterangan, dan nominal wajib')
     const count = await db.payment.count()
@@ -45,6 +50,8 @@ export async function POST(req: NextRequest) {
 // Simulated payment webhook (Midtrans-style): parent pays -> status updated -> WA confirmation
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const payment = await db.payment.findUnique({ where: { id: b.id }, include: { student: { include: { parent: true } } } })
@@ -77,6 +84,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
   await db.payment.delete({ where: { id } })

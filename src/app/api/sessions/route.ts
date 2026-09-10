@@ -1,7 +1,12 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { guard, getSession } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
+  // Daftar sesi dipakai halaman cek-in publik -> tetap terbuka, NAMAI kode
+  // kerahasiaan QR hanya dikirim ke admin/guru (publik tak boleh lihat kode).
+  const session = await getSession(req)
+  const staff = session?.role === 'ADMIN' || session?.role === 'GURU'
   const active = req.nextUrl.searchParams.get('active')
   const classId = req.nextUrl.searchParams.get('classId')
   const sessions = await db.session.findMany({
@@ -24,7 +29,7 @@ export async function GET(req: NextRequest) {
       classLevel: s.class.level,
       date: s.date,
       topic: s.topic,
-      code: s.code,
+      code: staff ? s.code : undefined,
       isActive: s.isActive,
       total: s.attendances.length,
       hadir: s.attendances.filter((a) => a.status === 'HADIR').length,
@@ -34,6 +39,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.classId) return bad('Kelas wajib dipilih')
     const cls = await db.class.findUnique({ where: { id: b.classId } })
@@ -58,6 +65,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
     const session = await db.session.update({ where: { id: b.id }, data: { isActive: !!b.isActive } })

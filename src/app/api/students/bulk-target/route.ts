@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 /**
  * ==== API CONTRACT — /api/students/bulk-target (Task 17-a) ====
@@ -12,6 +13,8 @@ import { db, ok, bad } from '@/lib/api'
  */
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'GURU'])
+    if ('res' in g) return g.res
     const b = await req.json()
     const classId = typeof b.classId === 'string' ? b.classId.trim() : ''
     if (!classId) return bad('Kelas wajib dipilih')
