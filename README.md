@@ -117,6 +117,26 @@ Buka `http://localhost:3000` — portal publik; dashboard admin di `/admin`.
 | `bun run db:push` | Sinkronisasi schema Prisma ke database |
 | `bun run db:generate` | Generate Prisma Client |
 | `bun run db:migrate` | Migrasi development |
+| `bun run cf:setup` | Buat D1 + R2 di Cloudflare (tulis database_id otomatis) |
+| `bun run cf:build` | Build aplikasi untuk Cloudflare Workers (OpenNext) |
+| `bun run cf:deploy` | Deploy ke Cloudflare Workers |
+| `bun run cf:schema` / `cf:data` | Isi skema + data ke database D1 |
+| `bun run cf:export` | Ekspor data SQLite lokal → SQL untuk D1 |
+| `bun run cf:dev` | Simulasi Workers + D1 + R2 di lokal (port 8787) |
+
+## ☁️ Deploy ke Cloudflare Workers
+
+SIMADJI mendukung deploy **full-stack di Cloudflare**: aplikasi di Workers,
+database di **D1**, upload foto di **R2** — tanpa mengubah kode.
+
+```bash
+bunx wrangler login   # sekali saja
+bun run cf:setup      # buat D1 + R2
+bun run cf:schema && bun run cf:data   # isi skema + seluruh data
+bun run cf:deploy     # 🚀 live di *.workers.dev
+```
+
+Panduan lengkap + arsitektur + troubleshooting: **[DEPLOY-CLOUDFLARE.md](DEPLOY-CLOUDFLARE.md)**
 
 ## 🏗️ Struktur Project
 
