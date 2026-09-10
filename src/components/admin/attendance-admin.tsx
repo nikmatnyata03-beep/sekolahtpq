@@ -44,7 +44,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Progress } from '@/components/ui/progress'
-import { statusBadgeClass, downloadCsv } from './overview'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { statusBadgeClass, downloadCsv, checkinUrl } from './overview'
+
+/**
+ * QR memuat URL portal dgn kode terisi otomatis (?absen=KODE#checkin) —
+ * santri memindai pakai kamera ponsel (tanpa aplikasi) → halaman check-in terbuka,
+ * kode terisi, tinggal pilih nama. Kode polos tetap diterima pemindai in-app.
+ */
 
 type AttStatus = 'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA'
 
@@ -127,6 +134,8 @@ export function AttendanceAdmin() {
   const [isOpening, setIsOpening] = useState(false)
   const [closingId, setClosingId] = useState<string | null>(null)
   const [createdSession, setCreatedSession] = useState<SessionItem | null>(null)
+  // Sesi yang QR-nya sedang ditayangkan (dialog besar utk dipindai/ diproyeksikan)
+  const [qrSession, setQrSession] = useState<SessionItem | null>(null)
 
   // Catat kehadiran
   const [sessionId, setSessionId] = useState('none')
@@ -461,13 +470,21 @@ export function AttendanceAdmin() {
 
               {createdSession && (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                  <div className="rounded-xl bg-white p-2 shadow-sm">
-                    <QRCodeSVG value={createdSession.code} size={128} />
-                  </div>
+                  <button
+                    type="button"
+                    className="rounded-xl bg-white p-2 shadow-sm transition-transform hover:scale-105"
+                    onClick={() => setQrSession(createdSession)}
+                    aria-label="Perbesar QR untuk ditayangkan"
+                  >
+                    <QRCodeSVG value={checkinUrl(createdSession.code)} size={128} />
+                  </button>
                   <p className="font-mono text-2xl font-bold tracking-[0.3em] text-emerald-800">{createdSession.code}</p>
-                  <p className="text-xs text-stone-500">
-                    Sesi {createdSession.className} · {formatShortDate(createdSession.date)} — scan atau ketik kode untuk check-in
+                  <p className="text-center text-xs text-stone-500">
+                    Sesi {createdSession.className} · {formatShortDate(createdSession.date)} — santri memindai QR ini dgn kamera ponsel (langsung terisi) atau ketik kode.
                   </p>
+                  <Button variant="outline" size="sm" onClick={() => setQrSession(createdSession)}>
+                    <QrCode className="size-3.5" /> Perbesar QR
+                  </Button>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => copyCode(createdSession.code)}>
                       <Copy className="size-3.5" /> Salin Kode
@@ -511,6 +528,15 @@ export function AttendanceAdmin() {
                         <p className="mt-0.5 font-mono text-xs font-bold tracking-widest text-emerald-800">{s.code}</p>
                       </div>
                       <span className="shrink-0 text-xs text-stone-500">{s.hadir}/{s.total} hadir</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => setQrSession(s)}
+                        aria-label={`Tampilkan QR sesi ${s.code}`}
+                      >
+                        <QrCode className="size-3.5" /> QR
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -809,6 +835,34 @@ export function AttendanceAdmin() {
           )}
         </CardContent>
       </Card>
+
+      {/* ===== Dialog QR besar — ditayangkan ke kelas / diproyeksikan ===== */}
+      <Dialog open={qrSession !== null} onOpenChange={(open) => { if (!open) setQrSession(null) }}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800">
+              <QrCode className="size-5" /> QR Check-in {qrSession?.className}
+            </DialogTitle>
+            <DialogDescription>
+              Santri memindai QR ini dengan kamera ponsel — halaman check-in terbuka dengan kode terisi otomatis.
+            </DialogDescription>
+          </DialogHeader>
+          {qrSession && (
+            <div className="flex flex-col items-center gap-3">
+              <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                <QRCodeSVG value={checkinUrl(qrSession.code)} size={220} />
+              </div>
+              <p className="font-mono text-xl font-bold tracking-[0.3em] text-emerald-800">{qrSession.code}</p>
+              <p className="text-center text-xs text-stone-500">
+                Sesi {qrSession.className} · {formatShortDate(qrSession.date)} · {qrSession.hadir}/{qrSession.total} hadir
+              </p>
+              <Button variant="outline" size="sm" onClick={() => copyCode(qrSession.code)}>
+                <Copy className="size-3.5" /> Salin Kode
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

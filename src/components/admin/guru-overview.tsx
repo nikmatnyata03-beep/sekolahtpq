@@ -60,6 +60,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { WeeklySchedule } from './weekly-schedule'
+import { checkinUrl } from './overview'
 
 export type GuruOverviewSection = 'attendance' | 'hafalan' | 'classes'
 
@@ -862,7 +863,7 @@ export function GuruOverview({ user, onNavigate }: {
                     className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3"
                   >
                     <div className="rounded-lg bg-white p-1.5 shadow-sm">
-                      <QRCodeSVG value={s.code} size={56} />
+                      <QRCodeSVG value={checkinUrl(s.code)} size={56} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">

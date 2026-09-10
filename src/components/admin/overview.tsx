@@ -46,6 +46,16 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import type { ReactNode } from 'react'
 
+/**
+ * QR memuat URL portal dgn kode terisi otomatis (?absen=KODE#checkin) — santri
+ * memindai QR dgn kamera ponsel → halaman check-in terbuka, kode terisi, tinggal
+ * pilih nama. Dipakai overview, guru-overview, dan attendance-admin.
+ */
+export function checkinUrl(code: string): string {
+  if (typeof window === 'undefined') return code
+  return `${window.location.origin}/?absen=${encodeURIComponent(code)}#checkin`
+}
+
 export function statusBadgeClass(status: string | null | undefined): string {
   switch (status) {
     case 'HADIR':
@@ -360,7 +370,7 @@ export function OverviewSection() {
                 {stats.activeSessions.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3">
                     <div className="rounded-lg bg-white p-1.5 shadow-sm">
-                      <QRCodeSVG value={s.code} size={64} />
+                      <QRCodeSVG value={checkinUrl(s.code)} size={64} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">

@@ -86,7 +86,7 @@ export interface SessionItem {
   classLevel?: string
   date: string
   topic: string | null
-  code: string
+  code?: string // rahasia — hanya dikirim ke ADMIN/GURU; publik undefined
   isActive: boolean
   total: number
   hadir: number

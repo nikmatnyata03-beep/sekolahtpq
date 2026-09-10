@@ -73,3 +73,4 @@ server.log
 .wrangler/
 .github-token.local
 .agent-credentials.local
+scripts/set-local-qa-admin.ts

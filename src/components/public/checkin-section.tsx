@@ -1,11 +1,14 @@
 'use client'
 
-// Simulasi QR-Absensi — santri/wali memilih nama santri dan memasukkan kode
-// sesi (sama dengan isi QR pada aplikasi mobile) → POST /api/attendance/checkin.
+// Absensi QR dua arah — santri/wali memindai QR kelas (atau mengetik kode) →
+// daftar santri kelas dimuat via /api/public/checkin-roster (kunci = kode sesi)
+// → pilih nama → POST /api/attendance/checkin.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
+  Camera,
+  CameraOff,
   CheckCircle2,
   Clock,
   Info,
@@ -13,6 +16,7 @@ import {
   RefreshCw,
   ScanLine,
   Users,
+  X,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -22,22 +26,36 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
-import type { SessionItem, Student } from '@/lib/types'
+import type { SessionItem } from '@/lib/types'
 
 type CheckinResult = { success?: boolean; already?: boolean; message?: string }
+type RosterStudent = { id: string; fullName: string; nis: string }
+type RosterPayload = {
+  session: { id: string; className: string; classLevel?: string; topic?: string | null; date?: string }
+  students: RosterStudent[]
+}
+
+/** Ambil kode sesi dari hasil scan — QR berisi URL (?absen=KODE) maupun kode polos. */
+function extractCode(decoded: string): string {
+  try {
+    const url = new URL(decoded)
+    const absen = url.searchParams.get('absen')
+    if (absen) return absen.toUpperCase()
+  } catch {
+    // bukan URL — perlakukan sebagai kode polos
+  }
+  return decoded.trim().toUpperCase()
+}
 
 export function CheckinSection() {
   const { toast } = useToast()
-  const [students, setStudents] = useState<Student[]>([])
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -46,15 +64,87 @@ export function CheckinSection() {
   const [code, setCode] = useState<string>('')
   const [checking, setChecking] = useState(false)
 
+  // Daftar santri kelas (dari kode sesi) — bukan seluruh sekolah.
+  const [roster, setRoster] = useState<RosterPayload | null>(null)
+  const [rosterLoading, setRosterLoading] = useState(false)
+  const [rosterError, setRosterError] = useState<string | null>(null)
+
+  // ==== Pemindai QR kamera (html5-qrcode, lazy-load saat tombol ditekan) ====
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const scannerRef = useRef<{ stop: () => Promise<void>; clear: () => Promise<void> } | null>(null)
+  const SCANNER_DIV = 'checkin-qr-reader'
+
+  // Prefill kode dari URL (?absen=KODE#checkin) — hasil scan kamera ponsel
+  useEffect(() => {
+    const absen = new URLSearchParams(window.location.search).get('absen')
+    if (absen) {
+      setCode(absen.toUpperCase())
+      document.getElementById('checkin')?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [])
+
+  const stopScan = useCallback(async () => {
+    const scanner = scannerRef.current
+    scannerRef.current = null
+    if (scanner) {
+      try {
+        await scanner.stop()
+        await scanner.clear()
+      } catch {
+        // kamera sudah berhenti sendiri — abaikan
+      }
+    }
+    setScanning(false)
+  }, [])
+
+  // Berhenti + lepaskan kamera saat komponen dibongkar
+  useEffect(() => {
+    return () => {
+      void stopScan()
+    }
+  }, [stopScan])
+
+  const startScan = async () => {
+    setScanError(null)
+    setScanning(true)
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode')
+      const scanner = new Html5Qrcode(SCANNER_DIV, { verbose: false })
+      scannerRef.current = scanner
+      await scanner.start(
+        { facingMode: 'environment' }, // kamera belakang
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText: string) => {
+          const found = extractCode(decodedText)
+          void stopScan()
+          setCode(found)
+          toast({
+            title: 'QR Terbaca',
+            description: `Kode ${found} terisi otomatis. Sekarang pilih nama santri.`,
+          })
+        },
+        () => {
+          // frame tanpa QR — abaikan diam-diam
+        },
+      )
+    } catch (err) {
+      scannerRef.current = null
+      setScanning(false)
+      const msg =
+        err instanceof Error && /permission|denied|notallowed/i.test(err.message)
+          ? 'Izin kamera ditolak. Aktifkan izin kamera di browser, atau ketik kode manual.'
+          : 'Kamera tidak dapat dibuka di perangkat ini. Silakan ketik kode manual.'
+      setScanError(msg)
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [studentData, sessionData] = await Promise.all([
-        apiGet<Student[]>('/api/students'),
-        apiGet<SessionItem[]>('/api/sessions?active=1'),
-      ])
-      setStudents(Array.isArray(studentData) ? studentData : [])
+      // Daftar sesi aktif publik (tanpa kode — kode hanya lewat QR ustadz).
+      const sessionData = await apiGet<SessionItem[]>('/api/sessions?active=1')
       setSessions(Array.isArray(sessionData) ? sessionData : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal memuat data absensi')
@@ -67,19 +157,33 @@ export function CheckinSection() {
     void load()
   }, [load])
 
-  // Kelompokkan santri berdasarkan kelas untuk Select bergrup
-  const grouped = useMemo(() => {
-    const map = new Map<string, Student[]>()
-    for (const student of students) {
-      const key = student?.class?.name ?? 'Tanpa Kelas'
-      const list = map.get(key) ?? []
-      list.push(student)
-      map.set(key, list)
+  // ==== Muat daftar santri kelas otomatis saat kode berubah (debounce 450ms) ====
+  useEffect(() => {
+    const trimmed = code.trim().toUpperCase()
+    if (trimmed.length < 4) {
+      setRoster(null)
+      setRosterError(null)
+      setRosterLoading(false)
+      return
     }
-    return Array.from(map.entries())
-  }, [students])
+    setRosterLoading(true)
+    setRosterError(null)
+    const timer = setTimeout(async () => {
+      try {
+        const data = await apiGet<RosterPayload>(`/api/public/checkin-roster?code=${encodeURIComponent(trimmed)}`)
+        setRoster(data)
+        setStudentId('') // reset pilihan — kelas bisa berbeda
+      } catch (err) {
+        setRoster(null)
+        setRosterError(err instanceof Error ? err.message : 'Kode tidak valid')
+      } finally {
+        setRosterLoading(false)
+      }
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [code])
 
-  const activeStudent = students.find((s) => s.id === studentId)
+  // (Dropdown santri kini berasal dari roster per kode sesi — lihat effect di atas.)
 
   const handleCheckin = async () => {
     if (!studentId) {
@@ -115,7 +219,7 @@ export function CheckinSection() {
           description: result?.message ?? 'Kehadiran santri tercatat HADIR.',
         })
       }
-      setCode('')
+      setStudentId('')
       // Refresh daftar sesi agar jumlah hadir terbarui
       try {
         const sessionData = await apiGet<SessionItem[]>('/api/sessions?active=1')
@@ -152,10 +256,11 @@ export function CheckinSection() {
         {/* Info box QR */}
         <Alert className="mx-auto mb-8 max-w-3xl rounded-2xl border-emerald-200 bg-emerald-50/70 text-emerald-900">
           <Info className="size-4 text-emerald-700" />
-          <AlertTitle className="text-emerald-900">Simulasi Absensi QR</AlertTitle>
+          <AlertTitle className="text-emerald-900">Absensi QR Dua Arah</AlertTitle>
           <AlertDescription className="text-emerald-800/80">
-            Pada aplikasi mobile, santri memindai QR Code yang ditayangkan ustadz/ustadzah di kelas.
-            Di portal web ini, kode yang sama cukup diketik manual pada kolom &quot;kode kehadiran&quot;.
+            Ustadz menayangkan QR sesi — santri memindainya dengan kamera ponsel (tanpa aplikasi
+            tambahan) dan halaman ini terbuka dengan kode terisi otomatis. Tanpa kamera? Kode yang
+            sama cukup diketik manual pada kolom &quot;kode kehadiran&quot;.
           </AlertDescription>
         </Alert>
 
@@ -189,46 +294,11 @@ export function CheckinSection() {
                 Form Check-in
               </h3>
 
-              {students.length === 0 ? (
-                <div className="mt-6 rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-8 text-center">
-                  <Users className="mx-auto size-10 text-stone-300" />
-                  <p className="mt-3 text-sm text-stone-500">
-                    Belum ada data santri. Hubungi administrasi TPQ untuk pendaftaran.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-6 space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="checkin-student">Pilih Santri</Label>
-                    <Select value={studentId} onValueChange={setStudentId}>
-                      <SelectTrigger id="checkin-student" className="w-full" aria-label="Pilih santri">
-                        <SelectValue placeholder="— Pilih nama santri —" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        {grouped.map(([className, list]) => (
-                          <SelectGroup key={className}>
-                            <SelectLabel className="text-xs font-bold text-emerald-700">
-                              Kelas {className}
-                            </SelectLabel>
-                            {list.map((student) => (
-                              <SelectItem key={student.id} value={student.id}>
-                                {student.fullName} · {student.nis}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {activeStudent?.class && (
-                      <p className="text-xs text-stone-500">
-                        Kelas <span className="font-semibold text-emerald-700">{activeStudent.class.name}</span>
-                        {activeStudent.class.schedule ? ` • ${activeStudent.class.schedule}` : ''}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="checkin-code">Kode Kehadiran</Label>
+              {/* Form selalu tampil — daftar santri muncul otomatis setelah kode valid */}
+              <div className="mt-6 space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="checkin-code">Kode Kehadiran</Label>
+                  <div className="flex gap-2">
                     <Input
                       id="checkin-code"
                       value={code}
@@ -243,16 +313,108 @@ export function CheckinSection() {
                       className="font-mono tracking-widest uppercase"
                       aria-label="Kode kehadiran sesi"
                     />
-                    <p className="text-xs text-stone-400">
-                      Kode tampil pada kartu sesi aktif di samping / QR kelas.
-                    </p>
+                    <Button
+                      type="button"
+                      variant={scanning ? 'destructive' : 'outline'}
+                      className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                      onClick={() => (scanning ? void stopScan() : void startScan())}
+                      aria-label={scanning ? 'Tutup kamera' : 'Pindai QR dengan kamera'}
+                    >
+                      {scanning ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
+                      <span className="hidden sm:inline">{scanning ? 'Tutup' : 'Pindai QR'}</span>
+                    </Button>
+                  </div>
+                  <p className="text-xs text-stone-400">
+                    Klik &quot;Pindai QR&quot; untuk membaca QR dari ustadz lewat kamera, atau ketik
+                    kodenya manual — daftar santri kelas muncul otomatis.
+                  </p>
+                </div>
+
+                  {/* ==== Kamera pemindai QR ==== */}
+                  {scanning && (
+                    <div className="overflow-hidden rounded-2xl border-2 border-emerald-300 bg-stone-900 shadow-inner">
+                      <div className="flex items-center justify-between border-b border-stone-700 bg-stone-800 px-3 py-2">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+                          <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                          Kamera aktif — arahkan ke QR kelas
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-md p-1 text-stone-300 transition-colors hover:bg-stone-700 hover:text-white"
+                          onClick={() => void stopScan()}
+                          aria-label="Tutup kamera"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                      <div id={SCANNER_DIV} className="mx-auto max-w-xs" aria-label="Bidang pemindai QR" />
+                    </div>
+                  )}
+                  {scanError && !scanning && (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                      <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
+                      {scanError}
+                    </div>
+                  )}
+
+                  {/* ==== Daftar santri kelas (muncul otomatis dari kode sesi) ==== */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="checkin-student">Pilih Santri</Label>
+                    {rosterLoading && (
+                      <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm text-stone-500">
+                        <Loader2 className="size-4 animate-spin text-emerald-600" />
+                        Mencari kelas dari kode {code}…
+                      </div>
+                    )}
+                    {!rosterLoading && rosterError && (
+                      <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                        <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+                        {rosterError}
+                      </div>
+                    )}
+                    {!rosterLoading && !rosterError && roster && roster.students.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4 text-center text-xs text-stone-500">
+                        Belum ada santri terdaftar di kelas {roster.session.className}.
+                      </div>
+                    )}
+                    {!rosterLoading && !rosterError && roster && roster.students.length > 0 && (
+                      <>
+                        <Select value={studentId} onValueChange={setStudentId}>
+                          <SelectTrigger id="checkin-student" className="w-full" aria-label="Pilih santri">
+                            <SelectValue placeholder="— Pilih nama santri —" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {roster.students.map((student) => (
+                              <SelectItem key={student.id} value={student.id}>
+                                {student.fullName} · {student.nis}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-stone-500">
+                          Kelas <span className="font-semibold text-emerald-700">{roster.session.className}</span>
+                          {roster.session.topic ? ` • ${roster.session.topic}` : ''}
+                          {' '}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            <span className="size-1 animate-pulse rounded-full bg-emerald-500" />
+                            {roster.students.length} santri
+                          </span>
+                        </p>
+                      </>
+                    )}
+                    {!rosterLoading && !rosterError && !roster && (
+                      <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4 text-center text-xs text-stone-500">
+                        <Users className="mx-auto mb-1.5 size-5 text-stone-300" />
+                        Masukkan atau pindai kode kehadiran — daftar santri kelas akan muncul di sini.
+                      </div>
+                    )}
                   </div>
 
                   <Button
                     type="button"
                     size="lg"
                     className="w-full bg-emerald-700 font-semibold shadow-md hover:bg-emerald-800"
-                    disabled={checking}
+                    disabled={checking || !studentId}
                     onClick={() => void handleCheckin()}
                   >
                     {checking ? (
@@ -271,8 +433,7 @@ export function CheckinSection() {
                   <p className="text-center text-xs text-stone-400">
                     Wali santri akan menerima notifikasi WhatsApp setelah check-in berhasil.
                   </p>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* ===== Sesi aktif ===== */}
@@ -304,14 +465,22 @@ export function CheckinSection() {
                     <button
                       key={session.id}
                       type="button"
-                      onClick={() => setCode(session.code)}
-                      className="flex w-full flex-col gap-2 rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+                      onClick={() => session.code && setCode(session.code)}
+                      className="flex w-full flex-col gap-2 rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md disabled:cursor-default disabled:hover:translate-y-0"
+                      disabled={!session.code}
+                      title={session.code ? 'Klik untuk mengisi kode' : 'Kode hanya lewat QR dari ustadz'}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-stone-800">{session.className}</span>
-                        <Badge className="border-transparent bg-emerald-700 font-mono text-[11px] tracking-widest text-white">
-                          {session.code}
-                        </Badge>
+                        {session.code ? (
+                          <Badge className="border-transparent bg-emerald-700 font-mono text-[11px] tracking-widest text-white">
+                            {session.code}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-stone-200 bg-stone-100 text-[10px] font-medium text-stone-400">
+                            Kode via QR ustadz
+                          </Badge>
+                        )}
                       </div>
                       {session.topic && (
                         <p className="text-sm text-stone-600">
