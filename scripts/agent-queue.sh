@@ -10,7 +10,9 @@
 #       tipe: RUNTIME_JS | RUNTIME_PROMISE | RUNTIME_FETCH | RUNTIME_HTTP5XX
 #   LOCAL=1 bash scripts/agent-queue.sh list            → target localhost:3000
 #
-# Login otomatis sebagai akun developer demo (dev@daruljinan.sch.id).
+# Kredensial dibaca dari .agent-credentials.local (gitignored, chmod 600):
+#   email=agent@daruljinan.sch.id
+#   password=xxxxxxxxxxxxxxxxxxxxxx
 # Keluar code 0; antrean kosong dicetak sebagai {"empty": true}.
 
 set -uo pipefail
@@ -22,26 +24,42 @@ trap 'rm -f "$JAR"' EXIT
 
 CMD="${1:-list}"
 
+CRED_FILE="$(dirname "$0")/../.agent-credentials.local"
+
+load_creds() {
+  if [ ! -f "$CRED_FILE" ]; then
+    echo "{\"empty\": true, \"note\": \"kredensial agen tidak ditemukan (.agent-credentials.local) — minta ADMIN membuat akun agen via menu Pengguna\"}"
+    return 1
+  fi
+  AGENT_EMAIL=$(grep -E '^email=' "$CRED_FILE" | head -1 | cut -d= -f2-)
+  AGENT_PASS=$(grep -E '^password=' "$CRED_FILE" | head -1 | cut -d= -f2-)
+  if [ -z "$AGENT_EMAIL" ] || [ -z "$AGENT_PASS" ]; then
+    echo "{\"empty\": true, \"note\": \"format .agent-credentials.local tidak valid\"}"
+    return 1
+  fi
+}
+
 login() {
+  load_creds || return 1
   local code
   code=$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR" -X POST "$BASE/api/auth/login" \
     -H 'Content-Type: application/json' \
-    -d '{"email":"dev@daruljinan.sch.id","password":"dev123"}')
+    -d "$(python3 -c 'import json,sys; print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))' "$AGENT_EMAIL" "$AGENT_PASS")")
   if [ "$code" != "200" ]; then
-    echo "{\"error\": \"login gagal HTTP $code\"}" >&2
-    exit 1
+    echo "{\"empty\": true, \"note\": \"login agen gagal HTTP $code — akun $AGENT_EMAIL belum ada/salah password di $BASE\"}" >&1
+    return 1
   fi
 }
 
 api_post() {
-  login
+  login || return 1
   curl -s -b "$JAR" -X POST "$BASE/api/dev/agent-queue" \
     -H 'Content-Type: application/json' -d "$1"
 }
 
 case "$CMD" in
   list)
-    login
+    login || exit 0
     OUT=$(curl -s -b "$JAR" "$BASE/api/dev/agent-queue")
     if [ -z "$OUT" ]; then
       echo '{"empty": true, "error": "respons kosong"}'
@@ -87,7 +105,7 @@ PYEOF
     ;;
   report)
     TYPE="${2:?tipe wajib}"; EP="${3:-}"; MSG="${4:?pesan wajib}"; DETAIL="${5:-}"
-    login
+    login || exit 0
     python3 - "$TYPE" "$EP" "$MSG" "$DETAIL" <<'PYEOF' > /tmp/aq-err.json
 import json, sys
 print(json.dumps({"type": sys.argv[1], "endpoint": sys.argv[2] or None, "message": sys.argv[3], "detail": sys.argv[4] or None}, ensure_ascii=False))

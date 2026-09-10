@@ -72,3 +72,4 @@ server.log
 .open-next/
 .wrangler/
 .github-token.local
+.agent-credentials.local
