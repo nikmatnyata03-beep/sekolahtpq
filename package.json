@@ -14,9 +14,9 @@
     "cf:setup": "bash scripts/cf-setup.sh",
     "cf:build": "prisma generate && opennextjs-cloudflare build",
     "cf:dev": "opennextjs-cloudflare preview",
-    "cf:deploy": "opennextjs-cloudflare deploy",
-    "cf:schema": "wrangler d1 execute simadji-db --remote --file=prisma/d1/schema.sql -y",
-    "cf:data": "wrangler d1 execute simadji-db --remote --file=prisma/d1/data.sql -y",
+    "cf:deploy": "bun run cf:build && opennextjs-cloudflare deploy",
+    "cf:schema": "wrangler d1 execute tpqdarussolah --remote --file=prisma/d1/schema.sql -y",
+    "cf:data": "wrangler d1 execute tpqdarussolah --remote --file=prisma/d1/data.sql -y",
     "cf:export": "bun scripts/d1-export.ts"
   },
   "dependencies": {

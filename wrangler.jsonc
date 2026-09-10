@@ -1,16 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Nama worker = subdomain: tpqdarussolah.<account>.workers.dev
+  // Nama worker = subdomain: tpqdarussolah.nikmatnyata03.workers.dev
   "name": "tpqdarussolah",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-01",
   "compatibility_flags": ["nodejs_compat"],
+  "account_id": "27f9d19e916a7ab071db7b2ad8f05b94",
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
   // Database: Cloudflare D1 (SQLite serverless)
-  // Jalankan `bun run cf:setup` untuk membuat database & mengisi id otomatis
   "d1_databases": [
     {
       "binding": "DB",
@@ -25,6 +25,12 @@
       "bucket_name": "tpqdarussolah-uploads"
     }
   ],
+  // Batas CPU Workers Free = 10ms/request: bcrypt cost 10 (~80ms) akan gagal.
+  // Cost 5 (~2-3ms) tetap jauh lebih kuat dari plaintext. Upgrade ke Workers
+  // Paid ($5/bln, 30s CPU) bila ingin menaikkan nilai ini ke 10-12.
+  "vars": {
+    "BCRYPT_ROUNDS": "5"
+  },
   "observability": {
     "enabled": true
   }

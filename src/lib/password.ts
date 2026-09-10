@@ -10,7 +10,28 @@ import bcrypt from 'bcryptjs'
  *   akan ter-rehash otomatis saat user mengganti password.
  */
 
-const ROUNDS = 10
+// Lazy: di Workers process.env baru terisi setelah handler init, jadi rounds
+// HARUS dibaca saat dipakai (bukan saat module load).
+function rounds(): number {
+  return resolveRounds()
+}
+
+/**
+ * Bcrypt rounds dari environment.
+ * - Produksi (Workers Free): vars BCRYPT_ROUNDS=5 di wrangler.jsonc —
+ *   batas CPU 10ms/request membuat cost 10+ mustahil dijalankan.
+ * - Lokal: tidak diset -> default 10.
+ */
+function resolveRounds(): number {
+  let raw: string | undefined
+  try {
+    raw = process.env?.BCRYPT_ROUNDS
+  } catch {
+    raw = undefined
+  }
+  const n = raw ? Number(raw) : NaN
+  return Number.isFinite(n) && n >= 4 && n <= 15 ? n : 10
+}
 
 /** Cek apakah string berformat bcrypt hash ($2a$/$2b$/$2y$ + 53 karakter). */
 export function isBcryptHash(value: string): boolean {
@@ -18,11 +39,11 @@ export function isBcryptHash(value: string): boolean {
 }
 
 export function hashPassword(plain: string): string {
-  return bcrypt.hashSync(String(plain), ROUNDS)
+  return bcrypt.hashSync(String(plain), rounds())
 }
 
 export async function hashPasswordAsync(plain: string): Promise<string> {
-  return bcrypt.hash(String(plain), ROUNDS)
+  return bcrypt.hash(String(plain), rounds())
 }
 
 /**

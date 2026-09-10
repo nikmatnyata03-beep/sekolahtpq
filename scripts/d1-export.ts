@@ -12,22 +12,25 @@ const OUT_PATH = new URL('../prisma/d1/data.sql', import.meta.url).pathname
 
 const sqlite = new Database(DB_PATH, { readonly: true })
 
+// Urutan TOPOLOGIS — import D1 remote mengeksekusi statement satu-per-satu
+// (PRAGMA defer_foreign_keys tidak berlaku lintas statement), jadi tabel
+// yang direferensikan FK HARUS di-insert lebih dulu.
 const tables = [
-  'User',
-  'Teacher',
-  'Class',
-  'Student',
-  'Registration',
-  'Session',
-  'Attendance',
-  'Hafalan',
-  'Material',
-  'Payment',
-  'Post',
-  'Announcement',
-  'Curriculum',
-  'SiteSetting',
-  'Notification',
+  'Teacher',      // tanpa FK
+  'Class',        // -> Teacher
+  'User',         // -> Teacher
+  'Student',      // -> User, Class
+  'Registration', // tanpa FK
+  'Session',      // -> Class
+  'Attendance',   // -> Session, Student
+  'Hafalan',      // -> Student
+  'Material',     // -> Teacher, Class
+  'Payment',      // -> Student
+  'Post',         // -> Teacher
+  'Announcement', // tanpa FK
+  'Curriculum',   // -> Class
+  'SiteSetting',  // tanpa FK
+  'Notification', // -> User
 ]
 
 function quote(value: unknown): string {
@@ -43,7 +46,7 @@ function quote(value: unknown): string {
 const lines: string[] = [
   '-- Data ekspor SIMADJI (dari SQLite lokal) untuk Cloudflare D1',
   `-- Dibuat: ${new Date().toISOString()}`,
-  '-- Impor: bunx wrangler d1 execute simadji-db --remote --file=prisma/d1/data.sql',
+  '-- Impor: bunx wrangler d1 execute tpqdarussolah --remote --file=prisma/d1/data.sql',
   '',
   '-- Tunda cek foreign key sampai akhir transaksi (urutan tabel bebas)',
   'PRAGMA defer_foreign_keys = true;',

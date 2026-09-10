@@ -35,9 +35,9 @@ bun run cf:setup
 ```
 
 Script ini akan:
-1. Membuat database D1 `simadji-db` dan **menuliskan `database_id`-nya
+1. Membuat database D1 `tpqdarussolah` dan **menuliskan `database_id`-nya
    otomatis ke `wrangler.jsonc`**
-2. Membuat bucket R2 `simadji-uploads`
+2. Membuat bucket R2 `tpqdarussolah-uploads`
 
 ## Langkah 3 — Isi database D1 (skema + seluruh data asli)
 
@@ -60,7 +60,7 @@ bun run cf:deploy
 ```
 
 Output di akhir menampilkan URL live, misal:
-`https://simadji.<subdomain-anda>.workers.dev`
+`https://tpqdarussolah.<subdomain>.workers.dev` — live: **https://tpqdarussolah.nikmatnyata03.workers.dev**
 
 Selesai! 🎉 SIMADJI (portal + dashboard + CMS) kini berjalan di edge
 Cloudflare dengan database D1 dan storage R2.
@@ -85,8 +85,8 @@ sehingga **langsung tampil tanpa langkah tambahan**. Foto yang diunggah
 
 ```bash
 bun run cf:build                          # build aplikasi untuk Workers
-bunx wrangler d1 execute simadji-db --local --file=prisma/d1/schema.sql
-bunx wrangler d1 execute simadji-db --local --file=prisma/d1/data.sql
+bunx wrangler d1 execute tpqdarussolah --local --file=prisma/d1/schema.sql
+bunx wrangler d1 execute tpqdarussolah --local --file=prisma/d1/data.sql
 bun run cf:dev                            # jalankan worker di localhost:8787
 ```
 
