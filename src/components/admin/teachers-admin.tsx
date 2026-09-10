@@ -20,6 +20,7 @@ import type { Teacher } from '@/lib/types'
 import { apiGet, apiSend, formatDate } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { ImageUpload } from '@/components/admin/image-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -69,6 +70,7 @@ interface TeacherFormState {
   birthDate: string
   address: string
   phone: string
+  photoUrl: string
   expertise: string
   philosophy: string
   bio: string
@@ -88,6 +90,7 @@ const EMPTY_FORM: TeacherFormState = {
   birthDate: '',
   address: '',
   phone: '',
+  photoUrl: '',
   expertise: '',
   philosophy: '',
   bio: '',
@@ -227,6 +230,7 @@ export function TeachersAdmin() {
       birthDate: t.birthDate ? t.birthDate.slice(0, 10) : '',
       address: t.address,
       phone: t.phone ?? '',
+      photoUrl: t.photoUrl ?? '',
       expertise: t.expertise,
       philosophy: t.philosophy ?? '',
       bio: t.bio,
@@ -253,6 +257,7 @@ export function TeachersAdmin() {
       birthDate: form.birthDate || undefined,
       address: form.address.trim() || undefined,
       phone: form.phone.trim() || null,
+      photoUrl: form.photoUrl.trim() || null,
       expertise: form.expertise.trim() || undefined,
       philosophy: form.philosophy.trim() || null,
       bio: form.bio.trim() || undefined,
@@ -359,9 +364,17 @@ export function TeachersAdmin() {
             <Card key={t.id} className={cn('rounded-2xl border-stone-200 shadow-sm', !t.isActive && 'opacity-70')}>
               <CardContent className="flex h-full flex-col gap-3 p-4">
                 <div className="flex items-start gap-3">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800">
-                    {initials(t.fullName)}
-                  </div>
+                  {t.photoUrl ? (
+                    <img
+                      src={t.photoUrl}
+                      alt={`Foto ${t.fullName}`}
+                      className="size-11 shrink-0 rounded-full object-cover ring-2 ring-emerald-200"
+                    />
+                  ) : (
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800">
+                      {initials(t.fullName)}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-stone-900">{t.fullName}</p>
                     <p className="text-xs text-stone-500">{t.gender === 'P' ? 'Ustadzah' : 'Ustadz'} · Bergabung {formatDate(t.joinDate)}</p>
@@ -448,6 +461,16 @@ export function TeachersAdmin() {
           </DialogHeader>
 
           <div className="grid gap-3">
+            {/* Foto guru — unggah/ganti/hapus (tersimpan bersama biodata saat Simpan) */}
+            <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-3">
+              <ImageUpload
+                label="Foto Guru"
+                aspect="square"
+                url={form.photoUrl}
+                onChange={(url) => setForm((f) => ({ ...f, photoUrl: url }))}
+              />
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="grid gap-1.5 sm:col-span-2">
                 <Label htmlFor="t-name">Nama Lengkap *</Label>

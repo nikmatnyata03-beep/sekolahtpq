@@ -1,7 +1,7 @@
 'use client'
 
-// Biodata Guru — kartu pengajar dengan avatar inisial, lama mengajar,
-// dan dialog biodata profesional (gaya Kemenag) dari /api/teachers.
+// Biodata Guru — kartu pengajar dengan avatar foto (fallback inisial), lama
+// mengajar, dan dialog biodata profesional (gaya Kemenag) dari /api/teachers.
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
@@ -33,6 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiGet, formatShortDate } from '@/lib/api-client'
 import type { Teacher } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
 /** Parse JSON string array dengan aman — fallback [] agar tidak crash. */
 function safeParseArray(value: string | null | undefined): unknown[] {
@@ -98,6 +99,66 @@ function yearsLabel(joinDate: string): string {
 const AVATAR_COLORS: Record<string, string> = {
   L: 'bg-teal-100 text-teal-800 ring-teal-200',
   P: 'bg-amber-100 text-amber-800 ring-amber-200',
+}
+
+/**
+ * Avatar guru: menampilkan foto (photoUrl) bila tersedia, dengan fallback
+ * anggun ke avatar inisial berwarna gender bila foto kosong/gagal dimuat.
+ * Instansi di-key oleh id+photoUrl di pemanggil — ganti/hapus foto dari admin
+ * me-remount komponen sehingga status gagal muat ter-reset dengan sendirinya.
+ */
+function TeacherAvatar({
+  teacher,
+  className,
+  ringClass,
+}: {
+  teacher: Teacher
+  className?: string
+  ringClass?: string
+}) {
+  const [broken, setBroken] = useState(false)
+
+  const fallbackColorCls = AVATAR_COLORS[teacher.gender] ?? 'bg-stone-100 text-stone-700 ring-stone-200'
+
+  if (!teacher.photoUrl || broken) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          'flex shrink-0 items-center justify-center rounded-full text-xl font-bold ring-4',
+          fallbackColorCls,
+          className,
+          ringClass,
+        )}
+      >
+        {initials(teacher.fullName)}
+      </span>
+    )
+  }
+
+  return (
+    <span className={cn('relative inline-block shrink-0', className)}>
+      {/* Aksen artistik: ring amber halus bergeser di belakang foto */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 translate-x-1.5 translate-y-1.5 rounded-full ring-2 ring-amber-400/60"
+      />
+      <span
+        className={cn(
+          'relative flex size-full items-center justify-center overflow-hidden rounded-full ring-4 ring-emerald-200',
+          ringClass,
+        )}
+      >
+        <img
+          key={`${teacher.id}-${teacher.photoUrl}`}
+          src={teacher.photoUrl}
+          alt={`Foto ${teacher.fullName}`}
+          className="size-full object-cover"
+          onError={() => setBroken(true)}
+        />
+      </span>
+    </span>
+  )
 }
 
 function BiodataSection({ icon: Icon, title, children }: { icon: typeof User; title: string; children: ReactNode }) {
@@ -187,14 +248,7 @@ export function TeachersSection() {
                 key={teacher.id}
                 className="flex flex-col items-center rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg"
               >
-                <span
-                  className={`flex size-16 items-center justify-center rounded-full text-xl font-bold ring-4 ${
-                    AVATAR_COLORS[teacher.gender] ?? 'bg-stone-100 text-stone-700 ring-stone-200'
-                  }`}
-                  aria-hidden="true"
-                >
-                  {initials(teacher.fullName)}
-                </span>
+                <TeacherAvatar key={`${teacher.id}-${teacher.photoUrl}`} teacher={teacher} className="size-16" />
                 <h3 className="mt-3 text-sm font-bold leading-snug text-stone-800">{teacher.fullName}</h3>
                 <p className="mt-1 text-xs text-emerald-700">{teacher.expertise}</p>
                 <Badge variant="outline" className="mt-3 border-amber-200 bg-amber-50 text-amber-700">
@@ -223,14 +277,7 @@ export function TeachersSection() {
             <>
               <DialogHeader>
                 <div className="flex flex-col items-center gap-3 sm:flex-row sm:text-left">
-                  <span
-                    className={`flex size-16 shrink-0 items-center justify-center rounded-full text-xl font-bold ring-4 ${
-                      AVATAR_COLORS[selected.gender] ?? 'bg-stone-100 text-stone-700 ring-stone-200'
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {initials(selected.fullName)}
-                  </span>
+                  <TeacherAvatar key={`${selected.id}-${selected.photoUrl}`} teacher={selected} className="size-16" />
                   <div className="text-center sm:text-left">
                     <DialogTitle className="text-xl leading-snug text-emerald-950">
                       {selected.gender === 'P' ? 'Ustadzah' : 'Ustadz'} {selected.fullName}

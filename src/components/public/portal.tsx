@@ -4,8 +4,10 @@
 // Consumed by the root SPA view switcher: <PublicPortal onOpenLogin={...} />
 
 import { useState } from 'react'
+import { motion, useScroll, useTransform } from 'framer-motion'
 import { LogIn, Menu, MoonStar, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { usePortalSettings } from '@/hooks/use-portal-settings'
 import {
   Sheet,
   SheetContent,
@@ -42,6 +44,12 @@ const NAV_ITEMS = [
 
 export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { settings } = usePortalSettings()
+  const logoUrl = settings.hero.logoUrl
+
+  // Progres scroll halaman — menggerakkan garis gradien tipis di tepi bawah header.
+  const { scrollYProgress } = useScroll()
+  const progressX = useTransform(scrollYProgress, [0, 1], [0, 1])
 
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -59,9 +67,14 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
       <header className="sticky top-0 z-40 border-b border-emerald-100 bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/75">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <button type="button" onClick={goHome} className="flex items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-900 text-white shadow-md shadow-emerald-900/20">
-              <MoonStar className="size-5" />
-            </span>
+            {logoUrl ? (
+              // Logo lembaga dari CMS — teks merek di sebelahnya sudah deskriptif
+              <img src={logoUrl} alt="" className="size-10 shrink-0 rounded-xl object-cover ring-1 ring-emerald-200" />
+            ) : (
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-900 text-white shadow-md shadow-emerald-900/20">
+                <MoonStar className="size-5" />
+              </span>
+            )}
             <span className="leading-tight">
               <span className="block text-sm font-extrabold tracking-tight text-emerald-900">SIMADJI</span>
               <span className="block text-[11px] font-medium text-stone-500">TPQ Darul Jinan</span>
@@ -114,9 +127,13 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
             <SheetContent side="right" className="w-72 border-emerald-100 p-0">
               <SheetHeader className="border-b border-emerald-100 bg-emerald-50/60 p-4">
                 <SheetTitle className="flex items-center gap-2 text-emerald-900">
-                  <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-900 text-white">
-                    <MoonStar className="size-4" />
-                  </span>
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="" className="size-8 rounded-lg object-cover ring-1 ring-emerald-200" />
+                  ) : (
+                    <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-900 text-white">
+                      <MoonStar className="size-4" />
+                    </span>
+                  )}
                   SIMADJI — TPQ Darul Jinan
                 </SheetTitle>
                 <SheetDescription>Portal informasi & layanan TPQ</SheetDescription>
@@ -149,6 +166,13 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
             </SheetContent>
           </Sheet>
         </div>
+
+        {/* Garis progres scroll — tipis di tepi bawah header (dekoratif) */}
+        <motion.span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-gradient-to-r from-emerald-600 via-amber-400 to-emerald-600"
+          style={{ scaleX: progressX }}
+        />
       </header>
 
       {/* ============ SECTIONS ============ */}

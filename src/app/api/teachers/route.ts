@@ -64,6 +64,7 @@ export async function PUT(req: NextRequest) {
         ...(b.birthDate && { birthDate: new Date(b.birthDate) }),
         ...(b.address && { address: b.address }),
         ...(b.phone !== undefined && { phone: b.phone }),
+        ...(b.photoUrl !== undefined && { photoUrl: b.photoUrl || null }),
         ...(b.formalEducation !== undefined && { formalEducation: parseJsonField(b.formalEducation) }),
         ...(b.nonFormalEducation !== undefined && { nonFormalEducation: parseJsonField(b.nonFormalEducation) }),
         ...(b.certifications !== undefined && { certifications: parseJsonField(b.certifications) }),

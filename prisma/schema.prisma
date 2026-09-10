@@ -224,6 +224,16 @@ model Curriculum {
   order       Int     @default(0)
 }
 
+// ===================== SITE SETTINGS (Landing Page CMS) =====================
+
+// Key-value store untuk konten landing page yang dapat diedit admin.
+// key: hero | about | contact | faqs | testimonials — value: JSON string.
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 // ===================== WHATSAPP NOTIFICATION LOG =====================
 
 model Notification {

@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Wallet,
   Newspaper,
+  Palette,
   UserCog,
   MessageCircle,
   Settings,
@@ -39,6 +40,7 @@ import { HafalanAdmin } from './hafalan-admin'
 import { MaterialsAdmin } from './materials-admin'
 import { PaymentsAdmin } from './payments-admin'
 import { ContentAdmin } from './content-admin'
+import { LandingEditor } from './landing-editor'
 import { UsersAdmin } from './users-admin'
 import { WhatsAppLog } from './whatsapp-log'
 
@@ -53,6 +55,7 @@ type SectionKey =
   | 'materials'
   | 'payments'
   | 'content'
+  | 'landing'
   | 'users'
   | 'whatsapp'
   | 'pengaturan'
@@ -76,6 +79,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'materials', label: 'Materi', description: 'Unggah dan bagikan materi pembelajaran', icon: FolderOpen },
   { key: 'payments', label: 'Keuangan', description: 'Tagihan, pembayaran, dan tunggakan', icon: Wallet, adminOnly: true },
   { key: 'content', label: 'Konten', description: 'Berita, artikel, dan pengumuman', icon: Newspaper, adminOnly: true },
+  { key: 'landing', label: 'Landing Page', description: 'Kelola konten halaman depan portal publik', icon: Palette, adminOnly: true },
   { key: 'users', label: 'Pengguna', description: 'Akun admin, guru, dan wali santri', icon: UserCog, adminOnly: true },
   { key: 'whatsapp', label: 'Log WhatsApp', description: 'Riwayat notifikasi terkirim ke wali', icon: MessageCircle, adminOnly: true },
   { key: 'pengaturan', label: 'Pengaturan', description: 'Profil akun dan keamanan', icon: Settings },
@@ -146,6 +150,8 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return <PaymentsAdmin />
       case 'content':
         return <ContentAdmin />
+      case 'landing':
+        return <LandingEditor />
       case 'users':
         return <UsersAdmin user={user} />
       case 'whatsapp':
