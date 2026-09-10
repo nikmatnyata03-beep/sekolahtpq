@@ -87,7 +87,7 @@ export function LoginDialog({
             <div className="min-w-0">
               <DialogTitle className="text-xl font-bold tracking-tight text-white">Masuk Portal SIMADJI</DialogTitle>
               <DialogDescription className="mt-1 text-sm text-emerald-100">
-                TPQ Darul Jinan Â· Sistem Informasi Manajemen
+                TPQ Darul Jinan · Sistem Informasi Manajemen
               </DialogDescription>
             </div>
             <DialogClose className="absolute -right-1 -top-1 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40">

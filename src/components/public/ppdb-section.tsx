@@ -1,8 +1,8 @@
 'use client'
 
-// PPDB Online â formulir pendaftaran santri baru (POST /api/registrations)
+// PPDB Online — formulir pendaftaran santri baru (POST /api/registrations)
 // + cek status pendaftaran via GET /api/registrations/check
-//   (butuh nomor pendaftaran + 5 digit terakhir no. HP â anti-enumeration).
+//   (butuh nomor pendaftaran + 5 digit terakhir no. HP — anti-enumeration).
 
 import { useState, type FormEvent } from 'react'
 import {
@@ -73,7 +73,7 @@ const NEXT_STEPS = [
   'Konfirmasi pendaftaran dikirim otomatis melalui WhatsApp ke nomor orang tua.',
   'Simpan nomor pendaftaran untuk memantau status melalui panel "Cek Status".',
   'Bawa dokumen asli saat sesi verifikasi di sekretariat TPQ Darul Jinan.',
-  'Hasil seleksi diumumkan melalui WhatsApp â santri diterima langsung mendapat NIS & akun wali.',
+  'Hasil seleksi diumumkan melalui WhatsApp — santri diterima langsung mendapat NIS & akun wali.',
 ]
 
 type FormState = {
@@ -120,7 +120,7 @@ function validate(form: FormState): FieldError {
   if (!form.birthDate) errors.birthDate = 'Tanggal lahir wajib diisi.'
   if (!form.parentName.trim()) errors.parentName = 'Nama orang tua/wali wajib diisi.'
   if (!form.phone.trim()) errors.phone = 'Nomor WhatsApp wajib diisi.'
-  else if (!/^[0-9+\-\s]{9,16}$/.test(form.phone.trim())) errors.phone = 'Nomor WhatsApp tidak valid (9â16 digit).'
+  else if (!/^[0-9+\-\s]{9,16}$/.test(form.phone.trim())) errors.phone = 'Nomor WhatsApp tidak valid (9–16 digit).'
   if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Format email tidak valid.'
   if (!form.address.trim()) errors.address = 'Alamat domisili wajib diisi.'
   return errors
@@ -225,7 +225,7 @@ export function PpdbSection() {
     }
   }
 
-  // ==== Cek status (GET /api/registrations/check â butuh nomor pendaftaran + no. HP) ====
+  // ==== Cek status (GET /api/registrations/check — butuh nomor pendaftaran + no. HP) ====
   const [checkOpen, setCheckOpen] = useState(false)
   const [checkNumber, setCheckNumber] = useState('')
   const [checkPhone, setCheckPhone] = useState('')
@@ -277,7 +277,7 @@ export function PpdbSection() {
           </span>
           <h2 className="text-3xl font-bold tracking-tight text-stone-800">Pendaftaran Santri Baru</h2>
           <p className="mt-3 text-muted-foreground">
-            Tahun Ajaran 2025/2026 telah dibuka. Isi formulir daring berikut â tanpa perlu datang
+            Tahun Ajaran 2025/2026 telah dibuka. Isi formulir daring berikut — tanpa perlu datang
             langsung, konfirmasi dikirim lewat WhatsApp.
           </p>
           <div className="mt-5">
@@ -351,7 +351,7 @@ export function PpdbSection() {
                 {checkLoading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Memeriksa Statusâ¦
+                    Memeriksa Status…
                   </>
                 ) : (
                   <>
@@ -367,7 +367,7 @@ export function PpdbSection() {
               Masukkan nomor pendaftaran dan 5 digit terakhir nomor HP yang digunakan saat mendaftar.
             </p>
 
-            {/* Hasil pemeriksaan â diumumkan ke pembaca layar */}
+            {/* Hasil pemeriksaan — diumumkan ke pembaca layar */}
             <div aria-live="polite">
               {checkError && (
                 <p
@@ -419,7 +419,7 @@ export function PpdbSection() {
                       </p>
                       <blockquote className="mt-1.5 flex items-start gap-1.5 text-sm italic leading-relaxed text-red-800">
                         <Quote className="mt-0.5 size-3.5 shrink-0" />
-                        â{checkResult.reviewNote}â
+                        “{checkResult.reviewNote}”
                       </blockquote>
                     </div>
                   )}
@@ -430,12 +430,12 @@ export function PpdbSection() {
                         Catatan Pengurus
                       </figcaption>
                       <blockquote className="mt-1 text-xs italic leading-relaxed text-amber-900">
-                        â{checkResult.reviewNote}â
+                        “{checkResult.reviewNote}”
                       </blockquote>
                     </figure>
                   )}
 
-                  {/* Diterima â ajakan langkah berikutnya */}
+                  {/* Diterima — ajakan langkah berikutnya */}
                   {checkResult.status === 'DITERIMA' && (
                     <p className="mt-4 flex items-start gap-1.5 rounded-lg bg-emerald-100/80 p-2.5 text-xs font-medium leading-relaxed text-emerald-800">
                       <MessageCircle className="mt-0.5 size-3.5 shrink-0" />
@@ -443,7 +443,7 @@ export function PpdbSection() {
                     </p>
                   )}
 
-                  {/* Menunggu / diverifikasi â timeline 3 tahap */}
+                  {/* Menunggu / diverifikasi — timeline 3 tahap */}
                   {checkStepIndex >= 0 && (
                     <ol className="mt-4 flex items-center" aria-label="Tahapan pendaftaran">
                       {CHECK_STEPS.map((label, i) => {
@@ -675,7 +675,7 @@ export function PpdbSection() {
               {submitting ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Mengirim Pendaftaranâ¦
+                  Mengirim Pendaftaran…
                 </>
               ) : (
                 <>
@@ -700,7 +700,7 @@ export function PpdbSection() {
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-stone-600">
                 Sekretariat PPDB siap membantu proses pendaftaran Anda pada jam operasional
-                (SeninâSabtu, 15.00â18.00 WIB).
+                (Senin–Sabtu, 15.00–18.00 WIB).
               </p>
               <a
                 href="tel:081234567890"

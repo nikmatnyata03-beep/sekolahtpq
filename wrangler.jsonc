@@ -49,7 +49,7 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["PresenceHub"] }
   ],
-  // Workers AI (tier gratis Â±10rb neuron/hari): ringkasan laporan + asisten guru
+  // Workers AI (tier gratis ±10rb neuron/hari): ringkasan laporan + asisten guru
   "ai": {
     "binding": "AI"
   },

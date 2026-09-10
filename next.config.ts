@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Security headers â perbaikan pertama via AI Fix Bridge (Task 28).
+// Security headers — perbaikan pertama via AI Fix Bridge (Task 28).
 // Temuan modul "headers" pentest: CSP/XFO/HSTS/nosniff belum diset +
 // X-Powered-By bocor. CSP dibuat aman untuk Next.js (inline script/style
 // diizinkan; blob: untuk preview PDF iframe) namun tetap memblokir

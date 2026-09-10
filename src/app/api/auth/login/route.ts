@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     const valid = user ? await verifyPassword(String(password), user.password) : false
     if (!user || !valid) return bad('Email atau password salah', 401)
 
-    // Sesi httpOnly â sumber kebenaran otorisasi di sisi server.
+    // Sesi httpOnly — sumber kebenaran otorisasi di sisi server.
     const sessionUser: SessionUser = {
       id: user.id,
       role: user.role as SessionUser['role'],
