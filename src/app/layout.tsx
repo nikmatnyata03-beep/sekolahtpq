@@ -53,6 +53,13 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
+        {/* Cloudflare Web Analytics (token ini memang dirancang publik di HTML) */}
+        <script
+          type="module"
+          async
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={JSON.stringify({ token: "3994e20d28cd4d2180409d2adf8e76c9" })}
+        />
       </body>
     </html>
   );
