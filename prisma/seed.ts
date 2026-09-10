@@ -28,6 +28,11 @@ async function main() {
     data: { email: 'admin@daruljinan.sch.id', name: 'H. Ahmad Fauzi, S.Pd.I', phone: '081234567890', password: hashPassword('admin123'), role: 'ADMIN' },
   })
 
+  // Akun developer — akses Dev Console & AI Pentest (terhubung agen otomatis GitHub + Cloudflare)
+  await db.user.create({
+    data: { email: 'dev@daruljinan.sch.id', name: 'Tim Developer SIMADJI', phone: '081300000001', password: hashPassword('dev123'), role: 'DEVELOPER' },
+  })
+
   const guruUsers = [
     { email: 'ustadzah.fatimah@daruljinan.sch.id', name: 'Ustadzah Fatimah Az-Zahra, S.Pd.I', phone: '081200000001', password: 'guru123', role: 'GURU' },
     { email: 'ustadz.yusuf@daruljinan.sch.id', name: 'Ustadz Yusuf Rahman, Lc.', phone: '081200000002', password: 'guru123', role: 'GURU' },

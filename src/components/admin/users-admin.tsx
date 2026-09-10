@@ -69,12 +69,14 @@ import {
 function roleBadgeClass(role: string): string {
   if (role === 'ADMIN') return 'border-emerald-200 bg-emerald-100 text-emerald-800'
   if (role === 'GURU') return 'border-amber-200 bg-amber-100 text-amber-800'
+  if (role === 'DEVELOPER') return 'border-purple-200 bg-purple-100 text-purple-800'
   return 'border-stone-200 bg-stone-100 text-stone-600'
 }
 
 function roleLabel(role: string): string {
   if (role === 'ADMIN') return 'Admin'
   if (role === 'GURU') return 'Guru'
+  if (role === 'DEVELOPER') return 'Developer'
   return 'Wali Santri'
 }
 
@@ -291,9 +293,9 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuLabel>Ubah Peran</DropdownMenuLabel>
-                          {(['ADMIN', 'GURU', 'ORANG_TUA'] as Role[]).map((r) => (
+                          {(['ADMIN', 'GURU', 'ORANG_TUA', 'DEVELOPER'] as Role[]).map((r) => (
                             <DropdownMenuItem key={r} disabled={u.role === r} onClick={() => void changeRole(u, r)}>
-                              <span className={`size-2 rounded-full ${r === 'ADMIN' ? 'bg-emerald-500' : r === 'GURU' ? 'bg-amber-500' : 'bg-stone-400'}`} />
+                              <span className={`size-2 rounded-full ${r === 'ADMIN' ? 'bg-emerald-500' : r === 'GURU' ? 'bg-amber-500' : r === 'DEVELOPER' ? 'bg-purple-500' : 'bg-stone-400'}`} />
                               {roleLabel(r)}
                               {u.role === r && <span className="ml-auto text-[10px] text-stone-400">saat ini</span>}
                             </DropdownMenuItem>
@@ -352,6 +354,7 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
                   <SelectItem value="ADMIN">Admin</SelectItem>
                   <SelectItem value="GURU">Guru</SelectItem>
                   <SelectItem value="ORANG_TUA">Wali Santri</SelectItem>
+                  <SelectItem value="DEVELOPER">Developer</SelectItem>
                 </SelectContent>
               </Select>
             </div>

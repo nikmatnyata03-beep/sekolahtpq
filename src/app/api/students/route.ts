@@ -3,15 +3,16 @@ import { db, ok, bad } from '@/lib/api'
 import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
-  // Data santri = data pribadi: hanya pengguna ter-autentikasi (admin/guru/wali).
+  // Data santri = data pribadi. ADMIN/GURU melihat semua; ORANG_TUA HANYA
+  // anaknya sendiri (perbaikan temuan IDOR oleh AI Pentest — CWE-863).
   const g = await guard(req)
   if ('res' in g) return g.res
   const parentId = req.nextUrl.searchParams.get('parentId')
   const classId = req.nextUrl.searchParams.get('classId')
+  const forceOwnChildren = g.session.role === 'ORANG_TUA'
   const students = await db.student.findMany({
     where: {
-      ...(parentId && { parentId }),
-      ...(classId && { classId }),
+      ...(forceOwnChildren ? { parentId: g.session.id } : { ...(parentId && { parentId }), ...(classId && { classId }) }),
     },
     include: {
       parent: { select: { id: true, name: true, phone: true, email: true } },

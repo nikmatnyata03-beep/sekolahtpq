@@ -1,7 +1,7 @@
 // Shared types — API contract for SIMADJI TPQ Darul Jinan
 // All dates come as ISO strings from JSON APIs.
 
-export type Role = 'ADMIN' | 'GURU' | 'ORANG_TUA'
+export type Role = 'ADMIN' | 'GURU' | 'ORANG_TUA' | 'DEVELOPER'
 
 export interface AuthUser {
   id: string

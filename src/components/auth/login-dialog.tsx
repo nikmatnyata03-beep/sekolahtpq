@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   AlertCircle,
+  Code2,
   Eye,
   EyeOff,
   GraduationCap,
@@ -59,6 +60,14 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     hint: 'Portal wali santri',
     icon: Users,
     featured: true,
+  },
+  {
+    role: 'Developer',
+    name: 'Tim Developer',
+    email: 'dev@daruljinan.sch.id',
+    password: 'dev123',
+    hint: 'AI Pentest & Dev Console',
+    icon: Code2,
   },
 ]
 

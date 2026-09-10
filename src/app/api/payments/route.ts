@@ -3,7 +3,7 @@ import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
-  const g = await guard(req)
+  const g = await guard(req, ['ADMIN']) // data keuangan lintas santri = admin saja (temuan IDOR AI Pentest)
   if ('res' in g) return g.res
   const studentId = req.nextUrl.searchParams.get('studentId')
   const status = req.nextUrl.searchParams.get('status')

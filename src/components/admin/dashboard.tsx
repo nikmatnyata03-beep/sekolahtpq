@@ -20,6 +20,8 @@ import {
   LogOut,
   Menu,
   Home,
+  ShieldCheck,
+  TerminalSquare,
   type LucideIcon,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/types'
@@ -45,6 +47,8 @@ import { ContentAdmin } from './content-admin'
 import { LandingEditor } from './landing-editor'
 import { UsersAdmin } from './users-admin'
 import { WhatsAppLog } from './whatsapp-log'
+import { PentestAdmin } from './pentest-admin'
+import { DevConsole } from './dev-console'
 
 type SectionKey =
   | 'ringkasan'
@@ -61,6 +65,8 @@ type SectionKey =
   | 'landing'
   | 'users'
   | 'whatsapp'
+  | 'pentest'
+  | 'devconsole'
   | 'pengaturan'
 
 interface SectionDef {
@@ -69,6 +75,7 @@ interface SectionDef {
   description: string
   icon: LucideIcon
   adminOnly?: boolean
+  developerOnly?: boolean
 }
 
 const SECTIONS: SectionDef[] = [
@@ -86,20 +93,25 @@ const SECTIONS: SectionDef[] = [
   { key: 'landing', label: 'Landing Page', description: 'Kelola konten halaman depan portal publik', icon: Palette, adminOnly: true },
   { key: 'users', label: 'Pengguna', description: 'Akun admin, guru, dan wali santri', icon: UserCog, adminOnly: true },
   { key: 'whatsapp', label: 'Log WhatsApp', description: 'Riwayat notifikasi terkirim ke wali', icon: MessageCircle, adminOnly: true },
+  { key: 'pentest', label: 'AI Pentest', description: 'Pemindai keamanan AI — audit otomatis seluruh endpoint', icon: ShieldCheck, adminOnly: true },
+  { key: 'devconsole', label: 'Dev Console', description: 'Monitor kesehatan sistem, diagnosa AI, dan auto-fix', icon: TerminalSquare, developerOnly: true },
   { key: 'pengaturan', label: 'Pengaturan', description: 'Profil akun dan keamanan', icon: Settings },
 ]
 
 const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'hafalan', 'materials', 'pengaturan']
+const DEVELOPER_ALLOWED: SectionKey[] = ['ringkasan', 'pentest', 'devconsole', 'pengaturan']
 
 function roleBadgeClass(role: string): string {
   if (role === 'ADMIN') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
   if (role === 'GURU') return 'bg-amber-100 text-amber-800 border-amber-200'
+  if (role === 'DEVELOPER') return 'bg-purple-100 text-purple-800 border-purple-200'
   return 'bg-stone-100 text-stone-700 border-stone-200'
 }
 
 function roleLabel(role: string): string {
   if (role === 'ADMIN') return 'Admin'
   if (role === 'GURU') return 'Guru'
+  if (role === 'DEVELOPER') return 'Developer'
   return 'Wali Santri'
 }
 
@@ -114,7 +126,12 @@ function initials(name: string): string {
 
 export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUser; onLogout: () => void; onOpenPublic?: () => void }) {
   const isAdmin = user.role === 'ADMIN'
-  const visible = SECTIONS.filter((s) => (isAdmin ? true : GURU_ALLOWED.includes(s.key)))
+  const isDeveloper = user.role === 'DEVELOPER'
+  const visible = SECTIONS.filter((s) => {
+    if (isAdmin) return !s.developerOnly
+    if (isDeveloper) return DEVELOPER_ALLOWED.includes(s.key)
+    return GURU_ALLOWED.includes(s.key)
+  })
   const [active, setActive] = useState<SectionKey>('ringkasan')
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -162,6 +179,10 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return <UsersAdmin user={user} />
       case 'whatsapp':
         return <WhatsAppLog user={user} />
+      case 'pentest':
+        return <PentestAdmin user={user} />
+      case 'devconsole':
+        return <DevConsole user={user} />
       case 'pengaturan':
         return <SettingsSection user={user} />
       default:

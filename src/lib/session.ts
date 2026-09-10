@@ -17,7 +17,7 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 7 // 7 hari
 
 export type SessionUser = {
   id: string
-  role: 'ADMIN' | 'GURU' | 'ORANG_TUA'
+  role: 'ADMIN' | 'GURU' | 'ORANG_TUA' | 'DEVELOPER'
   name: string
   teacherId?: string | null
 }
