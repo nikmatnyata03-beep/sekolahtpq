@@ -10,15 +10,88 @@
 // Akses: ADMIN, GURU, DEVELOPER. Rate limit 8 permintaan / 10 menit / user.
 
 import { NextRequest } from 'next/server'
-import { db, ok, bad } from '@/lib/api'
+import { ok, bad } from '@/lib/api'
 import { guard } from '@/lib/session'
 import { rateLimit } from '@/lib/rate-limit'
-import { runAi, aiErrorMessage, extractJsonBlock } from '@/lib/ai'
+import { runAi, aiErrorMessage } from '@/lib/ai'
 
 export const dynamic = 'force-dynamic'
 
 const KINDS = ['KUIS', 'IDE_MATERI', 'RENCANA'] as const
 type Kind = (typeof KINDS)[number]
+
+interface AiQuestion {
+  question: string
+  options: string[]
+  answerIndex: number
+  note?: string
+}
+
+/** Validasi + sanitasi satu objek soal dari AI (tolak yang cacat). */
+function sanitizeQuestion(o: unknown): AiQuestion | null {
+  if (!o || typeof o !== 'object') return null
+  const q = o as Record<string, unknown>
+  const question = typeof q.question === 'string' ? q.question.trim() : ''
+  if (question.length < 5) return null
+  if (!Array.isArray(q.options)) return null
+  const options = q.options
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim().slice(0, 160))
+    .filter(Boolean)
+  if (options.length < 2 || options.length > 6) return null
+  let idx = typeof q.answerIndex === 'number' ? Math.round(q.answerIndex) : -1
+  if (idx < 0 || idx >= options.length) {
+    // coba deteksi dari awalan "A." / "B." bila ada field benar bertipe string
+    const correct = typeof q.correct === 'string' ? q.correct.trim() : ''
+    idx = options.findIndex((opt) => correct && opt.toLowerCase().startsWith(correct.toLowerCase().slice(0, 2)))
+    if (idx < 0) return null
+  }
+  const note = typeof q.note === 'string' ? q.note.trim().slice(0, 240) : undefined
+  return { question: question.slice(0, 300), options, answerIndex: idx, note: note || undefined }
+}
+
+/**
+ * Salvage butir soal dari jawaban AI yang mungkin rusak sebagian:
+ * parse utuh dulu (array / {questions}), lalu tangkap tiap blok {...}
+ * secara independen agar 1 soal cacat tidak membuang 4 soal yang valid.
+ */
+function salvageQuestions(raw: string): AiQuestion[] {
+  const out: AiQuestion[] = []
+  const pushParsed = (parsed: unknown) => {
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) {
+        const s = sanitizeQuestion(item)
+        if (s && !out.some((x) => x.question === s.question)) out.push(s)
+      }
+    } else if (parsed && typeof parsed === 'object') {
+      const q = (parsed as { questions?: unknown }).questions
+      if (Array.isArray(q)) pushParsed(q)
+    }
+  }
+  const cleaned = raw.replace(/```(?:json)?/g, '').trim()
+  const start = cleaned.indexOf('[')
+  const objStart = cleaned.indexOf('{')
+  try {
+    if (start !== -1 && (objStart === -1 || start < objStart)) {
+      pushParsed(JSON.parse(cleaned.slice(start, cleaned.lastIndexOf(']') + 1)))
+    } else if (objStart !== -1) {
+      pushParsed(JSON.parse(cleaned.slice(objStart, cleaned.lastIndexOf('}') + 1)))
+    }
+  } catch {
+    /* utuh gagal → lanjut salvage per blok */
+  }
+  if (out.length === 0) {
+    for (const m of cleaned.matchAll(/\{[^{}]+\}/g)) {
+      try {
+        const s = sanitizeQuestion(JSON.parse(m[0]))
+        if (s && !out.some((x) => x.question === s.question)) out.push(s)
+      } catch {
+        /* blok ini cacat — lewati */
+      }
+    }
+  }
+  return out
+}
 
 export async function POST(req: NextRequest) {
   const g = await guard(req, ['ADMIN', 'GURU', 'DEVELOPER'])
@@ -57,10 +130,10 @@ export async function POST(req: NextRequest) {
         `- Soal sesuai jenjang dan surah yang diminta (isi, nomor ayat, hukum tajwid, atau makna umum).`
       const userPrompt = `Buat 5 soal kuis untuk santri dengan data berikut.\n${konteks}`
 
-      // Model kadang mengembalikan respons kosong (transient) — coba maksimal 2x.
-      // Percobaan ke-2 memakai bentuk objek {"questions":[...]} yang lebih stabil.
+      // Model kadang mengembalikan respons kosong (transient) — coba maksimal 3x.
+      // Percobaan ke-2/3 memakai bentuk objek {"questions":[...]} yang lebih stabil.
       let raw = ''
-      for (let attempt = 0; attempt < 2 && !raw; attempt++) {
+      for (let attempt = 0; attempt < 3 && !raw; attempt++) {
         const msg =
           attempt === 0
             ? userPrompt
@@ -70,21 +143,8 @@ export async function POST(req: NextRequest) {
       }
       if (!raw) throw new Error('Model AI memberikan respons kosong — coba lagi sebentar')
 
-      const json = extractJsonBlock(raw)
-      let questions: Array<{ question: string; options: string[]; answerIndex: number; note?: string }> = []
-      if (json) {
-        try {
-          const parsed: unknown = JSON.parse(json)
-          if (Array.isArray(parsed)) {
-            questions = parsed as typeof questions
-          } else if (parsed && typeof parsed === 'object') {
-            const q = (parsed as { questions?: unknown }).questions
-            if (Array.isArray(q)) questions = q as typeof questions
-          }
-        } catch {
-          // biarkan kosong → fallback ke teks mentah di bawah
-        }
-      }
+      // Salvage: 1 soal cacat tidak boleh membuang soal yang valid.
+      const questions = salvageQuestions(raw)
       if (questions.length === 0) return ok({ kind, questions: [], text: raw })
       return ok({ kind, questions, text: null })
     }
