@@ -27,9 +27,11 @@ import {
   FileText,
   Percent,
   BellRing,
+  Sparkles,
+  Copy,
   type LucideIcon,
 } from 'lucide-react'
-import { apiGet, formatRupiah, formatShortDate } from '@/lib/api-client'
+import { apiGet, apiSend, formatRupiah, formatShortDate } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -496,6 +498,9 @@ export function ReportsAdmin({ user }: { user: { name: string; role: string } })
   const [generating, setGenerating] = useState(false)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [pdfOpen, setPdfOpen] = useState(false)
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
   const pdfBlobRef = useRef<Blob | null>(null)
   const pdfMonthRef = useRef<string | null>(null)
 
@@ -585,6 +590,31 @@ export function ReportsAdmin({ user }: { user: { name: string; role: string } })
     }
   }
 
+  // ===== Ringkasan naratif AI atas laporan bulan terpilih =====
+  const handleAiSummary = useCallback(async () => {
+    setAiLoading(true)
+    setAiError(null)
+    setAiSummary(null)
+    try {
+      const res = await apiSend<{ month: string; summary: string }>('/api/reports/ai-summary', 'POST', { month })
+      setAiSummary(res.summary)
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Gagal menghubungi AI.')
+    } finally {
+      setAiLoading(false)
+    }
+  }, [month])
+
+  async function copyAiSummary() {
+    if (!aiSummary) return
+    try {
+      await navigator.clipboard.writeText(aiSummary)
+      toast({ title: 'Ringkasan disalin ke clipboard' })
+    } catch {
+      toast({ title: 'Gagal menyalin', variant: 'destructive' })
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       {/* ===== Toolbar ===== */}
@@ -618,6 +648,15 @@ export function ReportsAdmin({ user }: { user: { name: string; role: string } })
               <Button variant="outline" size="icon" aria-label="Muat ulang" onClick={() => load(month)} disabled={loading}>
                 <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
+              <Button
+                size="sm"
+                onClick={handleAiSummary}
+                disabled={aiLoading || loading || !data}
+                className="bg-amber-500 text-amber-950 hover:bg-amber-600"
+              >
+                {aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                Ringkas AI
+              </Button>
             </div>
           </div>
           <div className="flex flex-col gap-2 border-t border-stone-100 pt-4 sm:flex-row">
@@ -646,6 +685,50 @@ export function ReportsAdmin({ user }: { user: { name: string; role: string } })
           </p>
         </CardContent>
       </Card>
+
+      {/* ===== Ringkasan naratif AI ===== */}
+      {(aiLoading || aiError || aiSummary) && (
+        <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
+          <CardContent className="flex flex-col gap-3 p-4 md:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Sparkles className="size-4 shrink-0 text-amber-600" />
+                <h3 className="min-w-0 truncate text-sm font-bold text-amber-900">
+                  Ringkasan AI — {monthLabel(month)}
+                </h3>
+              </div>
+              {aiSummary && (
+                <Button variant="outline" size="sm" onClick={copyAiSummary} className="shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100">
+                  <Copy className="size-3.5" /> Salin
+                </Button>
+              )}
+            </div>
+            {aiLoading && (
+              <p className="flex items-center gap-2 text-sm text-stone-500">
+                <Loader2 className="size-4 animate-spin text-amber-600" /> AI sedang membaca angka laporan…
+              </p>
+            )}
+            {aiError && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertDescription>{aiError}</AlertDescription>
+              </Alert>
+            )}
+            {aiSummary && (
+              <div className="space-y-2.5 text-sm leading-relaxed text-stone-700">
+                {aiSummary
+                  .split(/\n{2,}/)
+                  .filter(Boolean)
+                  .map((para, i) => (
+                    <p key={i} className="whitespace-pre-wrap break-words">
+                      {para}
+                    </p>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {error ? (
         <Alert variant="destructive" className="border-red-200">

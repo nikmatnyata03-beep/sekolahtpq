@@ -1,8 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Nama worker = subdomain: tpq.darussolah.workers.dev
+  // main = entry kustom: fetch passthrough OpenNext + scheduled cron harian.
   "name": "tpq",
-  "main": ".open-next/worker.js",
+  "main": "src/worker.ts",
   "compatibility_date": "2025-03-01",
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "27f9d19e916a7ab071db7b2ad8f05b94",
@@ -29,7 +30,18 @@
   // Cost 5 (~2-3ms) tetap jauh lebih kuat dari plaintext. Upgrade ke Workers
   // Paid ($5/bln, 30s CPU) bila ingin menaikkan nilai ini ke 10-12.
   "vars": {
-    "BCRYPT_ROUNDS": "5"
+    "BCRYPT_ROUNDS": "5",
+    // Secret untuk memicu /api/cron/daily dari scheduled handler (repo privat;
+    // bila repo jadi publik, pindahkan ke Worker Secret via dashboard).
+    "CRON_SECRET": "d086576c5cc5541cbb25f28cb8bb438b81461ad6e6fb33dd"
+  },
+  // Workers AI (tier gratis ±10rb neuron/hari): ringkasan laporan + asisten guru
+  "ai": {
+    "binding": "AI"
+  },
+  // Cron harian 00:00 UTC = 07:00 WIB: pengingat tagihan + auto-tutup sesi lama
+  "triggers": {
+    "crons": ["0 0 * * *"]
   },
   "observability": {
     "enabled": true

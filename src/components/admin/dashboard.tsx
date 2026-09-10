@@ -22,6 +22,7 @@ import {
   Home,
   ShieldCheck,
   TerminalSquare,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/types'
@@ -49,6 +50,7 @@ import { UsersAdmin } from './users-admin'
 import { WhatsAppLog } from './whatsapp-log'
 import { PentestAdmin } from './pentest-admin'
 import { DevConsole } from './dev-console'
+import { AiAssistant } from './ai-assistant'
 
 type SectionKey =
   | 'ringkasan'
@@ -59,6 +61,7 @@ type SectionKey =
   | 'attendance'
   | 'hafalan'
   | 'materials'
+  | 'ai'
   | 'payments'
   | 'laporan'
   | 'content'
@@ -87,6 +90,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'attendance', label: 'Absensi', description: 'Buka sesi QR, catat kehadiran santri', icon: CalendarCheck },
   { key: 'hafalan', label: 'Hafalan', description: 'Catat setoran dan capaian hafalan', icon: BookMarked },
   { key: 'materials', label: 'Materi', description: 'Unggah dan bagikan materi pembelajaran', icon: FolderOpen },
+  { key: 'ai', label: 'Asisten AI', description: 'Generator kuis hafalan, ide materi, dan rencana belajar', icon: Sparkles },
   { key: 'payments', label: 'Keuangan', description: 'Tagihan, pembayaran, dan tunggakan', icon: Wallet, adminOnly: true },
   { key: 'laporan', label: 'Laporan', description: 'Laporan bulanan PDF: baca dan unduh arsip resmi', icon: FileBarChart, adminOnly: true },
   { key: 'content', label: 'Konten', description: 'Berita, artikel, dan pengumuman', icon: Newspaper, adminOnly: true },
@@ -98,7 +102,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'pengaturan', label: 'Pengaturan', description: 'Profil akun dan keamanan', icon: Settings },
 ]
 
-const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'hafalan', 'materials', 'pengaturan']
+const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'hafalan', 'materials', 'ai', 'pengaturan']
 const DEVELOPER_ALLOWED: SectionKey[] = ['ringkasan', 'pentest', 'devconsole', 'pengaturan']
 
 function roleBadgeClass(role: string): string {
@@ -167,6 +171,8 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return <HafalanAdmin />
       case 'materials':
         return <MaterialsAdmin user={user} />
+      case 'ai':
+        return <AiAssistant />
       case 'payments':
         return <PaymentsAdmin />
       case 'laporan':
