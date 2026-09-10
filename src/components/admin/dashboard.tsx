@@ -13,6 +13,7 @@ import {
   Wallet,
   Newspaper,
   Palette,
+  FileBarChart,
   UserCog,
   MessageCircle,
   Settings,
@@ -39,6 +40,7 @@ import { AttendanceAdmin } from './attendance-admin'
 import { HafalanAdmin } from './hafalan-admin'
 import { MaterialsAdmin } from './materials-admin'
 import { PaymentsAdmin } from './payments-admin'
+import { ReportsAdmin } from './reports-admin'
 import { ContentAdmin } from './content-admin'
 import { LandingEditor } from './landing-editor'
 import { UsersAdmin } from './users-admin'
@@ -54,6 +56,7 @@ type SectionKey =
   | 'hafalan'
   | 'materials'
   | 'payments'
+  | 'laporan'
   | 'content'
   | 'landing'
   | 'users'
@@ -78,6 +81,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'hafalan', label: 'Hafalan', description: 'Catat setoran dan capaian hafalan', icon: BookMarked },
   { key: 'materials', label: 'Materi', description: 'Unggah dan bagikan materi pembelajaran', icon: FolderOpen },
   { key: 'payments', label: 'Keuangan', description: 'Tagihan, pembayaran, dan tunggakan', icon: Wallet, adminOnly: true },
+  { key: 'laporan', label: 'Laporan', description: 'Laporan bulanan PDF: baca dan unduh arsip resmi', icon: FileBarChart, adminOnly: true },
   { key: 'content', label: 'Konten', description: 'Berita, artikel, dan pengumuman', icon: Newspaper, adminOnly: true },
   { key: 'landing', label: 'Landing Page', description: 'Kelola konten halaman depan portal publik', icon: Palette, adminOnly: true },
   { key: 'users', label: 'Pengguna', description: 'Akun admin, guru, dan wali santri', icon: UserCog, adminOnly: true },
@@ -148,6 +152,8 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return <MaterialsAdmin user={user} />
       case 'payments':
         return <PaymentsAdmin />
+      case 'laporan':
+        return <ReportsAdmin user={user} />
       case 'content':
         return <ContentAdmin />
       case 'landing':
