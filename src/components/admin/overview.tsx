@@ -125,7 +125,7 @@ function KpiCard({
         </div>
         <div className="min-w-0">
           <p className="text-xs font-medium text-stone-500">{label}</p>
-          <p className="truncate text-lg font-bold text-stone-900 sm:text-xl">{value}</p>
+          <p className="break-words text-base font-bold text-stone-900 sm:text-xl">{value}</p>
           <p className="mt-0.5 hidden text-[11px] text-stone-400 sm:block">{hint}</p>
         </div>
       </CardContent>

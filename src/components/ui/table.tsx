@@ -5,16 +5,56 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const scrollerRef = React.useRef<HTMLDivElement>(null)
+  const [scrollPos, setScrollPos] = React.useState<"none" | "left" | "right" | "both">("none")
+
+  // Scroll-aware fade edges: hint users that the table keeps going horizontally.
+  const update = React.useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const canLeft = el.scrollLeft > 2
+    const canRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+    setScrollPos(canLeft && canRight ? "both" : canLeft ? "left" : canRight ? "right" : "none")
+  }, [])
+
+  React.useEffect(() => {
+    update()
+    const el = scrollerRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => ro.disconnect()
+  }, [update])
+
+  const showLeft = scrollPos === "left" || scrollPos === "both"
+  const showRight = scrollPos === "right" || scrollPos === "both"
+
   return (
-    <div
-      data-slot="table-container"
-      className="relative w-full overflow-x-auto"
-    >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props}
-      />
+    <div data-slot="table-container" className="relative">
+      <div
+        ref={scrollerRef}
+        onScroll={update}
+        className="w-full scroll-pb-2 overflow-x-auto [scrollbar-width:thin]"
+      >
+        <table
+          data-slot="table"
+          className={cn("w-full caption-bottom text-sm", className)}
+          {...props}
+        />
+      </div>
+      {showLeft && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-card to-transparent"
+        />
+      )}
+      {showRight && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent"
+        />
+      )}
     </div>
   )
 }

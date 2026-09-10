@@ -478,9 +478,9 @@ function StatCard({ icon: Icon, label, value, sub, tone = 'emerald' }: {
           <Icon className="size-5" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-stone-500">{label}</p>
-          <p className="truncate text-lg font-bold text-stone-900">{value}</p>
-          {sub ? <p className="truncate text-[11px] text-stone-500">{sub}</p> : null}
+          <p className="break-words text-[11px] font-medium uppercase tracking-wide text-stone-500">{label}</p>
+          <p className="break-words text-base font-bold text-stone-900 sm:text-lg">{value}</p>
+          {sub ? <p className="break-words text-[11px] text-stone-500">{sub}</p> : null}
         </div>
       </CardContent>
     </Card>

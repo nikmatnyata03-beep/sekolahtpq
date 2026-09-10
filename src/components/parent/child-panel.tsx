@@ -610,12 +610,12 @@ function RaporDialog({
 
         <div id="rapor-santri-print" className="rounded-2xl border-2 border-emerald-700/70 bg-white p-5 sm:p-7">
           {/* Report letterhead */}
-          <div className="flex items-center gap-4 border-b-2 border-emerald-700 pb-4">
+          <div className="flex flex-wrap items-center gap-4 border-b-2 border-emerald-700 pb-4">
             <span className="grid size-12 shrink-0 place-items-center rounded-full bg-emerald-700 text-white">
               <Landmark className="size-6" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-lg font-extrabold tracking-[0.18em] text-emerald-800 sm:text-xl">TPQ DARUL JINAN</p>
+              <p className="text-base font-extrabold tracking-[0.1em] text-emerald-800 sm:text-xl sm:tracking-[0.18em]">TPQ DARUL JINAN</p>
               <p className="mt-0.5 text-xs text-stone-500 sm:text-sm">Laporan Perkembangan Santri — SIMADJI</p>
             </div>
             <span className="shrink-0 rounded-lg bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800">

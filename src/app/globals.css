@@ -122,6 +122,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Anti mobile-blowout: single-column grids (no explicit grid-cols utility) get a
+     bounded 1fr track, so nowrap/truncate content can never push a grid wider than
+     its container (classic implicit auto-track min-content overflow on phones).
+     Explicit grid-cols-N utilities already compile to minmax(0,1fr) — untouched. */
+  div.grid:not([class*='grid-cols-']):not([class*='cols-[']) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Same guard for the dialog shell itself (shadcn DialogContent is a bare `grid`). */
+  [data-slot='dialog-content'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
   ::selection {
     background-color: oklch(0.696 0.17 162.48 / 0.35);
   }
