@@ -3,7 +3,9 @@ import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
 import { guard } from '@/lib/session'
 
-const DEFAULT_ORtu_PASSWORD = 'ortu123'
+function temporaryPassword(): string {
+  return `Dj-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}!`
+}
 
 // Daftar pendaftar = ADMIN (data pribadi anak & kontak orang tua).
 export async function GET(req: NextRequest) {
@@ -64,9 +66,11 @@ export async function PUT(req: NextRequest) {
         const nis = `DJ-2025-${String(count + 1).padStart(3, '0')}`
         const emailGuess = reg.email || `${reg.phone}@wali.daruljinan.id`
         let parent = await db.user.findUnique({ where: { email: emailGuess.toLowerCase() } })
+        let tempPassword: string | null = null
         if (!parent) {
+          tempPassword = temporaryPassword()
           parent = await db.user.create({
-            data: { email: emailGuess.toLowerCase(), name: reg.parentName, phone: reg.phone, password: hashPassword(DEFAULT_ORtu_PASSWORD), role: 'ORANG_TUA' },
+            data: { email: emailGuess.toLowerCase(), name: reg.parentName, phone: reg.phone, password: hashPassword(tempPassword), role: 'ORANG_TUA' },
           })
         }
         const student = await db.student.create({
@@ -78,10 +82,9 @@ export async function PUT(req: NextRequest) {
         await sendWhatsApp({
           phone: reg.phone,
           userId: parent.id,
-          message: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. NIS: *${nis}*. Akun Portal Wali: ${parent.email} / ortu123. — TPQ Darul Jinan`,
+          message: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. NIS: *${nis}*. Akun Portal Wali: ${parent.email}${tempPassword ? ` / ${tempPassword}` : ''}. — TPQ Darul Jinan`,
         })
-        // credentials = akun wali yang dibuat/dipakai (parent bisa sudah ada sebelumnya); UI menampilkan panel salin
-        return ok({ registration: reg, student, credentials: { nis, email: parent.email, tempPassword: 'ortu123' } })
+        return ok({ registration: reg, student, credentials: tempPassword ? { nis, email: parent.email, tempPassword } : null })
       }
     }
 

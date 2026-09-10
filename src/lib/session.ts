@@ -8,8 +8,8 @@ import type { NextRequest } from 'next/server'
  * - Tidak ada state server → aman untuk runtime serverless/stateless.
  *
  * Variabel lingkungan:
- * - SESSION_SECRET (wajib di produksi; wrangler secret). Nilai fallback khusus
- *   development agar lokal tetap jalan — JANGAN dipakai produksi.
+ * - SESSION_SECRET (wajib; wrangler secret). Tidak ada fallback agar token tidak
+ *   dapat dipalsukan ketika konfigurasi deployment keliru.
  */
 
 export const SESSION_COOKIE = 'simadji_session'
@@ -24,16 +24,12 @@ export type SessionUser = {
 
 type SessionPayload = SessionUser & { exp: number }
 
-const DEV_FALLBACK_SECRET = 'simadji-dev-secret-jangan-dipakai-produksi'
-
 function getSecret(): string {
-  try {
-    const s = process.env.SESSION_SECRET
-    if (s && s.length >= 16) return s
-  } catch {
-    /* proses tanpa env — pakai fallback */
+  const secret = process.env.SESSION_SECRET
+  if (!secret || secret.length < 32) {
+    throw new Error('SESSION_SECRET wajib dikonfigurasi dan minimal 32 karakter')
   }
-  return DEV_FALLBACK_SECRET
+  return secret
 }
 
 const encoder = new TextEncoder()
@@ -99,7 +95,7 @@ export async function verifySessionToken(token: string | undefined | null): Prom
 
   try {
     const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as SessionPayload
-    if (!payload?.id || !payload?.role || typeof payload.exp !== 'number') return null
+    if (!payload?.id || !payload?.role || !['ADMIN', 'GURU', 'ORANG_TUA', 'DEVELOPER'].includes(payload.role) || typeof payload.exp !== 'number') return null
     if (payload.exp * 1000 < Date.now()) return null
     return { id: payload.id, role: payload.role, name: payload.name, teacherId: payload.teacherId ?? null }
   } catch {

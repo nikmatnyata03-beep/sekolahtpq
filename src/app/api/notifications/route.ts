@@ -5,7 +5,8 @@ import { guard } from '@/lib/session'
 export async function GET(req: NextRequest) {
   const g = await guard(req)
   if ('res' in g) return g.res
-  const userId = req.nextUrl.searchParams.get('userId')
+  const requestedUserId = req.nextUrl.searchParams.get('userId')
+  const userId = g.session.role === 'ADMIN' ? requestedUserId : g.session.id
   const notifications = await db.notification.findMany({
     where: userId ? { userId } : {},
     orderBy: { createdAt: 'desc' },

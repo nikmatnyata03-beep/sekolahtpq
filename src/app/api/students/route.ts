@@ -3,17 +3,19 @@ import { db, ok, bad } from '@/lib/api'
 import { guard } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
-  // Data santri = data pribadi. ADMIN/GURU melihat semua; ORANG_TUA HANYA
-  // anaknya sendiri (perbaikan temuan IDOR oleh AI Pentest — CWE-863).
+  // Data santri = data pribadi. Admin melihat semua, guru hanya kelasnya,
+  // dan wali hanya anaknya sendiri (perbaikan IDOR — CWE-863).
   const g = await guard(req)
   if ('res' in g) return g.res
   const parentId = req.nextUrl.searchParams.get('parentId')
   const classId = req.nextUrl.searchParams.get('classId')
-  const forceOwnChildren = g.session.role === 'ORANG_TUA'
+  const scope = g.session.role === 'ORANG_TUA'
+    ? { parentId: g.session.id }
+    : g.session.role === 'GURU'
+      ? { class: { teacherId: g.session.teacherId ?? '__no_teacher__' } }
+      : { ...(parentId && { parentId }), ...(classId && { classId }) }
   const students = await db.student.findMany({
-    where: {
-      ...(forceOwnChildren ? { parentId: g.session.id } : { ...(parentId && { parentId }), ...(classId && { classId }) }),
-    },
+    where: { ...scope, ...(g.session.role === 'ORANG_TUA' ? {} : g.session.role === 'GURU' && classId ? { classId } : {}) },
     include: {
       parent: { select: { id: true, name: true, phone: true, email: true } },
       class: { select: { id: true, name: true, level: true, schedule: true } },

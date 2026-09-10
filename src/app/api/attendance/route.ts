@@ -8,11 +8,18 @@ export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   const classId = req.nextUrl.searchParams.get('classId')
   const studentId = req.nextUrl.searchParams.get('studentId')
+  const studentFilter = g.session.role === 'ORANG_TUA'
+    ? { parentId: g.session.id, ...(classId && { classId }) }
+    : g.session.role === 'GURU'
+      ? { class: { teacherId: g.session.teacherId ?? '__no_teacher__' }, ...(classId && { classId }) }
+      : classId
+        ? { classId }
+        : undefined
   const records = await db.attendance.findMany({
     where: {
       ...(sessionId && { sessionId }),
       ...(studentId && { studentId }),
-      ...(classId && { student: { classId } }),
+      ...(studentFilter && { student: studentFilter }),
     },
     include: {
       student: { select: { id: true, fullName: true, nis: true } },
@@ -33,6 +40,9 @@ export async function POST(req: NextRequest) {
     if (!sessionId || !Array.isArray(records)) return bad('Data absensi tidak valid')
     const session = await db.session.findUnique({ where: { id: sessionId }, include: { class: true } })
     if (!session) return bad('Sesi tidak ditemukan')
+    if (g.session.role === 'GURU' && session.class.teacherId !== g.session.teacherId) {
+      return bad('Anda bukan pengampu kelas sesi ini', 403)
+    }
 
     for (const r of records) {
       if (!r.studentId) continue

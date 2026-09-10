@@ -19,11 +19,16 @@ import { guard } from '@/lib/session'
  */
 
 export async function GET(req: NextRequest) {
-  const g = await guard(req)
+  const g = await guard(req, ['ADMIN', 'GURU', 'ORANG_TUA'])
   if ('res' in g) return g.res
   const studentId = req.nextUrl.searchParams.get('studentId')
+  const studentFilter = g.session.role === 'ORANG_TUA'
+    ? { parentId: g.session.id }
+    : g.session.role === 'GURU'
+      ? { class: { teacherId: g.session.teacherId ?? '__no_teacher__' } }
+      : undefined
   const hafalans = await db.hafalan.findMany({
-    where: studentId ? { studentId } : {},
+    where: { ...(studentId && { studentId }), ...(studentFilter && { student: studentFilter }) },
     include: { student: { select: { id: true, fullName: true, nis: true, class: { select: { name: true } } } } },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -37,6 +42,14 @@ export async function POST(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.studentId || !b.surahName || !b.ayatRange) return bad('Santri, surah, dan rentang ayat wajib diisi')
+    const targetStudent = await db.student.findUnique({
+      where: { id: String(b.studentId) },
+      select: { class: { select: { teacherId: true } } },
+    })
+    if (!targetStudent) return bad('Santri tidak ditemukan', 404)
+    if (g.session.role === 'GURU' && targetStudent.class?.teacherId !== g.session.teacherId) {
+      return bad('Anda bukan pengampu kelas santri ini', 403)
+    }
     const hafalan = await db.hafalan.create({
       data: {
         studentId: b.studentId,
@@ -46,7 +59,7 @@ export async function POST(req: NextRequest) {
         grade: b.grade ? Number(b.grade) : null,
         teacherNote: b.teacherNote || null,
       },
-      include: { student: { include: { parent: true } } },
+      include: { student: { include: { parent: true, class: { select: { teacherId: true } } } } },
     })
     // Notify parent about setoran result (per blueprint: parental involvement)
     if (hafalan.student.parent) {
@@ -97,8 +110,18 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const g = await guard(req, ['ADMIN', 'GURU'])
+  if ('res' in g) return g.res
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return bad('ID wajib')
+  const existing = await db.hafalan.findUnique({
+    where: { id },
+    include: { student: { select: { class: { select: { teacherId: true } } } } },
+  })
+  if (!existing) return bad('Hafalan tidak ditemukan', 404)
+  if (g.session.role === 'GURU' && existing.student.class?.teacherId !== g.session.teacherId) {
+    return bad('Anda bukan pengampu kelas santri ini', 403)
+  }
   await db.hafalan.delete({ where: { id } })
   return ok({ success: true })
 }

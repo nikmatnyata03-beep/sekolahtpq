@@ -6,7 +6,8 @@ export async function PUT(req: NextRequest) {
   try {
     const g = await guard(req)
     if ('res' in g) return g.res
-    const { userId } = await req.json()
+    const body = (await req.json().catch(() => ({}))) as { userId?: unknown }
+    const userId = g.session.role === 'ADMIN' ? String(body.userId || '') : g.session.id
     if (!userId) return bad('ID pengguna wajib')
     await db.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } })
     return ok({ success: true })

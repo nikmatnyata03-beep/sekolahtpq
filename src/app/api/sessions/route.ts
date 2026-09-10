@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
     if (!b.classId) return bad('Kelas wajib dipilih')
     const cls = await db.class.findUnique({ where: { id: b.classId } })
     if (!cls) return bad('Kelas tidak ditemukan')
+    if (g.session.role === 'GURU' && cls.teacherId !== g.session.teacherId) {
+      return bad('Anda bukan pengampu kelas ini', 403)
+    }
     // close previous active sessions of this class
     await db.session.updateMany({ where: { classId: b.classId, isActive: true }, data: { isActive: false } })
     const code = `DJ-${cls.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
@@ -69,6 +72,11 @@ export async function PUT(req: NextRequest) {
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.id) return bad('ID wajib')
+    const existing = await db.session.findUnique({ where: { id: b.id }, include: { class: true } })
+    if (!existing) return bad('Sesi tidak ditemukan', 404)
+    if (g.session.role === 'GURU' && existing.class.teacherId !== g.session.teacherId) {
+      return bad('Anda bukan pengampu kelas sesi ini', 403)
+    }
     const session = await db.session.update({ where: { id: b.id }, data: { isActive: !!b.isActive } })
     return ok(session)
   } catch {

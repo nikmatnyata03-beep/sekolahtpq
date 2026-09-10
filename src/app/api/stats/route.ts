@@ -1,6 +1,10 @@
-import { db, ok } from '@/lib/api'
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/api'
+import { guard } from '@/lib/session'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const g = await guard(req, ['ADMIN'])
+  if ('res' in g) return g.res
   const [students, teachers, classes, registrationsPending, payments, todayAttendances, activeSessions, hafalan, materials] =
     await Promise.all([
       db.student.count({ where: { status: 'AKTIF' } }),
@@ -53,7 +57,7 @@ export async function GET() {
   })
 
   const totalToday = todayAttendances.length
-  return ok({
+  return NextResponse.json({
     students,
     teachers,
     classes,
@@ -72,5 +76,5 @@ export async function GET() {
     recentNotifications,
     recentPayments: recentPayments.map((p) => ({ ...p, studentName: p.student.fullName })),
     recentHafalan: recentHafalan.map((h) => ({ ...h, studentName: h.student.fullName })),
-  })
+  }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

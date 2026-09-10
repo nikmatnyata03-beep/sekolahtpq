@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
+import { guard } from '@/lib/session'
 
 /** Aggregated data for the parent (wali santri) portal */
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get('userId')
-  if (!userId) return bad('userId wajib')
+  const g = await guard(req, ['ORANG_TUA'])
+  if ('res' in g) return g.res
+  const userId = g.session.id
 
   const parent = await db.user.findUnique({ where: { id: userId } })
   if (!parent) return bad('Wali santri tidak ditemukan', 404)

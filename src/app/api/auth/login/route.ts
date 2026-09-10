@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ok, bad } from '@/lib/api'
+import { db, bad } from '@/lib/api'
 import { verifyPassword } from '@/lib/password'
 import { createSessionToken, sessionCookieHeader, isSecureRequest, type SessionUser } from '@/lib/session'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
-import { ensureDevSchema } from '@/lib/pentest/bootstrap'
 
 export async function POST(req: NextRequest) {
   try {
-    // Bootstrap skema tabel pentest/dev + akun developer (idempoten, cached
-    // per isolate) — dijalankan sebelum pencarian user agar akun dev selalu
-    // bisa login di produksi tanpa migrasi manual.
-    await ensureDevSchema().catch(() => {})
-
     const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null
     if (!body) return bad('Permintaan tidak valid', 400)
 
-    // Rate limit: maks 8 percobaan / 10 menit per email+IP (percepat brute force = gagal).
+    // Dua bucket mencegah password spraying dengan mengganti-ganti email.
     const ip = clientIp(req)
-    const key = `login:${String(body.email || '').toLowerCase().slice(0, 120)}|${ip}`
-    if (!rateLimit(key, 8, 10 * 60 * 1000)) {
-      return bad('Terlalu banyak percobaan login. Coba lagi dalam 10 menit.', 429)
+    const emailKey = `login:email:${String(body.email || '').toLowerCase().slice(0, 120)}|${ip}`
+    if (!rateLimit(emailKey, 8, 10 * 60 * 1000) || !rateLimit(`login:ip:${ip}`, 30, 10 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Terlalu banyak percobaan login. Coba lagi dalam 10 menit.' },
+        { status: 429, headers: { 'Retry-After': '600' } },
+      )
     }
 
     const { email, password } = body
