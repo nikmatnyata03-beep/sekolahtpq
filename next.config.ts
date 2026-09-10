@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Security headers — perbaikan pertama via AI Fix Bridge (Task 28).
+// Security headers â perbaikan pertama via AI Fix Bridge (Task 28).
 // Temuan modul "headers" pentest: CSP/XFO/HSTS/nosniff belum diset +
 // X-Powered-By bocor. CSP dibuat aman untuk Next.js (inline script/style
 // diizinkan; blob: untuk preview PDF iframe) namun tetap memblokir
@@ -15,12 +15,12 @@ const SECURITY_HEADERS = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self'",
-      "frame-src 'self' blob: data:",
+      "connect-src 'self' https://challenges.cloudflare.com",
+      "frame-src 'self' blob: data: https://challenges.cloudflare.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
