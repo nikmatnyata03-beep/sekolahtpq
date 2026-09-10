@@ -3,10 +3,11 @@ import { db, bad } from '@/lib/api'
 import { verifyPassword } from '@/lib/password'
 import { createSessionToken, sessionCookieHeader, isSecureRequest, type SessionUser } from '@/lib/session'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { verifyTurnstileToken } from '@/lib/turnstile-server'
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null
+    const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown; turnstileToken?: unknown } | null
     if (!body) return bad('Permintaan tidak valid', 400)
 
     // Dua bucket mencegah password spraying dengan mengganti-ganti email.
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
 
     const { email, password } = body
     if (!email || !password) return bad('Email dan password wajib diisi')
+    if (!(await verifyTurnstileToken(body.turnstileToken, ip))) return bad('Verifikasi keamanan gagal. Silakan coba lagi.', 403)
     const user = await db.user.findUnique({
       where: { email: String(email).toLowerCase().trim() },
       include: { teacherProfile: { select: { id: true, fullName: true } } },
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
     const valid = user ? await verifyPassword(String(password), user.password) : false
     if (!user || !valid) return bad('Email atau password salah', 401)
 
-    // Sesi httpOnly — sumber kebenaran otorisasi di sisi server.
+    // Sesi httpOnly â sumber kebenaran otorisasi di sisi server.
     const sessionUser: SessionUser = {
       id: user.id,
       role: user.role as SessionUser['role'],

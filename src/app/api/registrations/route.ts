@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
 import { guard } from '@/lib/session'
+import { clientIp } from '@/lib/rate-limit'
+import { verifyTurnstileToken } from '@/lib/turnstile-server'
 
 function temporaryPassword(): string {
   return `Dj-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}!`
@@ -21,6 +23,9 @@ export async function POST(req: NextRequest) {
     if (!b.childName || !b.parentName || !b.phone || !b.birthDate) {
       return bad('Nama anak, nama orang tua, nomor HP, dan tanggal lahir wajib diisi')
     }
+    if (!(await verifyTurnstileToken(b.turnstileToken, clientIp(req)))) {
+      return bad('Verifikasi keamanan gagal. Silakan coba lagi.', 403)
+    }
     const count = await db.registration.count()
     const reg = await db.registration.create({
       data: {
@@ -38,7 +43,7 @@ export async function POST(req: NextRequest) {
     })
     await sendWhatsApp({
       phone: b.phone,
-      message: `Assalamu'alaikum Bpk/Ibu ${b.parentName}, pendaftaran *${b.childName}* berhasil. Nomor pendaftaran: *${reg.regNumber}*. Status: MENUNGGU VERIFIKASI. Kami akan menghubungi Anda. — TPQ Darul Jinan`,
+      message: `Assalamu'alaikum Bpk/Ibu ${b.parentName}, pendaftaran *${b.childName}* berhasil. Nomor pendaftaran: *${reg.regNumber}*. Status: MENUNGGU VERIFIKASI. Kami akan menghubungi Anda. â TPQ Darul Jinan`,
     })
     return ok(reg)
   } catch {
@@ -82,21 +87,21 @@ export async function PUT(req: NextRequest) {
         await sendWhatsApp({
           phone: reg.phone,
           userId: parent.id,
-          message: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. NIS: *${nis}*. Akun Portal Wali: ${parent.email}${tempPassword ? ` / ${tempPassword}` : ''}. — TPQ Darul Jinan`,
+          message: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. NIS: *${nis}*. Akun Portal Wali: ${parent.email}${tempPassword ? ` / ${tempPassword}` : ''}. â TPQ Darul Jinan`,
         })
         return ok({ registration: reg, student, credentials: tempPassword ? { nis, email: parent.email, tempPassword } : null })
       }
     }
 
     const messages: Record<string, string> = {
-      VERIFIKASI: `Dokumen pendaftaran *${reg.childName}* telah diverifikasi. Menunggu keputusan penerimaan. — TPQ Darul Jinan`,
-      DITERIMA: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. — TPQ Darul Jinan`,
-      DITOLAK: `Mohon maaf, pendaftaran *${reg.childName}* belum dapat kami terima. ${reg.reviewNote || ''} — TPQ Darul Jinan`,
+      VERIFIKASI: `Dokumen pendaftaran *${reg.childName}* telah diverifikasi. Menunggu keputusan penerimaan. â TPQ Darul Jinan`,
+      DITERIMA: `Selamat! Pendaftaran *${reg.childName}* DITERIMA. â TPQ Darul Jinan`,
+      DITOLAK: `Mohon maaf, pendaftaran *${reg.childName}* belum dapat kami terima. ${reg.reviewNote || ''} â TPQ Darul Jinan`,
     }
     if (messages[b.status]) {
       await sendWhatsApp({ phone: reg.phone, message: messages[b.status] })
     }
-    // credentials: null → tidak ada akun baru dibuat (santri dengan nama serupa sudah ada, atau status bukan DITERIMA)
+    // credentials: null â tidak ada akun baru dibuat (santri dengan nama serupa sudah ada, atau status bukan DITERIMA)
     return ok({ registration: reg, credentials: null })
   } catch {
     return bad('Gagal memperbarui pendaftaran')

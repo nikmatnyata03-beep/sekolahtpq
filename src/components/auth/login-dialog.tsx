@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { apiSend } from '@/lib/api-client'
 import type { AuthUser } from '@/lib/types'
+import { TurnstileWidget } from '@/components/security/turnstile-widget'
 
 export function LoginDialog({
   open,
@@ -34,9 +35,15 @@ export function LoginDialog({
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [turnstileReset, setTurnstileReset] = useState(0)
 
   useEffect(() => {
-    if (open) setError(null)
+    if (open) {
+      setError(null)
+      setTurnstileToken('')
+      setTurnstileReset((value) => value + 1)
+    }
   }, [open])
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -45,17 +52,23 @@ export function LoginDialog({
       setError('Email dan password wajib diisi.')
       return
     }
+    if (!turnstileToken) {
+      setError('Silakan selesaikan verifikasi keamanan terlebih dahulu.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const res = await apiSend<{ user: AuthUser }>('/api/auth/login', 'POST', {
         email: email.trim(),
         password,
+        turnstileToken,
       })
       setPassword('')
       onSuccess(res.user)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal masuk. Silakan coba lagi.')
+      setTurnstileReset((value) => value + 1)
     } finally {
       setLoading(false)
     }
@@ -74,7 +87,7 @@ export function LoginDialog({
             <div className="min-w-0">
               <DialogTitle className="text-xl font-bold tracking-tight text-white">Masuk Portal SIMADJI</DialogTitle>
               <DialogDescription className="mt-1 text-sm text-emerald-100">
-                TPQ Darul Jinan · Sistem Informasi Manajemen
+                TPQ Darul Jinan Â· Sistem Informasi Manajemen
               </DialogDescription>
             </div>
             <DialogClose className="absolute -right-1 -top-1 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40">
@@ -134,6 +147,8 @@ export function LoginDialog({
                 </button>
               </div>
             </div>
+
+            <TurnstileWidget onToken={setTurnstileToken} resetSignal={turnstileReset} />
 
             <Button
               type="submit"
