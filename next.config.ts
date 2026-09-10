@@ -10,8 +10,11 @@ const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // camera=(self): pemindai QR check-in santri (html5-qrcode) butuh akses kamera
-  // same-origin; microphone/geolocation/payment tetap diblokir penuh.
-  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
+  // same-origin. geolocation=(self): validasi GPS absensi (≤ 20 m dari titik
+  // QR) + GPS kamera bukti izin/sakit (Task 33) — tanpa ini navigator.
+  // geolocation seluruhnya diblokir browser (pelajaran sama dgn camera=()).
+  // microphone/payment tetap diblokir penuh.
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=()" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   {
     key: "Content-Security-Policy",

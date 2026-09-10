@@ -15,11 +15,15 @@ import {
   Save,
   Loader2,
   History,
+  MapPin,
+  Lock,
 } from 'lucide-react'
 import type { AttendanceRecord, ClassRoom, SessionItem, Student } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { getGpsFix, GpsUnavailableError, type GpsFix } from '@/lib/gps-client'
+import { ProofPhotoInput, type ProofPhoto } from './proof-photo-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -55,15 +59,25 @@ import { statusBadgeClass, downloadCsv, checkinUrl } from './overview'
 
 type AttStatus = 'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA'
 
+// Task 33: HADIR TIDAK BISA dicatat manual — hanya via check-in QR + GPS santri.
+// Ustadz hanya mengisi IZIN (wajib foto surat), SAKIT (wajib foto surat), ALPA.
 const STATUSES: { value: AttStatus; label: string; on: string; off: string }[] = [
-  { value: 'HADIR', label: 'Hadir', on: 'bg-emerald-700 text-white border-emerald-700', off: 'border-stone-200 bg-white text-stone-600 hover:border-emerald-300' },
   { value: 'IZIN', label: 'Izin', on: 'bg-amber-500 text-white border-amber-500', off: 'border-stone-200 bg-white text-stone-600 hover:border-amber-300' },
   { value: 'SAKIT', label: 'Sakit', on: 'bg-orange-500 text-white border-orange-500', off: 'border-stone-200 bg-white text-stone-600 hover:border-orange-300' },
   { value: 'ALPA', label: 'Alpa', on: 'bg-red-600 text-white border-red-600', off: 'border-stone-200 bg-white text-stone-600 hover:border-red-300' },
 ]
 
+// Label metode pencatatan utk kolom riwayat.
+const METHOD_LABEL: Record<string, string> = {
+  QR_GPS: 'QR + GPS',
+  IZIN_FOTO: 'Foto Izin',
+  SAKIT_FOTO: 'Foto Sakit',
+  ALPA_MANUAL: 'Catat Manual',
+  LEGACY: 'Manual (lama)',
+}
+
 interface RecordState {
-  status: AttStatus
+  status: AttStatus | null
   note: string
 }
 
@@ -137,10 +151,33 @@ export function AttendanceAdmin() {
   // Sesi yang QR-nya sedang ditayangkan (dialog besar utk dipindai/ diproyeksikan)
   const [qrSession, setQrSession] = useState<SessionItem | null>(null)
 
+  // GPS titik absen (Task 33) — wajib sebelum bisa membuka sesi/QR
+  const [sessionGps, setSessionGps] = useState<GpsFix | null>(null)
+  const [gpsState, setGpsState] = useState<'locating' | 'ok' | 'error'>('locating')
+  const [gpsError, setGpsError] = useState<string | null>(null)
+  const [refreshingLoc, setRefreshingLoc] = useState(false)
+  const acquireGps = useCallback(async () => {
+    setGpsState('locating')
+    setGpsError(null)
+    try {
+      const fix = await getGpsFix()
+      setSessionGps(fix)
+      setGpsState('ok')
+    } catch (e) {
+      setSessionGps(null)
+      setGpsState('error')
+      setGpsError(e instanceof GpsUnavailableError ? e.message : 'Lokasi gagal diambil. Coba lagi.')
+    }
+  }, [])
+  useEffect(() => {
+    void acquireGps()
+  }, [acquireGps])
+
   // Catat kehadiran
   const [sessionId, setSessionId] = useState('none')
   const [students, setStudents] = useState<Student[]>([])
   const [records, setRecords] = useState<Record<string, RecordState>>({})
+  const [proofs, setProofs] = useState<Record<string, ProofPhoto | null>>({})
   const [loadingRoster, setLoadingRoster] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -209,11 +246,18 @@ export function AttendanceAdmin() {
         if (cancelled) return
         setStudents(roster)
         const map: Record<string, RecordState> = {}
+        const proofMap: Record<string, ProofPhoto | null> = {}
         for (const s of roster) {
           const found = existing.find((a) => a.studentId === s.id)
-          map[s.id] = { status: (found?.status as AttStatus) ?? 'HADIR', note: found?.note ?? '' }
+          // HADIR lama = hasil QR (terkunci, tidak dapat diubah di sini)
+          map[s.id] = {
+            status: found && found.status !== 'HADIR' ? (found.status as AttStatus) : found ? 'HADIR' : null,
+            note: found?.note ?? '',
+          }
+          proofMap[s.id] = null
         }
         setRecords(map)
+        setProofs(proofMap)
       } catch {
         if (!cancelled) {
           setStudents([])
@@ -241,12 +285,21 @@ export function AttendanceAdmin() {
       toast({ title: 'Pilih kelas', description: 'Tentukan kelas yang akan dibuka sesinya.' })
       return
     }
+    if (!sessionGps) {
+      toast({
+        title: 'GPS belum siap',
+        description: 'Titik lokasi wajib agar check-in santri tervalidasi ≤ 20 m. Tunggu GPS terkunci lalu coba lagi.',
+        variant: 'destructive',
+      })
+      return
+    }
     setIsOpening(true)
     try {
       await apiSend('/api/sessions', 'POST', {
         classId,
         topic: topic.trim() || undefined,
         date: date || undefined,
+        gps: { lat: sessionGps.lat, lng: sessionGps.lng, accuracy: sessionGps.accuracy, posTs: sessionGps.posTs },
       })
       const refreshed = await apiGet<SessionItem[]>('/api/sessions')
       setSessions(refreshed)
@@ -373,9 +426,37 @@ export function AttendanceAdmin() {
     })
   }
 
+  // Task 33: perbarui titik GPS anchor sesi (ustadz pindah ruangan / sesi lama
+  // belum punya titik). Dipanggil dari dialog QR.
+  async function refreshAnchor(s: SessionItem) {
+    setRefreshingLoc(true)
+    try {
+      const fix = await getGpsFix()
+      await apiSend('/api/sessions', 'PUT', {
+        id: s.id,
+        action: 'lokasi',
+        gps: { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, posTs: fix.posTs },
+      })
+      const refreshed = await apiGet<SessionItem[]>('/api/sessions')
+      setSessions(refreshed)
+      const updated = refreshed.find((x) => x.id === s.id) ?? null
+      setQrSession((prev) => (prev?.id === s.id ? (updated ?? prev) : prev))
+      setCreatedSession((prev) => (prev?.id === s.id ? (updated ?? prev) : prev))
+      toast({ title: 'Titik GPS diperbarui', description: `Check-in kini divalidasi ≤ 20 m dari posisi Anda sekarang.` })
+    } catch (e) {
+      toast({
+        title: 'Gagal memperbarui titik GPS',
+        description: e instanceof Error ? e.message : 'Terjadi kesalahan',
+        variant: 'destructive',
+      })
+    } finally {
+      setRefreshingLoc(false)
+    }
+  }
+
   function setRecord(studentId: string, patch: Partial<RecordState>) {
     setRecords((prev) => {
-      const base: RecordState = prev[studentId] ?? { status: 'HADIR', note: '' }
+      const base: RecordState = prev[studentId] ?? { status: null, note: '' }
       return { ...prev, [studentId]: { ...base, ...patch } }
     })
   }
@@ -386,19 +467,52 @@ export function AttendanceAdmin() {
       toast({ title: 'Tidak ada santri', description: 'Kelas ini belum memiliki santri terdaftar.' })
       return
     }
+    const pending = students
+      .map((s) => ({ st: s, row: records[s.id] }))
+      .filter((r) => r.row?.status && r.row.status !== 'HADIR')
+    for (const { st, row } of pending) {
+      if ((row?.status === 'IZIN' || row?.status === 'SAKIT') && !proofs[st.id]) {
+        toast({
+          title: `Foto surat wajib`,
+          description: `${st.fullName} ditandai ${row?.status} — potret surat buktinya terlebih dahulu.`,
+          variant: 'destructive',
+        })
+        return
+      }
+    }
+    if (pending.length === 0) {
+      toast({
+        title: 'Belum ada penandaan',
+        description: 'Tandai IZIN/SAKIT/ALPA. Hadir dicatat otomatis lewat check-in QR + GPS santri.',
+      })
+      return
+    }
     setIsSaving(true)
     try {
       await apiSend('/api/attendance', 'POST', {
         sessionId,
-        records: students.map((s) => ({
-          studentId: s.id,
-          status: records[s.id]?.status ?? 'HADIR',
-          note: records[s.id]?.note?.trim() || undefined,
+        records: pending.map(({ st, row }) => ({
+          studentId: st.id,
+          status: row?.status,
+          note: row?.note?.trim() || undefined,
+          ...(row?.status === 'IZIN' || row?.status === 'SAKIT'
+            ? {
+                proof: proofs[st.id]
+                  ? {
+                      dataUrl: proofs[st.id]!.dataUrl,
+                      lat: proofs[st.id]!.lat,
+                      lng: proofs[st.id]!.lng,
+                      accuracy: proofs[st.id]!.accuracy ?? undefined,
+                      posTs: proofs[st.id]!.posTs,
+                    }
+                  : undefined,
+              }
+            : {}),
         })),
       })
       toast({
         title: 'Absensi tersimpan',
-        description: `Kehadiran ${students.length} santri dicatat. Notifikasi WhatsApp terkirim ke wali.`,
+        description: `${pending.length} santri dicatat (${pending.map((p) => p.row?.status).join(', ')}). Notifikasi WhatsApp terkirim ke wali.`,
       })
       const [freshSessions, freshLog] = await Promise.all([
         apiGet<SessionItem[]>('/api/sessions'),
@@ -464,7 +578,38 @@ export function AttendanceAdmin() {
                   <Input id="att-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </div>
-              <Button onClick={() => void openSession()} disabled={isOpening} className="w-full bg-emerald-700 hover:bg-emerald-800">
+              {/* ==== Status GPS titik absen (wajib, Task 33) ==== */}
+              <div className="rounded-xl border p-3 text-xs" data-testid="session-gps-status">
+                {gpsState === 'locating' && (
+                  <div className="flex items-center gap-2 text-stone-600">
+                    <Loader2 className="size-3.5 animate-spin text-emerald-600" />
+                    Mengunci titik GPS perangkat Anda…
+                  </div>
+                )}
+                {gpsState === 'ok' && sessionGps && (
+                  <div className="flex items-center justify-between gap-2 text-emerald-800">
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin className="size-3.5" />
+                      Titik absen siap{sessionGps.accuracy != null ? ` (±${Math.round(sessionGps.accuracy)} m)` : ''} — check-in santri tervalidasi ≤ 20 m dari sini.
+                    </span>
+                    <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-emerald-700 hover:bg-emerald-50" onClick={() => void acquireGps()} aria-label="Ambil ulang titik GPS">
+                      <RefreshCw className="size-3" />
+                    </Button>
+                  </div>
+                )}
+                {gpsState === 'error' && (
+                  <div className="space-y-2 text-red-700">
+                    <div className="flex items-start gap-1.5">
+                      <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                      {gpsError}
+                    </div>
+                    <Button size="sm" variant="outline" className="h-7 border-red-300 text-red-700 hover:bg-red-50" onClick={() => void acquireGps()}>
+                      <RefreshCw className="size-3" /> Coba Lagi
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <Button onClick={() => void openSession()} disabled={isOpening || gpsState !== 'ok'} className="w-full bg-emerald-700 hover:bg-emerald-800">
                 {isOpening ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />} Buka Sesi &amp; Buat QR
               </Button>
 
@@ -555,13 +700,15 @@ export function AttendanceAdmin() {
           </Card>
         </div>
 
-        {/* Panel kanan: Catat kehadiran */}
+        {/* Panel kanan: Catat izin/sakit/alpa (Hadir hanya via QR+GPS santri) */}
         <Card className="rounded-2xl border-stone-200 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarCheck className="size-4 text-emerald-700" /> Catat Kehadiran
+              <CalendarCheck className="size-4 text-emerald-700" /> Catat Izin / Sakit / Alpa
             </CardTitle>
-            <CardDescription>Pilih sesi lalu tandai status tiap santri.</CardDescription>
+            <CardDescription>
+              Hadir tidak dicatat manual — santri check-in QR + GPS sendiri. IZIN/SAKIT wajib foto surat bukti.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-1.5">
@@ -597,7 +744,23 @@ export function AttendanceAdmin() {
               <>
                 <div className="max-h-96 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300">
                   {students.map((s) => {
-                    const rec = records[s.id] ?? { status: 'HADIR' as AttStatus, note: '' }
+                    const rec = records[s.id] ?? { status: null as AttStatus | null, note: '' }
+                    // HADIR hanya dari check-in QR santri — tampil terkunci (read-only).
+                    if (rec.status === 'HADIR') {
+                      return (
+                        <div key={s.id} className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3" data-testid="row-hadir-locked">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-stone-800">
+                              {s.fullName} <span className="ml-1 font-mono text-[10px] text-stone-400">{s.nis}</span>
+                            </p>
+                            <Badge className="gap-1 border-transparent bg-emerald-700 text-[10px] text-white">
+                              <Lock className="size-3" /> HADIR · via QR+GPS
+                            </Badge>
+                          </div>
+                          {rec.note && <p className="mt-1 text-xs text-stone-500">{rec.note}</p>}
+                        </div>
+                      )
+                    }
                     return (
                       <div key={s.id} className="rounded-xl border border-stone-100 bg-stone-50/50 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -609,7 +772,7 @@ export function AttendanceAdmin() {
                               <button
                                 key={st.value}
                                 type="button"
-                                onClick={() => setRecord(s.id, { status: st.value })}
+                                onClick={() => setRecord(s.id, { status: rec.status === st.value ? null : st.value })}
                                 className={cn(
                                   'rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors',
                                   rec.status === st.value ? st.on : st.off
@@ -621,19 +784,28 @@ export function AttendanceAdmin() {
                           </div>
                         </div>
                         {(rec.status === 'IZIN' || rec.status === 'SAKIT') && (
-                          <Input
-                            value={rec.note}
-                            onChange={(e) => setRecord(s.id, { note: e.target.value })}
-                            placeholder={rec.status === 'IZIN' ? 'Keterangan izin (opsional)' : 'Keterangan sakit (opsional)'}
-                            className="mt-2 h-8 rounded-lg bg-white text-xs"
-                          />
+                          <>
+                            <Input
+                              value={rec.note}
+                              onChange={(e) => setRecord(s.id, { note: e.target.value })}
+                              placeholder={rec.status === 'IZIN' ? 'Keterangan izin (opsional)' : 'Keterangan sakit (opsional)'}
+                              className="mt-2 h-8 rounded-lg bg-white text-xs"
+                            />
+                            <ProofPhotoInput
+                              studentName={s.fullName}
+                              kind={rec.status}
+                              value={proofs[s.id] ?? null}
+                              onChange={(v) => setProofs((prev) => ({ ...prev, [s.id]: v }))}
+                              disabled={isSaving}
+                            />
+                          </>
                         )}
                       </div>
                     )
                   })}
                 </div>
                 <Button onClick={() => void saveAttendance()} disabled={isSaving} className="w-full bg-emerald-700 hover:bg-emerald-800">
-                  {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Simpan Absensi
+                  {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Simpan Izin / Sakit / Alpa
                 </Button>
               </>
             )}
@@ -659,13 +831,16 @@ export function AttendanceAdmin() {
         ) : (
           <div className="p-4 pt-2">
             <div className="overflow-x-auto">
-              <Table className="min-w-[640px]">
+              <Table className="min-w-[820px]">
                 <TableHeader>
                   <TableRow className="bg-stone-50/60 hover:bg-stone-50/60">
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Kelas</TableHead>
                     <TableHead>Santri</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Metode</TableHead>
+                    <TableHead>Jarak</TableHead>
+                    <TableHead>Bukti</TableHead>
                     <TableHead>Catatan</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -676,6 +851,17 @@ export function AttendanceAdmin() {
                       <TableCell className="text-sm text-stone-600">{r.className ?? '—'}</TableCell>
                       <TableCell className="text-sm font-medium text-stone-800">{r.student.fullName}</TableCell>
                       <TableCell><Badge className={statusBadgeClass(r.status)}>{r.status}</Badge></TableCell>
+                      <TableCell className="text-xs text-stone-600">{r.method ? (METHOD_LABEL[r.method] ?? r.method) : '—'}</TableCell>
+                      <TableCell className="text-xs tabular-nums text-stone-600">{r.distanceM != null ? `±${Math.round(r.distanceM)} m` : '—'}</TableCell>
+                      <TableCell>
+                        {r.proofUrl ? (
+                          <a href={r.proofUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900" aria-label={`Lihat bukti foto ${r.student.fullName}`}>
+                            Lihat Foto
+                          </a>
+                        ) : (
+                          <span className="text-xs text-stone-400">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="max-w-52 truncate text-xs text-stone-500">{r.note ?? '—'}</TableCell>
                     </TableRow>
                   ))}
@@ -856,6 +1042,40 @@ export function AttendanceAdmin() {
               <p className="text-center text-xs text-stone-500">
                 Sesi {qrSession.className} · {formatShortDate(qrSession.date)} · {qrSession.hadir}/{qrSession.total} hadir
               </p>
+              {/* Titik GPS absen (Task 33) */}
+              <div
+                className={cn(
+                  'w-full rounded-xl border p-3 text-xs',
+                  qrSession.lat != null ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-800',
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="inline-flex items-start gap-1.5">
+                    <MapPin className="mt-0.5 size-3.5 shrink-0" />
+                    {qrSession.lat != null ? (
+                      <span>
+                        Titik absen aktif{qrSession.locAccuracy != null ? ` (±${Math.round(qrSession.locAccuracy)} m)` : ''} — santri hanya bisa check-in ≤ 20 m dari sini.
+                      </span>
+                    ) : (
+                      <span>
+                        Sesi belum punya titik GPS — check-in santri akan DITOLAK. Tekan
+                        "Perbarui Titik GPS" dari posisi Anda di kelas.
+                      </span>
+                    )}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                    disabled={refreshingLoc}
+                    onClick={() => void refreshAnchor(qrSession)}
+                    aria-label="Perbarui titik GPS sesi"
+                  >
+                    {refreshingLoc ? <Loader2 className="size-3 animate-spin" /> : <MapPin className="size-3" />}
+                    Perbarui Titik GPS
+                  </Button>
+                </div>
+              </div>
               <Button variant="outline" size="sm" onClick={() => copyCode(qrSession.code)}>
                 <Copy className="size-3.5" /> Salin Kode
               </Button>

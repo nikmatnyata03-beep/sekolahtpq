@@ -132,6 +132,13 @@ model Session {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  // ==== GPS titik absen (Task 33) ====
+  // Anchor tempat QR dibuat — check-in santri divalidasi ≤ 20 m dari titik ini.
+  lat         Float?
+  lng         Float?
+  locAccuracy Float?    // akurasi GPS perangkat ustadz (meter)
+  locAt       DateTime? // waktu titik diambil (bisa diperbarui ustadz dari dialog QR)
+
   attendances Attendance[]
 }
 
@@ -144,6 +151,22 @@ model Attendance {
   status    String // HADIR | IZIN | SAKIT | ALPA
   note      String?
   createdAt DateTime @default(now())
+
+  // ==== GPS + bukti foto (Task 33) ====
+  method        String?   // QR_GPS | IZIN_FOTO | SAKIT_FOTO | ALPA_MANUAL | LEGACY
+  lat           Float?    // GPS perangkat saat check-in HADIR
+  lng           Float?
+  accuracy      Float?    // akurasi (meter)
+  gpsAt         DateTime? // timestamp posisi klien (dicek freshness ≤ 3 menit)
+  distanceM     Float?    // jarak server-computed ke titik absen sesi
+  gpsFlags      String?   // JSON hasil heuristik anti-fakeGPS
+  proofUrl      String?   // foto surat izin/sakit (R2 → /api/files/...)
+  proofLat      Float?    // GPS kamera ustadz saat memotret surat
+  proofLng      Float?
+  proofAccuracy Float?
+  proofAt       DateTime?
+  proofGpsFlags String?
+  recordedBy    String?   // nama ustadz perekam izin/sakit/alpa
 
   @@unique([sessionId, studentId])
 }

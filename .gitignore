@@ -75,3 +75,4 @@ server.log
 .agent-credentials.local
 scripts/set-local-qa-admin.ts
 scripts/set-local-qa-parent.ts
+scripts/qa-gps-absensi.ts

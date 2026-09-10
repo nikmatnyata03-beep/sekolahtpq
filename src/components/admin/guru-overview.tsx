@@ -43,6 +43,7 @@ import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import { JUZ30_SURAHS, targetProgress, type TargetProgress } from '@/lib/hafalan-utils'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { ProofPhotoInput, type ProofPhoto } from './proof-photo-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -403,8 +404,10 @@ function QuickSetoranSheet({ student, tp, open, onOpenChange, onSaved }: {
 type AttStatus = 'HADIR' | 'IZIN' | 'SAKIT' | 'ALPA'
 
 // Kelas warna on/off persis mengikuti STATUSES di attendance-admin.tsx.
+// Task 33: HADIR dihapus dari pilihan manual — hadir hanya via check-in
+// QR + GPS santri; ustadz hanya menandai IZIN (wajib foto surat), SAKIT
+// (wajib foto surat), dan ALPA.
 const ABSEN_STATUSES: ReadonlyArray<{ value: AttStatus; label: string; on: string; off: string }> = [
-  { value: 'HADIR', label: 'Hadir', on: 'bg-emerald-700 text-white border-emerald-700', off: 'border-stone-200 bg-white text-stone-600 hover:border-emerald-300' },
   { value: 'IZIN', label: 'Izin', on: 'bg-amber-500 text-white border-amber-500', off: 'border-stone-200 bg-white text-stone-600 hover:border-amber-300' },
   { value: 'SAKIT', label: 'Sakit', on: 'bg-orange-500 text-white border-orange-500', off: 'border-stone-200 bg-white text-stone-600 hover:border-orange-300' },
   { value: 'ALPA', label: 'Alpa', on: 'bg-red-600 text-white border-red-600', off: 'border-stone-200 bg-white text-stone-600 hover:border-red-300' },
@@ -428,6 +431,7 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
 }) {
   const { toast } = useToast()
   const [rows, setRows] = useState<Record<string, QuickAbsenRow>>({})
+  const [proofs, setProofs] = useState<Record<string, ProofPhoto | null>>({})
   const [loading, setLoading] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -439,6 +443,7 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
     if (!open || !sessionId) return
     let cancelled = false
     setRows({})
+    setProofs({})
     setLoadFailed(false)
     setLoading(true)
     apiGet<AttendanceRecord[]>(`/api/attendance?sessionId=${sessionId}`)
@@ -494,10 +499,35 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
     if (!session || !canSubmit) return
     const records = students.flatMap((st) => {
       const row = rows[st.id]
-      if (!row || !row.status) return []
-      return [{ studentId: st.id, status: row.status, note: row.note.trim() || undefined }]
+      if (!row || !row.status || row.status === 'HADIR') return []
+      const needsProof = row.status === 'IZIN' || row.status === 'SAKIT'
+      const proof = needsProof ? proofs[st.id] : undefined
+      if (needsProof && !proof) return []
+      return [{
+        studentId: st.id,
+        status: row.status,
+        note: row.note.trim() || undefined,
+        ...(proof
+          ? {
+              proof: {
+                dataUrl: proof.dataUrl,
+                lat: proof.lat,
+                lng: proof.lng,
+                accuracy: proof.accuracy ?? undefined,
+                posTs: proof.posTs,
+              },
+            }
+          : {}),
+      }]
     })
-    if (records.length === 0) return
+    if (records.length === 0) {
+      toast({
+        title: 'Foto surat wajib',
+        description: 'IZIN/SAKIT hanya bisa disimpan dgn foto surat bukti. ALPA tanpa foto.',
+        variant: 'destructive',
+      })
+      return
+    }
     setSaving(true)
     try {
       await apiSend<{ success: boolean; count: number }>('/api/attendance', 'POST', {
@@ -564,6 +594,25 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
             <ul className="divide-y divide-stone-100">
               {students.map((st) => {
                 const row = rows[st.id]
+                // HADIR lama = hasil check-in QR santri — terkunci, tidak dapat diubah.
+                if (row?.status === 'HADIR') {
+                  return (
+                    <li key={st.id} className="py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          aria-hidden="true"
+                          className="grid size-9 shrink-0 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700"
+                        >
+                          {initialsOf(st.fullName)}
+                        </span>
+                        <p className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">{st.fullName}</p>
+                        <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          HADIR · via QR+GPS
+                        </span>
+                      </div>
+                    </li>
+                  )
+                }
                 return (
                   <li key={st.id} className="py-2.5">
                     <div className="flex items-center gap-2.5">
@@ -571,7 +620,7 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
                         aria-hidden="true"
                         className={cn(
                           'grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold',
-                          row?.status ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500',
+                          row?.status ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500',
                         )}
                       >
                         {initialsOf(st.fullName)}
@@ -583,7 +632,7 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
                     <div
                       role="group"
                       aria-label={`Status kehadiran ${st.fullName}`}
-                      className="mt-2 grid grid-cols-4 gap-1"
+                      className="mt-2 grid grid-cols-3 gap-1"
                     >
                       {ABSEN_STATUSES.map((s) => (
                         <button
@@ -603,14 +652,23 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
                         </button>
                       ))}
                     </div>
-                    {row?.status && row.status !== 'HADIR' && (
-                      <Input
-                        value={row.note}
-                        onChange={(e) => updateRow(st.id, { note: e.target.value })}
-                        placeholder="Catatan untuk orang tua (opsional)"
-                        aria-label={`Catatan untuk orang tua ${st.fullName}`}
-                        className="mt-2 h-9 text-xs"
-                      />
+                    {(row?.status === 'IZIN' || row?.status === 'SAKIT') && (
+                      <>
+                        <Input
+                          value={row.note}
+                          onChange={(e) => updateRow(st.id, { note: e.target.value })}
+                          placeholder="Catatan untuk orang tua (opsional)"
+                          aria-label={`Catatan untuk orang tua ${st.fullName}`}
+                          className="mt-2 h-9 text-xs"
+                        />
+                        <ProofPhotoInput
+                          studentName={st.fullName}
+                          kind={row.status}
+                          value={proofs[st.id] ?? null}
+                          onChange={(v) => setProofs((prev) => ({ ...prev, [st.id]: v }))}
+                          disabled={saving}
+                        />
+                      </>
                     )}
                   </li>
                 )

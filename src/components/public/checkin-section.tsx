@@ -1,8 +1,9 @@
 'use client'
 
-// Absensi QR dua arah — santri/wali memindai QR kelas (atau mengetik kode) →
-// daftar santri kelas dimuat via /api/public/checkin-roster (kunci = kode sesi)
-// → pilih nama → POST /api/attendance/checkin.
+// Absensi QR dua arah + VALIDASI GPS (Task 33) — santri/wali memindai QR kelas
+// (atau mengetik kode) → daftar santri kelas dimuat via /api/public/checkin-roster
+// (kunci = kode sesi) → pilih nama → POST /api/attendance/checkin dgn GPS.
+// HADIR hanya sah bila perangkat ≤ 20 m dari titik QR ustadz (server-side).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -13,6 +14,7 @@ import {
   Clock,
   Info,
   Loader2,
+  MapPin,
   RefreshCw,
   ScanLine,
   Users,
@@ -33,6 +35,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
+import { getGpsFix, GpsUnavailableError, type GpsFix } from '@/lib/gps-client'
 import type { SessionItem } from '@/lib/types'
 
 type CheckinResult = { success?: boolean; already?: boolean; message?: string }
@@ -63,6 +66,27 @@ export function CheckinSection() {
   const [studentId, setStudentId] = useState<string>('')
   const [code, setCode] = useState<string>('')
   const [checking, setChecking] = useState(false)
+
+  // ==== GPS wajib (Task 33) — diambil otomatis saat halaman dibuka ====
+  const [gps, setGps] = useState<GpsFix | null>(null)
+  const [gpsState, setGpsState] = useState<'locating' | 'ok' | 'error'>('locating')
+  const [gpsError, setGpsError] = useState<string | null>(null)
+  const acquireGps = useCallback(async () => {
+    setGpsState('locating')
+    setGpsError(null)
+    try {
+      const fix = await getGpsFix()
+      setGps(fix)
+      setGpsState('ok')
+    } catch (e) {
+      setGps(null)
+      setGpsState('error')
+      setGpsError(e instanceof GpsUnavailableError ? e.message : 'Lokasi gagal diambil. Coba lagi.')
+    }
+  }, [])
+  useEffect(() => {
+    void acquireGps()
+  }, [acquireGps])
 
   // Daftar santri kelas (dari kode sesi) — bukan seluruh sekolah.
   const [roster, setRoster] = useState<RosterPayload | null>(null)
@@ -186,6 +210,14 @@ export function CheckinSection() {
   // (Dropdown santri kini berasal dari roster per kode sesi — lihat effect di atas.)
 
   const handleCheckin = async () => {
+    if (!gps) {
+      toast({
+        title: 'GPS Belum Siap',
+        description: 'Check-in wajib GPS untuk mencegah absen palsu. Tunggu lokasi terkunci atau tekan Coba Lagi.',
+        variant: 'destructive',
+      })
+      return
+    }
     if (!studentId) {
       toast({
         title: 'Santri Belum Dipilih',
@@ -207,6 +239,7 @@ export function CheckinSection() {
       const result = await apiSend<CheckinResult>('/api/attendance/checkin', 'POST', {
         code: code.trim().toUpperCase(),
         studentId,
+        gps: { lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, posTs: gps.posTs },
       })
       if (result?.already) {
         toast({
@@ -256,11 +289,11 @@ export function CheckinSection() {
         {/* Info box QR */}
         <Alert className="mx-auto mb-8 max-w-3xl rounded-2xl border-emerald-200 bg-emerald-50/70 text-emerald-900">
           <Info className="size-4 text-emerald-700" />
-          <AlertTitle className="text-emerald-900">Absensi QR Dua Arah</AlertTitle>
+          <AlertTitle className="text-emerald-900">Absensi QR + Validasi GPS</AlertTitle>
           <AlertDescription className="text-emerald-800/80">
-            Ustadz menayangkan QR sesi — santri memindainya dengan kamera ponsel (tanpa aplikasi
-            tambahan) dan halaman ini terbuka dengan kode terisi otomatis. Tanpa kamera? Kode yang
-            sama cukup diketik manual pada kolom &quot;kode kehadiran&quot;.
+            Ustadz menayangkan QR sesi — santri memindainya dengan kamera ponsel dan halaman ini
+            terbuka dengan kode terisi otomatis. Kehadiran hanya sah bila perangkat berada
+            <span className="font-semibold"> maksimal 20 meter dari titik kelas</span> (anti absen palsu).
           </AlertDescription>
         </Alert>
 
@@ -357,6 +390,54 @@ export function CheckinSection() {
                     </div>
                   )}
 
+                  {/* ==== Status GPS (wajib utk check-in) ==== */}
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5">
+                      <MapPin className="size-3.5 text-emerald-600" /> Lokasi GPS (wajib — validasi 20 m)
+                    </Label>
+                    {gpsState === 'locating' && (
+                      <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
+                        <Loader2 className="size-4 animate-spin text-emerald-600" />
+                        Mengunci posisi GPS…
+                      </div>
+                    )}
+                    {gpsState === 'ok' && gps && (
+                      <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
+                          GPS siap{gps.accuracy != null ? ` (±${Math.round(gps.accuracy)} m)` : ''}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-emerald-700 hover:bg-emerald-100"
+                          onClick={() => void acquireGps()}
+                          aria-label="Perbarui posisi GPS"
+                        >
+                          <RefreshCw className="size-3" /> Segarkan
+                        </Button>
+                      </div>
+                    )}
+                    {gpsState === 'error' && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+                          <span>{gpsError}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 h-8 border-red-300 text-red-700 hover:bg-red-100"
+                          onClick={() => void acquireGps()}
+                        >
+                          <RefreshCw className="size-3.5" /> Coba Lagi
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   {/* ==== Daftar santri kelas (muncul otomatis dari kode sesi) ==== */}
                   <div className="space-y-1.5">
                     <Label htmlFor="checkin-student">Pilih Santri</Label>
@@ -414,7 +495,7 @@ export function CheckinSection() {
                     type="button"
                     size="lg"
                     className="w-full bg-emerald-700 font-semibold shadow-md hover:bg-emerald-800"
-                    disabled={checking || !studentId}
+                    disabled={checking || !studentId || gpsState !== 'ok'}
                     onClick={() => void handleCheckin()}
                   >
                     {checking ? (

@@ -87,10 +87,16 @@ export interface SessionItem {
   date: string
   topic: string | null
   code?: string // rahasia — hanya dikirim ke ADMIN/GURU; publik undefined
+  lat?: number | null // titik GPS absen — hanya utk staff (Task 33)
+  lng?: number | null
+  locAccuracy?: number | null
+  locAt?: string | null
   isActive: boolean
   total: number
   hadir: number
 }
+
+export type AttendanceMethod = 'QR_GPS' | 'IZIN_FOTO' | 'SAKIT_FOTO' | 'ALPA_MANUAL' | 'LEGACY'
 
 export interface AttendanceRecord {
   id: string
@@ -101,6 +107,14 @@ export interface AttendanceRecord {
   createdAt: string
   student: { id: string; fullName: string; nis: string }
   className?: string
+  // ==== Task 33: GPS + bukti foto ====
+  method?: AttendanceMethod | null
+  lat?: number | null
+  lng?: number | null
+  accuracy?: number | null
+  distanceM?: number | null
+  proofUrl?: string | null
+  recordedBy?: string | null
 }
 
 export interface Hafalan {
