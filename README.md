@@ -162,6 +162,9 @@ Panduan lengkap + arsitektur + troubleshooting: **[DEPLOY-CLOUDFLARE.md](DEPLOY-
 
 ## 🔐 Catatan Keamanan
 
+Pemetaan metodologi Strix untuk AI Pentest dan batas coverage tersedia di
+**[docs/security/strix-integration.md](docs/security/strix-integration.md)**.
+
 File berikut sengaja **tidak** ikut ke repository (lihat `.gitignore`):
 
 - `db/custom.db` — database berisi data pribadi santri & hash akun
