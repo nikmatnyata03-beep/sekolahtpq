@@ -885,17 +885,27 @@ function QrCheckinCard({
           {classSessions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium text-stone-500">Kode sesi aktif kelas {child.className}:</span>
-              {classSessions.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setCode(s.code)}
-                  className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 font-mono text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
-                  title={s.topic ? `Topik: ${s.topic}` : 'Sesi aktif'}
-                >
-                  {s.code}
-                </button>
-              ))}
+              {classSessions.map((s) =>
+                s.code ? (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setCode(s.code!)}
+                    className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 font-mono text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+                    title={s.topic ? `Topik: ${s.topic}` : 'Sesi aktif'}
+                  >
+                    {s.code}
+                  </button>
+                ) : (
+                  <span
+                    key={s.id}
+                    className="rounded-full border border-stone-200 bg-white px-2.5 py-1 text-xs text-stone-400"
+                    title="Minta kode lewat QR yang ditayangkan ustadz/ustadzah"
+                  >
+                    Kode via QR ustadz
+                  </span>
+                ),
+              )}
             </div>
           ) : (
             <p className="text-xs text-stone-500">

@@ -5,9 +5,19 @@ import { broadcastPresence } from '@/lib/presence-broadcast'
 
 export async function GET(req: NextRequest) {
   // Daftar sesi dipakai halaman cek-in publik -> tetap terbuka, NAMAI kode
-  // kerahasiaan QR hanya dikirim ke admin/guru (publik tak boleh lihat kode).
+  // kerahasiaan QR: admin/guru melihat semua; WALI hanya kode sesi kelas
+  // tempat anaknya terdaftar (dipakai check-in anak di portal wali);
+  // publik anonim tidak menerima kode sama sekali (jalurnya via QR/roster).
   const session = await getSession(req)
   const staff = session?.role === 'ADMIN' || session?.role === 'GURU'
+  let parentClassIds: string[] = []
+  if (session?.role === 'ORANG_TUA') {
+    const kids = await db.student.findMany({
+      where: { parentId: session.id },
+      select: { classId: true },
+    })
+    parentClassIds = [...new Set(kids.map((k) => k.classId))]
+  }
   const active = req.nextUrl.searchParams.get('active')
   const classId = req.nextUrl.searchParams.get('classId')
   const sessions = await db.session.findMany({
@@ -30,7 +40,7 @@ export async function GET(req: NextRequest) {
       classLevel: s.class.level,
       date: s.date,
       topic: s.topic,
-      code: staff ? s.code : undefined,
+      code: (staff || (session?.role === 'ORANG_TUA' && parentClassIds.includes(s.classId))) ? s.code : undefined,
       isActive: s.isActive,
       total: s.attendances.length,
       hadir: s.attendances.filter((a) => a.status === 'HADIR').length,
