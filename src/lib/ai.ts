@@ -79,6 +79,61 @@ export async function runAi(system: string, user: string, maxTokens = 1500): Pro
   }
 }
 
+/** Giliran percakapan multi-turn (Head Office chat) — sudah tervalidasi pemanggil. */
+export interface AiTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+async function workersAiChatTurns(
+  system: string,
+  turns: AiTurn[],
+  maxTokens: number,
+): Promise<{ ok: true; text: string } | { ok: false; error: string } | null> {
+  try {
+    const { env } = getCloudflareContext()
+    const ai = (env as { AI?: WorkersAiLike } | undefined)?.AI
+    if (!ai || typeof ai.run !== 'function') return null
+    const res = await ai.run(AI_MODEL, {
+      messages: [{ role: 'system', content: system }, ...turns],
+      max_tokens: maxTokens,
+      temperature: 0.6,
+    })
+    const text = extractResponse(res)
+    if (!text) return { ok: false, error: 'Workers AI mengembalikan respons kosong' }
+    return { ok: true, text }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[ai] Workers AI (multi-turn) gagal:', msg)
+    return { ok: false, error: msg.slice(0, 200) }
+  }
+}
+
+async function sdkChatTurns(system: string, turns: AiTurn[]): Promise<string> {
+  const { default: ZAI } = await import('z-ai-web-dev-sdk')
+  const zai = await ZAI.create()
+  const completion = await zai.chat.completions.create({
+    messages: [{ role: 'assistant', content: system }, ...turns],
+    thinking: { type: 'disabled' },
+  })
+  const text = completion.choices[0]?.message?.content?.trim()
+  if (!text) throw new Error('Respons AI kosong')
+  return text
+}
+
+/** Chat multi-turn: Workers AI dulu, fallback z-ai-web-dev-sdk (lokal). Task 55. */
+export async function runAiMessages(system: string, turns: AiTurn[], maxTokens = 1500): Promise<string> {
+  const viaWorkers = await workersAiChatTurns(system, turns, maxTokens)
+  if (viaWorkers?.ok) return viaWorkers.text
+  const workersErr = viaWorkers ? viaWorkers.error : 'binding AI tidak tersedia di runtime ini'
+  try {
+    return await sdkChatTurns(system, turns)
+  } catch (e) {
+    const sdkErr = e instanceof Error ? e.message : String(e)
+    throw new Error(`Workers AI: ${workersErr} | fallback SDK: ${sdkErr.slice(0, 160)}`)
+  }
+}
+
 export function aiErrorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
   return 'Layanan AI sedang tidak tersedia. Silakan coba lagi sebentar. (' + msg.slice(0, 140) + ')'

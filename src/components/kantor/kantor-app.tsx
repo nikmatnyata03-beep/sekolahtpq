@@ -2,7 +2,7 @@
 // Kantor AI Agent — app shell: fetch manifest /api/assets, header kontrol,
 // panel divisi + form kritik/saran, loading bar, fallback 2D. (Task 51)
 // Task 52 — kontrol akses: access='full' (ADMIN/DEVELOPER) dapat kritik-saran
-// + Chat Head Office (Gemini live); access='view' (GURU) hanya melihat.
+// + Chat Head Office (GLM internal live, Task 55); access='view' (GURU) hanya melihat.
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -79,7 +79,7 @@ export function KantorApp({ access = 'full', userName }: { access?: 'full' | 'vi
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-700 text-white shadow"><Sparkles className="h-5 w-5" /></div>
             <div>
               <h1 className="text-base font-bold leading-tight text-stone-900" data-testid="judul-kantor">Kantor AI Agent</h1>
-              <p className="text-[11px] leading-tight text-stone-500">Head: Gemini 3.6 Flash · Divisi: GLM 5.3 Flash</p>
+              <p className="text-[11px] leading-tight text-stone-500">Head: GLM (internal) · Divisi: GLM 5.3 Flash</p>
             </div>
           </div>
 

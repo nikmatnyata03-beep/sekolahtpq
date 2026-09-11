@@ -1,6 +1,6 @@
 'use client'
-// Panel obrolan Head Office + mode Agent Antigravity — Task 52/53/54.
-// Mode "Chat": Q&A cepat via Gemini 3.6 Flash (/api/kantor/chat).
+// Panel obrolan Head Office + mode Agent Antigravity — Task 52/53/54/55.
+// Mode "Chat": Q&A cepat via GLM internal SIMADJI (/api/kantor/chat → src/lib/ai.ts).
 // Mode "Agent": tugas agentic via Antigravity agent — sandbox remote Google,
 // bisa eksekusi kode & jelajah web, hasil 1–5 menit (/api/kantor/agent).
 // Hanya dirender untuk ADMIN & DEVELOPER (akses penuh). Saat balasan tiba,
@@ -24,7 +24,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       role: 'assistant',
-      content: `Selamat datang, ${userName}. Saya Head Office (Gemini 3.6 Flash) — siap membantu. Ada yang bisa saya bantu?`,
+      content: `Selamat datang, ${userName}. Saya Head Office (GLM) — siap membantu. Ada yang bisa saya bantu?`,
     },
   ])
   const [mode, setMode] = useState<Mode>('chat')
@@ -126,7 +126,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-stone-900">Head Office</p>
           <p className={`text-[10px] font-medium ${isAgent ? 'text-amber-600' : 'text-emerald-600'}`}>
-            {isAgent ? 'Antigravity Agent · sandbox remote' : 'Gemini 3.6 Flash · online'}
+            {isAgent ? 'Antigravity Agent · sandbox remote' : 'GLM · online'}
           </p>
         </div>
         {messages.length > 1 && (
