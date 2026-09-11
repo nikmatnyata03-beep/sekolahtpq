@@ -39,8 +39,20 @@ cmd="${1:-list}"; shift || true
 case "$cmd" in
 
   list)
-    gh GET "$API/issues?labels=ai-task&state=open&per_page=20&sort=created&direction=asc" |
-      jq -r 'if type=="array" then (if length==0 then "(kosong — tidak ada tugas ai-task terbuka)" else .[] | "#\(.number) | \(.title) | label: \([.labels[].name] | join(","))" end) else "ERROR: \(tostring)" end'
+    issues=$(gh GET "$API/issues?labels=ai-task&state=open&per_page=20&sort=created&direction=asc" |
+      jq -r 'if type=="array" then (if length==0 then "" else .[] | "#\(.number) | \(.title) | label: \([.labels[].name] | join(","))" end) else "ERROR: \(tostring)" end') || issues=""
+    # Task 57-c — jembatan antrian chat Head Office (/kantor) ke poller ini.
+    # Baris "#CHAT-..." BUKAN GitHub issue: proses sesuai docs/KANTOR-CHAT-AGENT.md
+    # (scripts/kantor-chat-agent.sh claim → reply/error). Saat QA lokal, arahkan
+    # dengan env KANTOR_CHAT_BASE=http://localhost:3000.
+    chats=$(bash "$ROOT/scripts/kantor-chat-agent.sh" pending 2>/dev/null |
+      jq -r '.pending // [] | .[] | "#CHAT-\(.id) | [KANTOR-CHAT] \(.user.role // "?") \(.user.name // "?") | \((.content // "") | gsub("\\s+";" ") | .[0:80])"' 2>/dev/null) || chats=""
+    if [[ -z "$issues" && -z "$chats" ]]; then
+      echo "(kosong — tidak ada tugas ai-task terbuka)"
+    else
+      [[ -n "$issues" ]] && printf '%s\n' "$issues"
+      [[ -n "$chats" ]] && printf '%s\n' "$chats"
+    fi
     ;;
 
   show)

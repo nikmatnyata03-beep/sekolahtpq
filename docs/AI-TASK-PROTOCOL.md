@@ -106,3 +106,32 @@ bash scripts/ai-task.sh done 12 "hasil..."  # lapor + tutup
 bash scripts/ai-task.sh reject 12 "alasan"  # butuh info
 bash scripts/ai-task.sh setup-labels        # siapkan label sekali di awal
 ```
+
+## 7. Baris `#CHAT-…` — antrian chat Head Office (Task 57-c)
+
+Sejak Task 57, chat Head Office di `/kantor` bersifat asinkron: pesan pengguna
+tersimpan di D1 dan dijawab agen saat poller berjalan. `ai-task.sh list` kini
+JUGA menampilkan antrian tersebut sebagai baris:
+
+```
+#CHAT-<messageId> | [KANTOR-CHAT] <ROLE> <nama> | <cuplikan isi pesan>
+```
+
+Aturan pemrosesan (jangan tertukar dengan issue GitHub):
+
+1. `#CHAT-...` **BUKAN** GitHub issue — JANGAN pakai `show/claim/done/reject`
+   `ai-task.sh` untuk itu (semuanya akan error).
+2. Bila ada issue GitHub terbuka → kerjakan issue itu dulu seperti biasa;
+   chat boleh menyusul di giliran berikutnya.
+3. Proses chat maksimal **5 pesan** per giliran sesuai
+   **docs/KANTOR-CHAT-AGENT.md**:
+   ```bash
+   bash scripts/kantor-chat-agent.sh pending            # sudah tampil di list
+   bash scripts/kantor-chat-agent.sh claim <messageId>  # wajib sebelum jawab (409 = diambil agen lain)
+   bash scripts/kantor-chat-agent.sh reply <messageId> "jawaban"
+   bash scripts/kantor-chat-agent.sh error <messageId> "alasan tak bisa dijawab"
+   ```
+4. Jawab sesuai role pengirim & batasan keamanan §4 — rinciannya ada di
+   docs/KANTOR-CHAT-AGENT.md (DEVELOPER: bebas topik pengembangan web;
+   ADMIN: informatif saja; larangan kebocoran kredensial/data sensitif tetap mutlak).
+5. Laporan akhir giliran sebut jumlah chat diproses, mis. "chat: 2 dijawab".
