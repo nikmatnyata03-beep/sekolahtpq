@@ -81,3 +81,6 @@ scripts/qa-pentest-guru.ts
 scripts/tmp-set-pentest-pw.ts
 scripts/tmp-inspect.ts
 scripts/seed-qa-suspicious.ts
+
+# runtime lokal (berubah tiap sandbox)
+.zscripts/dev.pid
