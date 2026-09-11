@@ -117,6 +117,9 @@ export interface AttendanceRecord {
   distanceM?: number | null
   proofUrl?: string | null
   recordedBy?: string | null
+  // ==== Task 42: heuristik perangkat ganda (staff-only) ====
+  gpsFlags?: string | null
+  deviceHash?: string | null
 }
 
 export interface Hafalan {

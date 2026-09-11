@@ -167,6 +167,7 @@ model Attendance {
   proofAt       DateTime?
   proofGpsFlags String?
   recordedBy    String?   // nama ustadz perekam izin/sakit/alpa
+  deviceHash    String?   // Task 42: fingerprint ringan perangkat check-in (anti 1 HP banyak santri)
 
   @@unique([sessionId, studentId])
 }

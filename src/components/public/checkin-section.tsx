@@ -4,6 +4,8 @@
 // (atau mengetik kode) → daftar santri kelas dimuat via /api/public/checkin-roster
 // (kunci = kode sesi) → pilih nama → POST /api/attendance/checkin dgn GPS.
 // HADIR hanya sah bila perangkat ≤ 20 m dari titik QR ustadz (server-side).
+// Task 42: fingerprint perangkat ringan dikirim + konfirmasi wali bila 1 HP
+// dipakai check-in santri lain di sesi yang sama (verifikasi ustadz menyusul).
 
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -17,9 +19,20 @@ import {
   MapPin,
   RefreshCw,
   ScanLine,
+  Smartphone,
   Users,
   X,
 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -36,11 +49,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { useGpsFix } from '@/hooks/use-gps-fix'
 import { useQrScanner } from '@/hooks/use-qr-scanner'
-import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
+import { apiGet, apiSendFull, formatShortDate } from '@/lib/api-client'
+import { collectDeviceSignal } from '@/lib/device-fingerprint'
 import { type GpsFix } from '@/lib/gps-client'
 import type { SessionItem } from '@/lib/types'
 
-type CheckinResult = { success?: boolean; already?: boolean; message?: string }
+type CheckinResult = { success?: boolean; already?: boolean; message?: string; sharedDevice?: boolean }
+type DupDevicePayload = { code?: string; otherName?: string; error?: string }
 type RosterStudent = { id: string; fullName: string; nis: string }
 type RosterPayload = {
   session: { id: string; className: string; classLevel?: string; topic?: string | null; date?: string }
@@ -56,6 +71,8 @@ export function CheckinSection() {
   const [studentId, setStudentId] = useState<string>('')
   const [code, setCode] = useState<string>('')
   const [checking, setChecking] = useState(false)
+  // Task 42: perangkat ganda terdeteksi server → dialog konfirmasi wali
+  const [dupPrompt, setDupPrompt] = useState<{ otherName: string; message: string } | null>(null)
 
   // ==== GPS wajib (Task 33/34) — hook bersama, auto-request saat halaman dibuka ====
   const { gps, state: gpsState, error: gpsError, acquire: acquireGps, ensureFresh } = useGpsFix()
@@ -135,7 +152,7 @@ export function CheckinSection() {
 
   // (Dropdown santri kini berasal dari roster per kode sesi — lihat effect di atas.)
 
-  const handleCheckin = async () => {
+  const handleCheckin = async (confirmSharedDevice = false) => {
     if (!studentId) {
       toast({
         title: 'Santri Belum Dipilih',
@@ -166,11 +183,31 @@ export function CheckinSection() {
         })
         return
       }
-      const result = await apiSend<CheckinResult>('/api/attendance/checkin', 'POST', {
+      // Task 42: fingerprint ringan non-PII (layar, tz, bahasa, core, RAM, sentuh).
+      const device = collectDeviceSignal()
+      const { status, data } = await apiSendFull<CheckinResult & DupDevicePayload>('/api/attendance/checkin', 'POST', {
         code: code.trim().toUpperCase(),
         studentId,
         gps: { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, posTs: fix.posTs },
+        device,
+        ...(confirmSharedDevice ? { confirmSharedDevice: true } : {}),
       })
+
+      // 409 DUP_DEVICE → tampilkan dialog konfirmasi (bukan toast error)
+      if (status === 409 && data?.code === 'DUP_DEVICE') {
+        setDupPrompt({
+          otherName: data.otherName ?? 'santri lain',
+          message:
+            data.error ??
+            'Perangkat yang sama baru saja dipakai check-in oleh santri lain di sesi ini.',
+        })
+        return
+      }
+      if (status >= 400) {
+        throw new Error(data?.error ?? 'Check-in gagal. Periksa kode dan lokasi GPS Anda.')
+      }
+
+      const result = data
       if (result?.already) {
         toast({
           title: 'Sudah Terabsen',
@@ -178,7 +215,7 @@ export function CheckinSection() {
         })
       } else {
         toast({
-          title: 'Check-in Berhasil',
+          title: result?.sharedDevice ? 'Check-in Terkirim — Menunggu Verifikasi' : 'Check-in Berhasil',
           description: result?.message ?? 'Kehadiran santri tercatat HADIR.',
         })
       }
@@ -528,6 +565,53 @@ export function CheckinSection() {
           </div>
         )}
       </div>
+
+      {/* ==== Task 42: dialog konfirmasi perangkat ganda (1 HP dipakai 2 santri) ==== */}
+      <AlertDialog
+        open={dupPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) setDupPrompt(null)
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                <Smartphone className="size-4.5" />
+              </span>
+              Perangkat Sama Terdeteksi
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm leading-relaxed text-stone-600">
+                <p>{dupPrompt?.message}</p>
+                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                  Jika Anda adalah <span className="font-semibold">wali dari kedua santri</span>{' '}
+                  (1 HP untuk beberapa anak), silakan lanjutkan — absensi akan dicatat dengan status{' '}
+                  <span className="font-semibold">&quot;menunggu verifikasi ustadz&quot;</span>.
+                  Ustadz pengampu akan mengonfirmasi kehadiran fisik anak Anda.
+                </p>
+                <p className="text-xs text-stone-400">
+                  Bukan perangkat Anda? Tutup dialog ini dan pastikan Anda memakai ponsel sendiri
+                  dengan GPS aktif.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-700 text-white hover:bg-emerald-800"
+              onClick={(e) => {
+                e.preventDefault()
+                setDupPrompt(null)
+                void handleCheckin(true)
+              }}
+            >
+              Ya, Tetap Absen (1 Wali 2 Anak)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }

@@ -32,6 +32,8 @@ const STATEMENTS: string[] = [
   `ALTER TABLE "Attendance" ADD COLUMN "proofAt" DATETIME`,
   `ALTER TABLE "Attendance" ADD COLUMN "proofGpsFlags" TEXT`,
   `ALTER TABLE "Attendance" ADD COLUMN "recordedBy" TEXT`,
+  // Task 42: fingerprint ringan perangkat check-in (anti 1 HP banyak santri)
+  `ALTER TABLE "Attendance" ADD COLUMN "deviceHash" TEXT`,
   `CREATE INDEX IF NOT EXISTS "Attendance_sessionId_method_idx" ON "Attendance"("sessionId", "method")`,
 ]
 

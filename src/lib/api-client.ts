@@ -75,6 +75,21 @@ export async function apiGet<T>(url: string): Promise<T> {
 }
 
 export async function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> {
+  const { data } = await apiSendFull<T>(url, method, body)
+  return data
+}
+
+/**
+ * Varian apiSend yang TIDAK melempar error untuk status 4xx — mengembalikan
+ * { status, data } apa adanya. Dipakai alur yang butuh payload terstruktur
+ * dari server (mis. Task 42: code 'DUP_DEVICE' + otherName utk dialog
+ * konfirmasi "1 HP dipakai 2 santri"). 5xx tetap dilaporkan runtime-error.
+ */
+export async function apiSendFull<T>(
+  url: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  body?: unknown,
+): Promise<{ status: number; data: T & { error?: string } }> {
   let res: Response
   try {
     res = await fetch(url, {
@@ -92,16 +107,13 @@ export async function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'DELETE',
   } catch {
     reportRuntimeError({ type: 'RUNTIME_FETCH', endpoint: url, message: `Respons bukan JSON (HTTP ${res.status})` })
     if (!res.ok) throw new Error('Terjadi kesalahan')
-    return {} as T
+    return { status: res.status, data: {} as T & { error?: string } }
   }
-  if (!res.ok) {
+  if (res.status >= 500) {
     const msg = (data as { error?: string })?.error || 'Terjadi kesalahan'
-    if (res.status >= 500) {
-      reportRuntimeError({ type: 'RUNTIME_HTTP5XX', endpoint: url, message: msg, detail: `HTTP ${res.status}` })
-    }
-    throw new Error(msg)
+    reportRuntimeError({ type: 'RUNTIME_HTTP5XX', endpoint: url, message: msg, detail: `HTTP ${res.status}` })
   }
-  return data as T
+  return { status: res.status, data: data as T & { error?: string } }
 }
 
 export function formatRupiah(n: number): string {

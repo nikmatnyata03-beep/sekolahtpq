@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
+  BadgeCheck,
   BookMarked,
   BookOpen,
   CalendarCheck,
@@ -419,6 +420,13 @@ interface QuickAbsenRow {
   note: string
 }
 
+// Task 42: flag perangkat ganda per santri (read-only di sheet — aksi penuh di menu Absensi).
+interface DupFlagInfo {
+  pending: boolean
+  approved: boolean
+  otherName: string | null
+}
+
 // Sheet "Absen Cepat": prefill dari GET /api/attendance?sessionId= lalu POST bulk
 // {sessionId, records[]} — route melakukan upsert + kirim WA ke wali per santri.
 // Pola Sheet mengikuti QuickSetoranSheet (side kanan, sm:max-w-md, header stone-50/60).
@@ -432,6 +440,7 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
   const { toast } = useToast()
   const [rows, setRows] = useState<Record<string, QuickAbsenRow>>({})
   const [proofs, setProofs] = useState<Record<string, ProofPhoto | null>>({})
+  const [dupFlags, setDupFlags] = useState<Record<string, DupFlagInfo>>({})
   const [loading, setLoading] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -450,10 +459,25 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
       .then((records) => {
         if (cancelled) return
         const next: Record<string, QuickAbsenRow> = {}
+        const dups: Record<string, DupFlagInfo> = {}
         for (const rec of records) {
           next[rec.studentId] = { status: rec.status, note: rec.note ?? '' }
+          // Task 42: baca flag perangkat ganda utk indikator amber
+          try {
+            const f = rec.gpsFlags ? (JSON.parse(rec.gpsFlags) as Record<string, unknown>) : {}
+            if (f.dupDevice === true) {
+              dups[rec.studentId] = {
+                pending: f.dupDeviceReviewed !== true,
+                approved: f.dupDeviceReviewed === true && f.reviewAction === 'approve',
+                otherName: typeof f.dupDeviceOf === 'string' ? f.dupDeviceOf : null,
+              }
+            }
+          } catch {
+            // flag rusak — abaikan
+          }
         }
         setRows(next)
+        setDupFlags(dups)
       })
       .catch(() => {
         // Gagal prefill: tetap bisa absen dari awal (hint amber tampil di bawah).
@@ -596,16 +620,35 @@ function QuickAbsenSheet({ session, students, open, onOpenChange, onSaved }: {
                 const row = rows[st.id]
                 // HADIR lama = hasil check-in QR santri — terkunci, tidak dapat diubah.
                 if (row?.status === 'HADIR') {
+                  const dup = dupFlags[st.id]
                   return (
                     <li key={st.id} className="py-2.5">
                       <div className="flex items-center gap-2.5">
                         <span
                           aria-hidden="true"
-                          className="grid size-9 shrink-0 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700"
+                          className={cn(
+                            'grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold',
+                            dup?.pending ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700',
+                          )}
                         >
                           {initialsOf(st.fullName)}
                         </span>
-                        <p className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">{st.fullName}</p>
+                        <p className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">
+                          {st.fullName}
+                          {dup?.pending && dup.otherName && (
+                            <span className="ml-1.5 text-[10px] font-normal text-amber-700">
+                              (perangkat sama dgn {dup.otherName})
+                            </span>
+                          )}
+                        </p>
+                        {dup?.pending && (
+                          <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                            PERANGKAT GANDA
+                          </span>
+                        )}
+                        {dup?.approved && (
+                          <BadgeCheck className="size-4 shrink-0 text-emerald-600" aria-label="Absen diverifikasi" />
+                        )}
                         <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold text-white">
                           HADIR · via QR+GPS
                         </span>

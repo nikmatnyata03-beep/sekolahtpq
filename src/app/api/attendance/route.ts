@@ -43,9 +43,10 @@ export async function GET(req: NextRequest) {
       className: r.session.class.name,
       session: undefined,
       // Bukti GPS hanya untuk staff (audit); wali cukup lihat metode + bukti foto.
+      // Task 42: deviceHash juga staff-only (bukan data wali).
       ...(['ADMIN', 'GURU'].includes(g.session.role)
         ? {}
-        : { lat: undefined, lng: undefined, accuracy: undefined, gpsFlags: undefined, proofLat: undefined, proofLng: undefined, proofAccuracy: undefined, proofGpsFlags: undefined }),
+        : { lat: undefined, lng: undefined, accuracy: undefined, gpsFlags: undefined, deviceHash: undefined, proofLat: undefined, proofLng: undefined, proofAccuracy: undefined, proofGpsFlags: undefined }),
     })),
   )
 }

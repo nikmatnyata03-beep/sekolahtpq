@@ -17,6 +17,9 @@ import {
   History,
   MapPin,
   Lock,
+  Smartphone,
+  BadgeCheck,
+  Ban,
   X,
 } from 'lucide-react'
 import type { AttendanceRecord, AuthUser, ClassRoom, SessionItem, Student } from '@/lib/types'
@@ -188,6 +191,9 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
   const [proofs, setProofs] = useState<Record<string, ProofPhoto | null>>({})
   const [loadingRoster, setLoadingRoster] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  // Task 42: record mentah per santri (gpsFlags/id) + aksi verifikasi perangkat ganda
+  const [existingMap, setExistingMap] = useState<Record<string, AttendanceRecord>>({})
+  const [reviewingId, setReviewingId] = useState<string | null>(null)
 
   // Rekap absensi bulanan
   const [recapClassId, setRecapClassId] = useState('none')
@@ -267,8 +273,10 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
         setStudents(roster)
         const map: Record<string, RecordState> = {}
         const proofMap: Record<string, ProofPhoto | null> = {}
+        const exMap: Record<string, AttendanceRecord> = {}
         for (const s of roster) {
           const found = existing.find((a) => a.studentId === s.id)
+          if (found) exMap[s.id] = found
           // HADIR lama = hasil QR (terkunci, tidak dapat diubah di sini)
           map[s.id] = {
             status: found && found.status !== 'HADIR' ? (found.status as AttStatus) : found ? 'HADIR' : null,
@@ -278,10 +286,12 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
         }
         setRecords(map)
         setProofs(proofMap)
+        setExistingMap(exMap)
       } catch {
         if (!cancelled) {
           setStudents([])
           setRecords({})
+          setExistingMap({})
         }
       } finally {
         if (!cancelled) setLoadingRoster(false)
@@ -298,6 +308,46 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
       ?.writeText(code)
       .then(() => toast({ title: 'Kode disalin', description: `Kode sesi ${code} siap dibagikan.` }))
       .catch(() => toast({ title: 'Gagal menyalin', description: 'Salin kode secara manual.' }))
+  }
+
+  // ==== Task 42: verifikasi absen perangkat ganda ====
+  // approve → tandai sah; revoke → batalkan kehadiran (ALPA + WA wali).
+  async function reviewAttendance(recordId: string, action: 'approve' | 'revoke') {
+    setReviewingId(recordId)
+    try {
+      const res = await apiSend<{ success: boolean; message?: string }>(
+        `/api/attendance/${recordId}/review`,
+        'POST',
+        { action },
+      )
+      toast({
+        title: action === 'approve' ? 'Absen Ditandai Sah' : 'Absen Dibatalkan',
+        description: res?.message ?? 'Status absensi diperbarui.',
+      })
+      // Muat ulang roster sesi — status/flag berubah
+      if (selectedSession) {
+        const existing = await apiGet<AttendanceRecord[]>(`/api/attendance?sessionId=${selectedSession.id}`)
+        const exMap: Record<string, AttendanceRecord> = {}
+        const map: Record<string, RecordState> = { ...records }
+        for (const a of existing) {
+          exMap[a.studentId] = a
+          map[a.studentId] = {
+            status: a.status as AttStatus,
+            note: a.note ?? '',
+          }
+        }
+        setExistingMap((prev) => ({ ...prev, ...exMap }))
+        setRecords(map)
+      }
+    } catch (e) {
+      toast({
+        title: 'Gagal memperbarui absen',
+        description: e instanceof Error ? e.message : 'Coba lagi sebentar.',
+        variant: 'destructive',
+      })
+    } finally {
+      setReviewingId(null)
+    }
   }
 
   async function openSession() {
@@ -822,16 +872,85 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
                     const rec = records[s.id] ?? { status: null as AttStatus | null, note: '' }
                     // HADIR hanya dari check-in QR santri — tampil terkunci (read-only).
                     if (rec.status === 'HADIR') {
+                      // Task 42: flag perangkat ganda dari gpsFlags (staff-only)
+                      let flags: Record<string, unknown> = {}
+                      try {
+                        flags = existingMap[s.id]?.gpsFlags
+                          ? (JSON.parse(existingMap[s.id].gpsFlags as string) as Record<string, unknown>)
+                          : {}
+                      } catch {
+                        flags = {}
+                      }
+                      const dupPending = flags.dupDevice === true && flags.dupDeviceReviewed !== true
+                      const dupApproved = flags.dupDeviceReviewed === true && flags.reviewAction === 'approve'
+                      const dupOf = typeof flags.dupDeviceOf === 'string' ? flags.dupDeviceOf : null
+                      const recordId = existingMap[s.id]?.id
                       return (
-                        <div key={s.id} className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3" data-testid="row-hadir-locked">
+                        <div
+                          key={s.id}
+                          className={cn(
+                            'rounded-xl border p-3',
+                            dupPending ? 'border-amber-300 bg-amber-50/60' : 'border-emerald-100 bg-emerald-50/50',
+                          )}
+                          data-testid={dupPending ? 'row-dup-device' : 'row-hadir-locked'}
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-medium text-stone-800">
                               {s.fullName} <span className="ml-1 font-mono text-[10px] text-stone-400">{s.nis}</span>
                             </p>
-                            <Badge className="gap-1 border-transparent bg-emerald-700 text-[10px] text-white">
-                              <Lock className="size-3" /> HADIR · via QR+GPS
-                            </Badge>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {dupPending ? (
+                                <Badge className="gap-1 border-transparent bg-amber-500 text-[10px] text-white">
+                                  <Smartphone className="size-3" /> Perangkat ganda · perlu verifikasi
+                                </Badge>
+                              ) : dupApproved ? (
+                                <Badge variant="outline" className="gap-1 border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700">
+                                  <BadgeCheck className="size-3" /> Diverifikasi
+                                  {typeof flags.reviewedBy === 'string' ? ` · ${flags.reviewedBy}` : ''}
+                                </Badge>
+                              ) : null}
+                              <Badge className="gap-1 border-transparent bg-emerald-700 text-[10px] text-white">
+                                <Lock className="size-3" /> HADIR · via QR+GPS
+                              </Badge>
+                            </div>
                           </div>
+                          {dupPending && dupOf && (
+                            <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-800">
+                              <Smartphone className="mt-0.5 size-3.5 shrink-0" />
+                              Perangkat yang sama juga dipakai check-in oleh <span className="font-semibold">{dupOf}</span> pada
+                              sesi ini — konfirmasi kehadiran fisik, lalu tandai sah atau batalkan.
+                            </p>
+                          )}
+                          {dupPending && recordId && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-100"
+                                disabled={reviewingId === recordId}
+                                onClick={() => void reviewAttendance(recordId, 'approve')}
+                                data-testid="btn-approve-dup"
+                              >
+                                {reviewingId === recordId ? (
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : (
+                                  <BadgeCheck className="size-3" />
+                                )}
+                                Tandai Sah
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1 border-red-300 px-2 text-xs text-red-600 hover:bg-red-50"
+                                disabled={reviewingId === recordId}
+                                onClick={() => void reviewAttendance(recordId, 'revoke')}
+                                data-testid="btn-revoke-dup"
+                              >
+                                <Ban className="size-3" />
+                                Batalkan Absen
+                              </Button>
+                            </div>
+                          )}
                           {rec.note && <p className="mt-1 text-xs text-stone-500">{rec.note}</p>}
                         </div>
                       )
