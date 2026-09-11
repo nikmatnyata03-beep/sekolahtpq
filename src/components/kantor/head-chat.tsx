@@ -14,6 +14,8 @@ import { Bot, Loader2, Send, Sparkles, Trash2, X } from 'lucide-react'
 interface ChatMsg {
   role: 'user' | 'assistant'
   content: string
+  /** bubble merah utk kegagalan request — tampil permanen (toast gampang terlewat) */
+  error?: boolean
 }
 
 type Mode = 'chat' | 'agent'
@@ -49,32 +51,57 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
     }
   }
 
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Task 54i: kirim tahan banting — timeout klien, error PERMANEN di bubble chat
+  // (toast 4 detik gampang terlewat → dulu terkesan "tombol mati"), teks user
+  // dikembalikan bila gagal, dan respons non-JSON (halaman error worker) tetap terbaca.
+  const send = async (e?: { preventDefault: () => void }) => {
+    e?.preventDefault()
     const text = input.trim()
     if (!text || sending) return
+    const isAgent = mode === 'agent'
+    const history = messages.slice(-12).filter((m, i) => !(i === 0 && m.role === 'assistant'))
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setSending(true)
-    getAgent('HEAD')?.talk(2.5, mode === 'agent' ? 'Menugaskan agent…' : 'Memproses…')
+    getAgent('HEAD')?.talk(2.5, isAgent ? 'Menugaskan agent…' : 'Memproses…')
     try {
-      const isAgent = mode === 'agent'
+      // Chat 40 dtk; Agent boleh 1–5 mnt (server membatasi diri 280 dtk)
       const res = await fetch(isAgent ? '/api/kantor/agent' : '/api/kantor/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: isAgent ? JSON.stringify({ tugas: text }) : JSON.stringify({ message: text, history: messages.slice(-12).filter((m, i) => !(i === 0 && m.role === 'assistant')) }),
+        body: isAgent ? JSON.stringify({ tugas: text }) : JSON.stringify({ message: text, history }),
+        signal: AbortSignal.timeout(isAgent ? 300_000 : 40_000),
       })
-      const body = (await res.json()) as { reply?: string; error?: string }
-      if (!res.ok || !body.reply) {
-        toast.error(body.error ?? 'Tidak ada respons dari server')
+      const raw = await res.text()
+      let body: { reply?: string; error?: string } | null = null
+      try {
+        body = JSON.parse(raw) as { reply?: string; error?: string }
+      } catch {
+        body = null
+      }
+      if (!res.ok || !body?.reply) {
+        const serverMsg = body?.error ?? (raw.trim() ? raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) : 'Server tidak merespons')
+        const pesan = `⚠️ Gagal (${res.status || 'jaringan'}): ${serverMsg}`
+        setMessages((prev) => [...prev, { role: 'assistant', content: pesan, error: true }])
+        setInput((cur) => cur || text) // teks user tidak hilang — tinggal kirim ulang
+        toast.error(serverMsg.slice(0, 120))
         return
       }
-      setMessages((prev) => [...prev, { role: 'assistant', content: body.reply as string }])
+      const reply = body.reply
+      setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
       // Head bicara di scene: bubble memuat potongan awal balasan
-      const ringkas = body.reply.replace(/\s+/g, ' ').slice(0, 90)
-      getAgent('HEAD')?.talk(5, ringkas + (body.reply.length > 90 ? '…' : ''))
-    } catch {
-      toast.error('Jaringan bermasalah — coba lagi.')
+      const ringkas = reply.replace(/\s+/g, ' ').slice(0, 90)
+      getAgent('HEAD')?.talk(5, ringkas + (reply.length > 90 ? '…' : ''))
+    } catch (err) {
+      const timeout = err instanceof DOMException && err.name === 'TimeoutError'
+      const pesan = timeout
+        ? isAgent
+          ? '⚠️ Agent belum selesai dalam 5 menit — coba tugas yang lebih kecil.'
+          : '⚠️ Head Office tidak menjawab dalam 40 detik — coba kirim ulang.'
+        : '⚠️ Jaringan bermasalah — periksa koneksi lalu kirim ulang.'
+      setMessages((prev) => [...prev, { role: 'assistant', content: pesan, error: true }])
+      setInput((cur) => cur || text)
+      toast.error(timeout ? 'Waktu tunggu habis' : 'Jaringan bermasalah')
     } finally {
       setSending(false)
     }
@@ -85,6 +112,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
   return (
     <div
       className="absolute end-2 bottom-2 z-30 flex max-h-[75vh] w-[calc(100vw-1rem)] max-w-sm flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl sm:end-4 sm:bottom-4"
+      style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
       data-testid="head-chat"
       role="dialog"
       aria-label="Obrolan Head Office"
@@ -150,9 +178,11 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
               className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${
                 m.role === 'user'
                   ? 'rounded-br-sm bg-emerald-700 text-white'
-                  : isAgent && i === messages.length - 1 && m.role === 'assistant'
-                    ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-900'
-                    : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
+                  : m.error
+                    ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
+                    : isAgent && i === messages.length - 1 && m.role === 'assistant'
+                      ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-900'
+                      : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
               }`}
             >
               {m.content}
@@ -179,7 +209,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
-              void send(e)
+              void send()
             }
           }}
           rows={1}
