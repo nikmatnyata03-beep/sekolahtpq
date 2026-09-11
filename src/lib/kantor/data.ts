@@ -35,7 +35,7 @@ export const KANTOR_CHARACTERS: KantorCharacter[] = [
     division: 'HEAD',
     colorHex: '#eab308',
     accentHex: '#fef3c7',
-    badge: 'Gemini 2.5 Flash',
+    badge: 'Gemini 3.6 Flash',
     role: 'Pemimpin kantor. Menerima laporan tiap divisi, menyusun prioritas, dan menjaga keseimbangan beban kerja seluruh agen.',
     tasks: ['Mereview laporan divisi', 'Menyusun prioritas pekanan', 'Rapat koordinasi harian'],
     tasksDone: 512,

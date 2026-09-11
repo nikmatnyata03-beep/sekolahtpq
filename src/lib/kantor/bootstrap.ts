@@ -69,6 +69,20 @@ async function seedAssets(): Promise<void> {
       })
     }
     if (missing.length > 0) console.log(`[kantor-schema] seed ${missing.length} aset divisi.`)
+
+    // Task 53: segarkan badge bila label model berubah (mis. Gemini 2.5 → 3.6).
+    // Idempoten — hanya menulis baris yang beda.
+    for (const c of KANTOR_CHARACTERS) {
+      try {
+        const row = await db.asset.findFirst({ where: { assetKey: c.assetKey }, select: { id: true, badge: true } })
+        if (row && row.badge !== c.badge) {
+          await db.asset.update({ where: { id: row.id }, data: { badge: c.badge, version: { increment: 1 } } })
+          console.log(`[kantor-schema] badge ${c.assetKey}: ${row.badge} → ${c.badge}`)
+        }
+      } catch (e) {
+        console.error('[kantor-schema] refresh badge gagal:', (e as Error).message?.slice(0, 120))
+      }
+    }
   } catch (e) {
     console.error('[kantor-schema] seed gagal:', (e as Error).message?.slice(0, 200))
   }

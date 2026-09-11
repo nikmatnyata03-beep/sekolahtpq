@@ -1,5 +1,6 @@
-// POST /api/kantor/chat — obrolan live dengan Head Office AI (Gemini 2.5 Flash).
+// POST /api/kantor/chat — obrolan live dengan Head Office AI (Gemini 3.6 Flash).
 // Task 52: akses penuh hanya ADMIN & DEVELOPER (guru = mode lihat saja di /kantor).
+// Task 53: model diganti gemini-3.6-flash (dapat dioverride via env GEMINI_MODEL).
 // Key dari env GEMINI_API_KEY (set di .env lokal / secret Cloudflare produksi).
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -19,7 +20,7 @@ const chatSchema = z.object({
 })
 
 const SYSTEM_INSTRUCTION = `Kamu adalah "Head Office", agen AI kepala di web 3D "Kantor AI Agent" milik SIMADJI (sistem manajemen TPQ Darul Jinan).
-Model yang kamu jalankan: Gemini 2.5 Flash. Kamu memimpin 6 divisi agen (semua bertenaga GLM 5.3 Flash): General Purpose, Explore, Plan, Frontend, Fullstack, dan PPT.
+Model yang kamu jalankan: Gemini 3.6 Flash. Kamu memimpin 6 divisi agen (semua bertenaga GLM 5.3 Flash): General Purpose, Explore, Plan, Frontend, Fullstack, dan PPT.
 Gaya bicara: profesional, hangat, ringkas — seperti kepala kantor yang efisien. Jawab MAKSIMAL ~120 kata dalam bahasa Indonesia.
 Kamu boleh membantu hal seputar kantor, tugas divisi, serta pertanyaan umum singkat. Jangan mengarang data santri/keuangan nyata — data operasional TPQ bukan wewenangmu di sini; arahkan ke dashboard SIMADJI.`
 
@@ -79,6 +80,9 @@ export async function POST(req: NextRequest) {
     }
     const { message, history } = parsed.data
 
+    // Task 53: model dapat dioverride tanpa deploy ulang kode (env GEMINI_MODEL)
+    const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash'
+
     const contents = [
       ...(history ?? []).map((h) => ({
         role: h.role === 'assistant' ? 'model' : 'user',
@@ -88,7 +92,7 @@ export async function POST(req: NextRequest) {
     ]
 
     const upstream = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
@@ -105,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok || !data) {
       const msg = data?.error?.message ?? `HTTP ${upstream.status}`
-      console.error('[kantor/chat] upstream error:', msg)
+      console.error(`[kantor/chat] upstream error (model=${MODEL}):`, msg)
       // Kasus spesifik: kredit prepayment Gemini habis (key valid, akun tanpa saldo)
       if (/prepayment|billing|credits?/i.test(msg)) {
         return NextResponse.json(

@@ -1,5 +1,5 @@
 'use client'
-// Panel obrolan live dengan Head Office AI (Gemini 2.5 Flash) — Task 52.
+// Panel obrolan live dengan Head Office AI (Gemini 3.6 Flash) — Task 52/53.
 // Hanya dirender untuk ADMIN & DEVELOPER (akses penuh). Saat balasan tiba,
 // agen HEAD di scene 3D di-trigger bicara (bubble) via agent-registry.
 import { useEffect, useRef, useState } from 'react'
@@ -17,7 +17,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       role: 'assistant',
-      content: `Selamat datang, ${userName}. Saya Head Office (Gemini 2.5 Flash) — siap membantu. Ada yang bisa saya bantu?`,
+      content: `Selamat datang, ${userName}. Saya Head Office (Gemini 3.6 Flash) — siap membantu. Ada yang bisa saya bantu?`,
     },
   ])
   const [input, setInput] = useState('')
@@ -74,7 +74,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-stone-900">Head Office</p>
-          <p className="text-[10px] font-medium text-emerald-600">Gemini 2.5 Flash · online</p>
+          <p className="text-[10px] font-medium text-emerald-600">Gemini 3.6 Flash · online</p>
         </div>
         {messages.length > 1 && (
           <button
