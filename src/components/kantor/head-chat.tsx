@@ -1,15 +1,15 @@
 'use client'
-// Panel obrolan Head Office + mode Agent Antigravity — Task 52/53/54/55.
-// Mode "Chat": Q&A cepat via GLM internal SIMADJI (/api/kantor/chat → src/lib/ai.ts).
-// Mode "Agent": tugas agentic via Antigravity agent — sandbox remote Google,
-// bisa eksekusi kode & jelajah web, hasil 1–5 menit (/api/kantor/agent).
+// Panel obrolan Head Office — Task 52/53/54/55/56.
+// Task 55: mesin chat = GLM internal SIMADJI (/api/kantor/chat → src/lib/ai.ts),
+// Gemini dipensiunkan. Task 56: mode Agent (Antigravity) DIHAPUS — panel kini
+// chat saja; endpoint /api/kantor/agent sudah dihapus bersama tab-nya.
 // Hanya dirender untuk ADMIN & DEVELOPER (akses penuh). Saat balasan tiba,
 // agen HEAD di scene 3D di-trigger bicara (bubble) via agent-registry.
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { getAgent } from './agent-registry'
-import { Bot, Loader2, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { Bot, Loader2, Send, Trash2, X } from 'lucide-react'
 
 interface ChatMsg {
   role: 'user' | 'assistant'
@@ -18,8 +18,6 @@ interface ChatMsg {
   error?: boolean
 }
 
-type Mode = 'chat' | 'agent'
-
 export function HeadChat({ userName, onClose }: { userName: string; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
@@ -27,7 +25,6 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
       content: `Selamat datang, ${userName}. Saya Head Office (GLM) — siap membantu. Ada yang bisa saya bantu?`,
     },
   ])
-  const [mode, setMode] = useState<Mode>('chat')
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -36,21 +33,6 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending])
 
-  const switchMode = (next: Mode) => {
-    if (sending || next === mode) return
-    setMode(next)
-    if (next === 'agent') {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content:
-            'Mode Agent (Antigravity) aktif. Beri tugas mandiri — mis. "cari 3 ide kegiatan TPQ dari web" atau "buat draft jadwal latihan". Agent bisa eksekusi kode & jelajah web; hasil butuh 1–5 menit.',
-        },
-      ])
-    }
-  }
-
   // Task 54i: kirim tahan banting — timeout klien, error PERMANEN di bubble chat
   // (toast 4 detik gampang terlewat → dulu terkesan "tombol mati"), teks user
   // dikembalikan bila gagal, dan respons non-JSON (halaman error worker) tetap terbaca.
@@ -58,19 +40,17 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
     e?.preventDefault()
     const text = input.trim()
     if (!text || sending) return
-    const isAgent = mode === 'agent'
     const history = messages.slice(-12).filter((m, i) => !(i === 0 && m.role === 'assistant'))
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setSending(true)
-    getAgent('HEAD')?.talk(2.5, isAgent ? 'Menugaskan agent…' : 'Memproses…')
+    getAgent('HEAD')?.talk(2.5, 'Memproses…')
     try {
-      // Chat 40 dtk; Agent boleh 1–5 mnt (server membatasi diri 280 dtk)
-      const res = await fetch(isAgent ? '/api/kantor/agent' : '/api/kantor/chat', {
+      const res = await fetch('/api/kantor/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: isAgent ? JSON.stringify({ tugas: text }) : JSON.stringify({ message: text, history }),
-        signal: AbortSignal.timeout(isAgent ? 300_000 : 40_000),
+        body: JSON.stringify({ message: text, history }),
+        signal: AbortSignal.timeout(40_000),
       })
       const raw = await res.text()
       let body: { reply?: string; error?: string } | null = null
@@ -95,9 +75,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
     } catch (err) {
       const timeout = err instanceof DOMException && err.name === 'TimeoutError'
       const pesan = timeout
-        ? isAgent
-          ? '⚠️ Agent belum selesai dalam 5 menit — coba tugas yang lebih kecil.'
-          : '⚠️ Head Office tidak menjawab dalam 40 detik — coba kirim ulang.'
+        ? '⚠️ Head Office tidak menjawab dalam 40 detik — coba kirim ulang.'
         : '⚠️ Jaringan bermasalah — periksa koneksi lalu kirim ulang.'
       setMessages((prev) => [...prev, { role: 'assistant', content: pesan, error: true }])
       setInput((cur) => cur || text)
@@ -106,8 +84,6 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
       setSending(false)
     }
   }
-
-  const isAgent = mode === 'agent'
 
   return (
     <div
@@ -125,9 +101,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-stone-900">Head Office</p>
-          <p className={`text-[10px] font-medium ${isAgent ? 'text-amber-600' : 'text-emerald-600'}`}>
-            {isAgent ? 'Antigravity Agent · sandbox remote' : 'GLM · online'}
-          </p>
+          <p className="text-[10px] font-medium text-emerald-600">GLM · online</p>
         </div>
         {messages.length > 1 && (
           <button
@@ -143,33 +117,6 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
         </button>
       </div>
 
-      {/* Toggle mode: Chat vs Agent */}
-      <div className="flex gap-1 border-b border-stone-100 bg-stone-50/60 p-1.5" role="tablist" aria-label="Mode percakapan" data-testid="chat-mode-toggle">
-        <button
-          role="tab"
-          aria-selected={!isAgent}
-          onClick={() => switchMode('chat')}
-          className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-            !isAgent ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-500 hover:bg-stone-100'
-          }`}
-          data-testid="mode-chat"
-        >
-          Chat
-        </button>
-        <button
-          role="tab"
-          aria-selected={isAgent}
-          onClick={() => switchMode('agent')}
-          className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-            isAgent ? 'bg-amber-600 text-white shadow-sm' : 'text-stone-500 hover:bg-stone-100'
-          }`}
-          data-testid="mode-agent"
-        >
-          <Sparkles className="h-3 w-3" />
-          Agent
-        </button>
-      </div>
-
       {/* Pesan */}
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-white px-3 py-3" data-testid="chat-messages">
         {messages.map((m, i) => (
@@ -180,9 +127,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
                   ? 'rounded-br-sm bg-emerald-700 text-white'
                   : m.error
                     ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
-                    : isAgent && i === messages.length - 1 && m.role === 'assistant'
-                      ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-900'
-                      : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
+                    : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
               }`}
             >
               {m.content}
@@ -193,9 +138,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
           <div className="flex justify-start" data-testid="chat-typing">
             <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm border border-stone-200 bg-stone-50 px-3 py-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-stone-400" />
-              <span className="text-[11px] text-stone-400">
-                {isAgent ? 'Antigravity bekerja… (1–5 menit)' : 'Head Office mengetik…'}
-              </span>
+              <span className="text-[11px] text-stone-400">Head Office mengetik…</span>
             </div>
           </div>
         )}
@@ -213,9 +156,9 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
             }
           }}
           rows={1}
-          maxLength={isAgent ? 800 : 1000}
-          placeholder={isAgent ? 'Beri tugas ke agent… (mis. riset web)' : 'Tulis pesan ke Head Office…'}
-          aria-label={isAgent ? 'Tugas untuk agent Antigravity' : 'Pesan untuk Head Office'}
+          maxLength={1000}
+          placeholder="Tulis pesan ke Head Office…"
+          aria-label="Pesan untuk Head Office"
           className="max-h-24 min-h-[38px] flex-1 resize-none rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-800 outline-none placeholder:text-stone-400 focus:border-emerald-500"
           data-testid="chat-input"
         />
@@ -223,8 +166,8 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
           type="submit"
           size="icon"
           disabled={sending || !input.trim()}
-          className={`h-[38px] w-[38px] shrink-0 rounded-xl text-white ${isAgent ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-700 hover:bg-emerald-800'}`}
-          aria-label={isAgent ? 'Kirim tugas' : 'Kirim pesan'}
+          className="h-[38px] w-[38px] shrink-0 rounded-xl bg-emerald-700 text-white hover:bg-emerald-800"
+          aria-label="Kirim pesan"
           data-testid="chat-send"
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
