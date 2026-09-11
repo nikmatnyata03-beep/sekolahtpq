@@ -1,0 +1,349 @@
+{
+  "pack": "ai-agent-office",
+  "version": "1.0.0",
+  "generatedAt": "2026-09-11T12:20:34.218Z",
+  "stats": {
+    "assets": 11,
+    "characters": 7,
+    "rooms": 1,
+    "props": 3,
+    "totalTriangles": 43378
+  },
+  "assets": [
+    {
+      "id": "agent-general-purpose",
+      "name": "General Purpose Agent",
+      "type": "character",
+      "role": "Agent serba bisa — jaket abu-abu netral dengan aksen putih",
+      "file": "/assets/models/agent-general-purpose.glb",
+      "preview": "/assets/previews/agent-general-purpose.png",
+      "palette": [
+        "#8b929e",
+        "#f4f5f7",
+        "#6ef3e0"
+      ],
+      "stats": {
+        "triangles": 4588,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.7,
+        "fileSize": 1181308
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "agent-explore",
+      "name": "Explore Agent",
+      "type": "character",
+      "role": "Penjelajah data & informasi — jaket teal dengan topi penjelajah",
+      "file": "/assets/models/agent-explore.glb",
+      "preview": "/assets/previews/agent-explore.png",
+      "palette": [
+        "#0f8f86",
+        "#d8b26a",
+        "#57e0b0"
+      ],
+      "stats": {
+        "triangles": 4740,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.7,
+        "fileSize": 1287564
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "agent-plan",
+      "name": "Plan Agent",
+      "type": "character",
+      "role": "Perencana strategi — jas teal gelap, membawa clipboard",
+      "file": "/assets/models/agent-plan.glb",
+      "preview": "/assets/previews/agent-plan.png",
+      "palette": [
+        "#0c5f63",
+        "#e9ebee",
+        "#7df0d8"
+      ],
+      "stats": {
+        "triangles": 4624,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.7,
+        "fileSize": 1192432
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "agent-frontend-styling-expert",
+      "name": "Frontend Styling Expert",
+      "type": "character",
+      "role": "Spesialis UI/UX — jaket emerald dengan kacamata desainer",
+      "file": "/assets/models/agent-frontend-styling-expert.glb",
+      "preview": "/assets/previews/agent-frontend-styling-expert.png",
+      "palette": [
+        "#128a5c",
+        "#1c2126",
+        "#52f5b5"
+      ],
+      "stats": {
+        "triangles": 5056,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.7,
+        "fileSize": 1270120
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "agent-full-stack-developer",
+      "name": "Full-Stack Developer",
+      "type": "character",
+      "role": "Developer penuh — hoodie emerald gelap dengan headset coder",
+      "file": "/assets/models/agent-full-stack-developer.glb",
+      "preview": "/assets/previews/agent-full-stack-developer.png",
+      "palette": [
+        "#0b5d43",
+        "#57e0b0",
+        "#1e2226"
+      ],
+      "stats": {
+        "triangles": 5872,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.7,
+        "fileSize": 1346040
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "agent-ppt-expert",
+      "name": "PPT Expert",
+      "type": "character",
+      "role": "Spesialis slide & presentasi — blazer amber, membawa tablet presentasi",
+      "file": "/assets/models/agent-ppt-expert.glb",
+      "preview": "/assets/previews/agent-ppt-expert.png",
+      "palette": [
+        "#d9932c",
+        "#ffd27a",
+        "#262019"
+      ],
+      "stats": {
+        "triangles": 4612,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.7,
+        "fileSize": 1181844
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "agent-head-office",
+      "name": "Head Office Agent",
+      "type": "character",
+      "role": "Kepala kantor — jas putih-emas, sedikit lebih tinggi (1,8 m)",
+      "file": "/assets/models/agent-head-office.glb",
+      "preview": "/assets/previews/agent-head-office.png",
+      "palette": [
+        "#f2efe6",
+        "#c9a227",
+        "#ffd76a"
+      ],
+      "stats": {
+        "triangles": 4920,
+        "materials": 1,
+        "bones": 65,
+        "textures": 3,
+        "height": 1.8,
+        "fileSize": 1048480
+      },
+      "animations": [
+        {
+          "name": "idle",
+          "duration": 4
+        },
+        {
+          "name": "walk",
+          "duration": 1.2
+        },
+        {
+          "name": "talk",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "id": "office-room",
+      "name": "Office Room 16×12",
+      "type": "room",
+      "role": "Lantai terbuka 16×12 m — 7 workstation mengelilingi podium tengah, whiteboard, tanaman, karpet logo, jendela lebar, pintu kaca, lampu panel, partisi rendah, server rack mini",
+      "file": "/assets/models/office-room.glb",
+      "preview": "/assets/previews/office-room.png",
+      "palette": [
+        "#d9d4cb",
+        "#0f8f86",
+        "#8a6742"
+      ],
+      "stats": {
+        "triangles": 7684,
+        "materials": 2,
+        "bones": 0,
+        "textures": 3,
+        "height": 3,
+        "fileSize": 1408928
+      },
+      "dimensions": {
+        "width": 16,
+        "depth": 12
+      },
+      "animations": []
+    },
+    {
+      "id": "coffee-cup",
+      "name": "Coffee Cup",
+      "type": "prop",
+      "role": "Cangkir kopi dengan telenan dan saucer — prop meja",
+      "file": "/assets/models/coffee-cup.glb",
+      "preview": "/assets/previews/coffee-cup.png",
+      "palette": [
+        "#f2efe6",
+        "#4a2f21"
+      ],
+      "stats": {
+        "triangles": 540,
+        "materials": 1,
+        "bones": 0,
+        "textures": 3,
+        "height": 0.11,
+        "fileSize": 322828
+      },
+      "animations": []
+    },
+    {
+      "id": "document-folder",
+      "name": "Document Folder",
+      "type": "prop",
+      "role": "Map dokumen dengan kertas — untuk animasi agent membawa dokumen",
+      "file": "/assets/models/document-folder.glb",
+      "preview": "/assets/previews/document-folder.png",
+      "palette": [
+        "#d9b26a",
+        "#f5f2e8"
+      ],
+      "stats": {
+        "triangles": 132,
+        "materials": 1,
+        "bones": 0,
+        "textures": 3,
+        "height": 0.046,
+        "fileSize": 191356
+      },
+      "animations": []
+    },
+    {
+      "id": "holo-screen",
+      "name": "Holo Screen",
+      "type": "prop",
+      "role": "Panel hologram 1×0,6 m semi-transparan emissive dengan emitter — untuk di atas meja",
+      "file": "/assets/models/holo-screen.glb",
+      "preview": "/assets/previews/holo-screen.png",
+      "palette": [
+        "#39e6c8",
+        "#0d1b1a",
+        "#1c2126"
+      ],
+      "stats": {
+        "triangles": 610,
+        "materials": 2,
+        "bones": 0,
+        "textures": 6,
+        "height": 1.06,
+        "fileSize": 309000
+      },
+      "animations": []
+    }
+  ]
+}

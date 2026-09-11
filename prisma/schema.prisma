@@ -375,3 +375,38 @@ model DevChat {
   action    String? // JSON aksi yang dieksekusi AI (jika ada)
   createdAt DateTime @default(now())
 }
+
+// ===================== KANTOR AI AGENT 3D (route /kantor) =====================
+// Fitur web 3D terisolasi — TIDAK menyentuh data operasional TPQ.
+
+// Manifest aset & data divisi (sumber kebenaran panel 3D; seed via bootstrap)
+model Asset {
+  id         String   @id @default(cuid())
+  kind       String // CHARACTER | OFFICE | PROP
+  assetKey   String   @unique // "agent-general-purpose", dst.
+  name       String
+  division   String? // GENERAL_PURPOSE | EXPLORE | PLAN | FRONTEND | FULLSTACK | PPT | HEAD
+  colorHex   String?
+  accentHex  String? // warna aksen sekunder (badge, glow)
+  modelUrl   String? // null = karakter procedural (dibangun dari primitif)
+  animations String? // JSON array, mis. ["idle","walk","talk"]
+  role       String? // deskripsi peran divisi
+  tasks      String? // JSON array tugas aktif (mock realistis)
+  badge      String? // label model AI, mis. "GLM 5.3 Flash"
+  status     String   @default("AKTIF")
+  tasksDone  Int      @default(0)
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+}
+
+// Kritik & saran dari pengunjung web 3D (form saat meja divisi diklik)
+model Feedback {
+  id         String   @id @default(cuid())
+  divisionId String // GENERAL_PURPOSE | ... | HEAD
+  name       String?
+  message    String
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([divisionId, createdAt])
+}
