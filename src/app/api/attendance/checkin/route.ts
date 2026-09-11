@@ -10,6 +10,7 @@ import {
   roundCoord,
   MAX_CHECKIN_ACCURACY_M,
 } from '@/lib/geo'
+import { parseAttendanceCode, verifyRotatingSuffix } from '@/lib/rotating-code'
 
 /**
  * Check-in QR kehadiran (Task 30/32) + VALIDASI GPS ANTI-FAKEGPS (Task 33):
@@ -29,7 +30,15 @@ export async function POST(req: NextRequest) {
     const { code, studentId, gps: rawGps } = await req.json()
     if (!code || !studentId) return bad('Kode kehadiran dan santri wajib dipilih')
 
-    const session = await db.session.findUnique({ where: { code: String(code).trim().toUpperCase() }, include: { class: true } })
+    // Task 41: QR berotasi — input bisa `STATIS.SUFIX`. Sufiks wajib masih
+    // segar (jendela 60 dtk + toleransi 1 jendela); statis polos tetap sah.
+    const parsedCode = parseAttendanceCode(String(code))
+    if (parsedCode.rot) {
+      const rotErr = await verifyRotatingSuffix(parsedCode.rot, parsedCode.staticCode)
+      if (rotErr) return bad(rotErr)
+    }
+
+    const session = await db.session.findUnique({ where: { code: parsedCode.staticCode }, include: { class: true } })
     if (!session) return bad('Kode kehadiran tidak ditemukan', 404)
     if (!session.isActive) return bad('Sesi sudah ditutup', 400)
 

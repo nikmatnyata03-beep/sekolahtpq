@@ -32,7 +32,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { QRCodeSVG } from 'qrcode.react'
 import {
   Table,
   TableBody,
@@ -51,6 +50,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { statusBadgeClass, downloadCsv, checkinUrl } from './overview'
+import { RotatingQr } from './rotating-qr'
 import { AnchorMapDialog } from '@/components/shared/anchor-map-dialog'
 import { formatMapPoint, type MapPoint } from '@/components/shared/map-picker'
 
@@ -694,7 +694,9 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
                     onClick={() => setQrSession(createdSession)}
                     aria-label="Perbesar QR untuk ditayangkan"
                   >
-                    <QRCodeSVG value={checkinUrl(createdSession.code)} size={128} />
+                    <div className="rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm">
+                      <RotatingQr code={createdSession.code} size={128} />
+                    </div>
                   </button>
                   <p className="font-mono text-2xl font-bold tracking-[0.3em] text-emerald-800">{createdSession.code}</p>
                   <p className="text-center text-xs text-stone-500">
@@ -1109,9 +1111,12 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
           {qrSession && (
             <div className="flex flex-col items-center gap-3">
               <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-                <QRCodeSVG value={checkinUrl(qrSession.code)} size={220} />
+                <RotatingQr code={qrSession.code} size={220} />
               </div>
-              <p className="font-mono text-xl font-bold tracking-[0.3em] text-emerald-800">{qrSession.code}</p>
+              <div className="text-center">
+                <p className="font-mono text-xl font-bold tracking-[0.3em] text-emerald-800">{qrSession.code}</p>
+                <p className="text-[11px] text-stone-400">kode manual (fallback bila kamera santri rusak)</p>
+              </div>
               <p className="text-center text-xs text-stone-500">
                 Sesi {qrSession.className} · {formatShortDate(qrSession.date)} · {qrSession.hadir}/{qrSession.total} hadir
               </p>

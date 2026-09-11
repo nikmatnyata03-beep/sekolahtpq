@@ -33,7 +33,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { QRCodeSVG } from 'qrcode.react'
 import type { DashboardStats, Registration } from '@/lib/types'
 import { apiGet, formatRupiah, formatShortDate } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
@@ -44,6 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { RotatingQr } from './rotating-qr'
 import type { ReactNode } from 'react'
 
 /**
@@ -371,7 +371,7 @@ export function OverviewSection() {
                 {stats.activeSessions.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3">
                     <div className="rounded-lg bg-white p-1.5 shadow-sm">
-                      <QRCodeSVG value={checkinUrl(s.code)} size={64} />
+                      <RotatingQr code={s.code} size={64} compact />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">

@@ -30,7 +30,6 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
 import type {
   AttendanceRecord,
   AuthUser,
@@ -62,6 +61,7 @@ import {
 } from '@/components/ui/select'
 import { WeeklySchedule } from './weekly-schedule'
 import { checkinUrl } from './overview'
+import { RotatingQr } from './rotating-qr'
 
 export type GuruOverviewSection = 'attendance' | 'hafalan' | 'classes'
 
@@ -921,7 +921,7 @@ export function GuruOverview({ user, onNavigate }: {
                     className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3"
                   >
                     <div className="rounded-lg bg-white p-1.5 shadow-sm">
-                      <QRCodeSVG value={checkinUrl(s.code)} size={56} />
+                      <RotatingQr code={s.code} size={56} compact />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
