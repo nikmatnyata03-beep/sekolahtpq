@@ -2,31 +2,11 @@ import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
 import { getSession, guard } from '@/lib/session'
+import { syncTeacherClasses } from '@/lib/teacher-classes'
 
 function parseJsonField(v: unknown, fallback = '[]') {
   if (typeof v === 'string') return v
   return JSON.stringify(v ?? [])
-}
-
-/**
- * Sinkronisasi penugasan kelas seorang guru (Task 36).
- * - Kelas yang sebelumnya diampu guru ini tapi tidak ada di classIds → teacherId null.
- * - Kelas di classIds → teacherId = guru ini (menimpa pengampu lama secara eksplisit).
- * ID yang tidak dikenal diabaikan agar payload bocor tidak merusak data.
- */
-async function syncTeacherClasses(teacherId: string, classIds: unknown) {
-  if (!Array.isArray(classIds)) return
-  const wanted = [...new Set(classIds.filter((v): v is string => typeof v === 'string' && v.trim() !== ''))]
-  const valid = wanted.length
-    ? await db.class.findMany({ where: { id: { in: wanted } }, select: { id: true } })
-    : []
-  const validIds = new Set(valid.map((c) => c.id))
-  const current = await db.class.findMany({ where: { teacherId }, select: { id: true } })
-  const toRemove = current.filter((c) => !validIds.has(c.id)).map((c) => c.id)
-  await db.$transaction([
-    ...(toRemove.length ? [db.class.updateMany({ where: { id: { in: toRemove } }, data: { teacherId: null } })] : []),
-    ...(validIds.size ? [db.class.updateMany({ where: { id: { in: [...validIds] } }, data: { teacherId } })] : []),
-  ])
 }
 
 export async function GET(req: NextRequest) {

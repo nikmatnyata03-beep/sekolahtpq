@@ -14,8 +14,9 @@ import {
   KeyRound,
   ShieldAlert,
 } from 'lucide-react'
-import type { AppUser, AuthUser, Role, Teacher } from '@/lib/types'
+import type { AppUser, AuthUser, ClassRoom, Role, Teacher } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
+import { ClassAssignmentEditor } from '@/components/admin/class-assignment-editor'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -87,9 +88,10 @@ interface UserFormState {
   password: string
   role: string
   teacherId: string
+  classIds: string[] // Task 40: penugasan kelas+jenjang langsung dari form akun
 }
 
-const EMPTY_FORM: UserFormState = { name: '', email: '', phone: '', password: '', role: 'ORANG_TUA', teacherId: 'none' }
+const EMPTY_FORM: UserFormState = { name: '', email: '', phone: '', password: '', role: 'ORANG_TUA', teacherId: 'none', classIds: [] }
 
 export function UsersAdmin({ user }: { user?: AuthUser }) {
   const { toast } = useToast()
@@ -104,6 +106,8 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM)
   // Task 36: daftar profil guru (utk penautan akun GURU → profil guru)
   const [teachers, setTeachers] = useState<Teacher[]>([])
+  // Task 40: daftar kelas (utk pilihan Kelas yang Diampu saat role=Guru)
+  const [classes, setClasses] = useState<ClassRoom[]>([])
   const [resetTarget, setResetTarget] = useState<AppUser | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null)
@@ -127,12 +131,15 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
     else setLoading(false)
   }, [isAdmin, load])
 
-  // Task 36: muat profil guru saat dialog tambah dibuka (utk pilihan penautan)
+  // Task 36+40: muat profil guru & daftar kelas saat dialog tambah dibuka
   useEffect(() => {
     if (!createOpen) return
     void apiGet<Teacher[]>('/api/teachers')
       .then(setTeachers)
       .catch(() => setTeachers([]))
+    void apiGet<ClassRoom[]>('/api/classes')
+      .then(setClasses)
+      .catch(() => setClasses([]))
   }, [createOpen])
 
   const filtered = users.filter((u) => {
@@ -196,13 +203,16 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
         phone: form.phone.trim() || null,
         password: form.password,
         role: form.role,
-        ...(form.role === 'GURU' && { teacherId: form.teacherId === 'none' ? null : form.teacherId }),
+        ...(form.role === 'GURU' && {
+          teacherId: form.teacherId === 'none' ? null : form.teacherId,
+          classIds: form.classIds, // Task 40: langsung dari form akun
+        }),
       })
       toast({
         title: 'Pengguna ditambahkan',
         description:
           form.role === 'GURU'
-            ? `${form.name} dapat login. Tugaskan kelasnya lewat menu Guru → Edit → Kelas yang Diampu.`
+            ? `${form.name} dapat login${form.classIds.length ? ` dan mengampu ${form.classIds.length} kelas` : ''}. Kelas bisa diubah kapan saja lewat menu Guru.`
             : `${form.name} dapat login dengan akun barunya.`,
       })
       setCreateOpen(false)
@@ -366,7 +376,7 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
             </div>
             <div className="grid gap-1.5">
               <Label>Peran</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v, teacherId: 'none' })}>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v, teacherId: 'none', classIds: [] })}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
@@ -377,23 +387,39 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
               </Select>
             </div>
             {/* Task 36: akun guru wajib terhubung profil guru agar bisa ditugaskan kelas */}
+            {/* Task 40: pilihan Kelas yang Diampu langsung di form — admin tidak perlu buka menu lain */}
             {form.role === 'GURU' && (
-              <div className="grid gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
-                <Label htmlFor="u-teacher">Profil Guru</Label>
-                <Select value={form.teacherId} onValueChange={(v) => setForm({ ...form, teacherId: v })}>
-                  <SelectTrigger id="u-teacher" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Buat profil baru otomatis</SelectItem>
-                    {teachers.map((t) => (
-                      <SelectItem key={t.id} value={t.id} disabled={!!t.user}>
-                        {t.fullName}
-                        {t.user ? ' — sudah punya akun' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="u-teacher">Profil Guru</Label>
+                  <Select
+                    value={form.teacherId}
+                    onValueChange={(v) => {
+                      // Prefill kelas yang sudah diampu profil terpilih agar admin tinggal menyesuaikan
+                      const t = teachers.find((x) => x.id === v)
+                      const prefill = t?.classes?.map((c) => c.id) ?? []
+                      setForm((f) => ({ ...f, teacherId: v, classIds: v === 'none' ? [] : prefill }))
+                    }}
+                  >
+                    <SelectTrigger id="u-teacher" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Buat profil baru otomatis</SelectItem>
+                      {teachers.map((t) => (
+                        <SelectItem key={t.id} value={t.id} disabled={!!t.user}>
+                          {t.fullName}
+                          {t.user ? ' — sudah punya akun' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <ClassAssignmentEditor
+                  classes={classes}
+                  selected={form.classIds}
+                  onChange={(ids) => setForm((f) => ({ ...f, classIds: ids }))}
+                />
                 <p className="text-xs text-amber-800">
-                  Setelah akun dibuat, tetapkan kelas &amp; jenjang lewat menu <span className="font-semibold">Guru → Edit → Kelas yang Diampu</span> agar guru bisa membuka sesi absensi.
+                  Kelas &amp; jenjang yang dicentang langsung aktif saat akun dibuat — guru bisa langsung membuka sesi absensi.
                 </p>
               </div>
             )}
