@@ -290,7 +290,7 @@ export function Agent({
       </group>
 
       {/* Name-tag + badge model AI */}
-      <Html position={[0, 1.72, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }} zIndexRange={[40, 0]}>
+      <Html position={[0, 1.72, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }} zIndexRange={[15, 0]}>
         <div className="pointer-events-none flex select-none flex-col items-center gap-0.5" data-testid={`nametag-${division}`}>
           <div className="whitespace-nowrap rounded-md border-2 bg-white/95 px-2 py-0.5 text-[11px] font-bold text-stone-800 shadow" style={{ borderColor: color }}>
             {name}
@@ -303,7 +303,7 @@ export function Agent({
 
       {/* Chat bubble */}
       {bubble && (
-        <Html position={[0, 2.14, 0]} center distanceFactor={8} style={{ pointerEvents: 'none' }} zIndexRange={[50, 10]}>
+        <Html position={[0, 2.14, 0]} center distanceFactor={8} style={{ pointerEvents: 'none' }} zIndexRange={[16, 10]}>
           <div
             data-testid={`bubble-${division}`}
             className="pointer-events-none max-w-[190px] whitespace-nowrap rounded-xl border-2 bg-white px-3 py-1.5 text-center text-[11px] font-medium text-stone-800 shadow-lg"

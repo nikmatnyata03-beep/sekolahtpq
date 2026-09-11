@@ -410,3 +410,41 @@ model Feedback {
 
   @@index([divisionId, createdAt])
 }
+
+// ===================== KANTOR CHAT — ANTRIAN AI (Task 57) =====================
+// Chat Head Office asinkron: pesan user disimpan berstatus 'pending', agen
+// AI (sandbox, cron 5 menit) mengambil, mengklaim, lalu menjawab via
+// /api/kantor/chat/agent (x-agent-key). Protokol: docs/KANTOR-CHAT-AGENT.md
+
+// Satu sesi obrolan per user — terpisah total dari user lain (privasi).
+model KantorChatSession {
+  id           String   @id @default(cuid())
+  userId       String // snapshot pemilik sesi (tidak FK — riwayat tetap ada)
+  userRole     String // ADMIN | DEVELOPER (snapshot saat sesi dibuat)
+  userName     String
+  userEmail    String
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+
+  messages KantorChatMessage[]
+
+  @@index([userId, lastActiveAt])
+}
+
+// Pesan obrolan. role 'user' → status: pending|processing|answered|error;
+// role 'assistant' → status 'done' (isi jawaban / bubble error agen).
+model KantorChatMessage {
+  id         String    @id @default(cuid())
+  sessionId  String
+  role       String // 'user' | 'assistant'
+  content    String
+  status     String    @default("done")
+  claimedAt  DateTime? // kapan agen mengklaim (anti balapan antar-sesi cron)
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  session KantorChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([status, createdAt])
+}

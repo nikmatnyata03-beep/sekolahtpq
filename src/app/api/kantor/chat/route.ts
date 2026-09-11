@@ -1,31 +1,32 @@
-// POST /api/kantor/chat — obrolan live dengan Head Office AI.
-// Task 52: akses penuh hanya ADMIN & DEVELOPER (guru = mode lihat saja di /kantor).
-// Task 53: gemini-3.6-flash via REST (geo-block & key AQ. kerap gagal).
-// Task 55: Gemini DIPENSIKAN — Head Office kini memakai lapisan AI internal
-// SIMADJI (src/lib/ai.ts): Workers AI (produksi, model Llama 3.3 70B) dengan
-// fallback z-ai-web-dev-sdk/GLM (lokal). Tanpa API key eksternal, tanpa geo-block.
+// /api/kantor/chat — antrian pesan Head Office (Task 57, arsitektur baru).
+//
+// Task 52: akses ADMIN & DEVELOPER. Task 55: balasan GLM sinkron.
+// Task 57: chat kini ASINKRON & tersimpan di D1 —
+//   POST  → pesan user disimpan berstatus 'pending' (TANPA memanggil AI).
+//           Balasan disusun agen AI di sandbox (cron 5 menit) lewat
+//           /api/kantor/chat/agent — protokol: docs/KANTOR-CHAT-AGENT.md.
+//   GET   → sesi terakhir milik user (+ ?sessionId= utk sesi tertentu) dan
+//           seluruh pesannya; klien mem-polling endpoint ini saat ada pending.
+//
+// Privasi: satu sesi = satu user. Sesi/pesan user lain tidak bisa diakses.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { guard } from '@/lib/session'
-import { runAiMessages, aiErrorMessage, type AiTurn } from '@/lib/ai'
+import { db } from '@/lib/db'
+import { ensureKantorSchema } from '@/lib/kantor/bootstrap'
 
 const chatSchema = z.object({
   message: z.string().trim().min(1, 'Pesan kosong').max(1000, 'Pesan maksimal 1000 karakter'),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string().trim().min(1).max(2000),
-      }),
-    )
-    .max(12, 'Riwayat terlalu panjang')
-    .optional(),
+  sessionId: z.string().trim().min(1).max(64).optional(),
 })
 
-const SYSTEM_INSTRUCTION = `Kamu adalah "Head Office", agen AI kepala di web 3D "Kantor AI Agent" milik SIMADJI (sistem manajemen TPQ Darul Jinan, Yogyakarta).
-Mesin yang kamu jalankan: GLM internal SIMADJI (lapisan AI src/lib/ai.ts). Kamu memimpin 6 divisi agen: General Purpose, Explore, Plan, Frontend, Fullstack, dan PPT.
-Gaya bicara: profesional, hangat, ringkas — seperti kepala kantor yang efisien. Jawab MAKSIMAL ~120 kata dalam bahasa Indonesia.
-Kamu boleh membantu hal seputar kantor, tugas divisi, serta pertanyaan umum singkat. Jangan mengarang data santri/keuangan nyata — data operasional TPQ bukan wewenangmu di sini; arahkan ke dashboard SIMADJI.`
+/** Sesi terakhir milik user (atau null bila belum pernah chat). */
+async function latestSession(userId: string) {
+  return db.kantorChatSession.findFirst({
+    where: { userId },
+    orderBy: { lastActiveAt: 'desc' },
+  })
+}
 
 // ---- Rate limit per user (window geser in-memory): 10 pesan/menit ----
 const WINDOW_MS = 60_000
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest) {
   const session = g.session
 
   try {
+    await ensureKantorSchema()
+
     if (rateLimited(`${session.id}:${req.headers.get('cf-connecting-ip') ?? 'lokal'}`)) {
       return NextResponse.json({ error: 'Terlalu sering — semenit lagi ya.' }, { status: 429 })
     }
@@ -65,18 +68,93 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
-    const { message, history } = parsed.data
+    const { message, sessionId } = parsed.data
 
-    // Susun giliran multi-turn: riwayat (maks 12) + pesan baru
-    const turns: AiTurn[] = [
-      ...(history ?? []).map((h) => ({ role: h.role, content: h.content }) as AiTurn),
-      { role: 'user', content: message },
-    ]
+    // Resolusi sesi: pakai sessionId milik sendiri, atau buat sesi baru.
+    let kantorSession = null as Awaited<ReturnType<typeof latestSession>> | null
+    if (sessionId) {
+      kantorSession = await db.kantorChatSession.findUnique({ where: { id: sessionId } })
+      // 404 (bukan 403) agar keberadaan sesi orang lain tidak terbocor.
+      if (!kantorSession || kantorSession.userId !== session.id) {
+        return NextResponse.json({ error: 'Sesi tidak ditemukan' }, { status: 404 })
+      }
+    }
+    if (!kantorSession) {
+      // Snapshot identitas user (email dari tabel User) — sesi per user terpisah.
+      const u = await db.user.findUnique({ where: { id: session.id }, select: { email: true } })
+      kantorSession = await db.kantorChatSession.create({
+        data: {
+          userId: session.id,
+          userRole: session.role,
+          userName: session.name,
+          userEmail: u?.email ?? 'tanpa-email',
+        },
+      })
+    }
 
-    const reply = await runAiMessages(SYSTEM_INSTRUCTION, turns, 700)
-    return NextResponse.json({ reply })
+    const msg = await db.kantorChatMessage.create({
+      data: {
+        sessionId: kantorSession.id,
+        role: 'user',
+        content: message,
+        status: 'pending',
+      },
+    })
+    await db.kantorChatSession.update({
+      where: { id: kantorSession.id },
+      data: { lastActiveAt: new Date(), userRole: session.role, userName: session.name },
+    })
+
+    return NextResponse.json({
+      sessionId: kantorSession.id,
+      messageId: msg.id,
+      pending: true,
+      waitHint: 'Sedang di proses sistem, silahkan tunggu…',
+    })
   } catch (e) {
-    console.error('[kantor/chat]', e)
-    return NextResponse.json({ error: aiErrorMessage(e) }, { status: 502 })
+    console.error('[kantor/chat POST]', e)
+    return NextResponse.json({ error: 'Gagal menyimpan pesan' }, { status: 500 })
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const g = await guard(req, ['ADMIN', 'DEVELOPER'])
+  if ('res' in g) return g.res
+  const session = g.session
+
+  try {
+    await ensureKantorSchema()
+
+    const url = new URL(req.url)
+    const wanted = url.searchParams.get('sessionId')
+
+    let kantorSession = null as Awaited<ReturnType<typeof latestSession>> | null
+    if (wanted) {
+      kantorSession = await db.kantorChatSession.findUnique({ where: { id: wanted } })
+      if (!kantorSession || kantorSession.userId !== session.id) {
+        return NextResponse.json({ error: 'Sesi tidak ditemukan' }, { status: 404 })
+      }
+    } else {
+      kantorSession = await latestSession(session.id)
+    }
+
+    if (!kantorSession) {
+      return NextResponse.json({ session: null, messages: [] })
+    }
+
+    const messages = await db.kantorChatMessage.findMany({
+      where: { sessionId: kantorSession.id },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+      select: { id: true, role: true, content: true, status: true, createdAt: true },
+    })
+
+    return NextResponse.json({
+      session: { id: kantorSession.id, createdAt: kantorSession.createdAt, lastActiveAt: kantorSession.lastActiveAt },
+      messages,
+    })
+  } catch (e) {
+    console.error('[kantor/chat GET]', e)
+    return NextResponse.json({ error: 'Gagal memuat obrolan' }, { status: 500 })
   }
 }

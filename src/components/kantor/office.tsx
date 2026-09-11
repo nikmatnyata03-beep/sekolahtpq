@@ -54,7 +54,7 @@ export function Office({ onSelect }: { onSelect: (division: string) => void }) {
       <GlassDoor />
 
       {/* Sign nama kantor */}
-      <Html position={[0, 2.9, -4.85]} center transform distanceFactor={9} style={{ pointerEvents: 'none' }} data-testid="sign-kantor">
+      <Html position={[0, 2.9, -4.85]} center transform distanceFactor={9} style={{ pointerEvents: 'none' }} zIndexRange={[10, 0]} data-testid="sign-kantor">
         <div className="whitespace-nowrap rounded-xl border border-amber-200 bg-stone-900/90 px-6 py-2 text-2xl font-bold tracking-widest text-amber-300 shadow-xl">
           KANTOR AI AGENT
         </div>
@@ -413,7 +413,7 @@ function Desk({
       </group>
 
       {/* Label meja (DOM) */}
-      <Html position={[0, 1.28, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
+      <Html position={[0, 1.28, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }} zIndexRange={[12, 0]}>
         <div
           data-testid={`desk-label-${division}`}
           className="pointer-events-none select-none whitespace-nowrap rounded-md border bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-stone-800 shadow"

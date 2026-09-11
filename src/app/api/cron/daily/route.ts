@@ -9,6 +9,8 @@
 //        - PENDING berumur >= 3 hari  → "masih menunggu pembayaran"
 //        - FAILED  berumur >= 1 hari  → "silakan coba bayar kembali"
 //      Dedupe: 1 pengingat per invoice per 3 hari (anti spam).
+//   3. (Task 57) Bersihkan sesi chat Head Office berumur >30 hari
+//      (privasi pengguna + jaga ukuran D1).
 //
 // Aman CPU 10ms tier gratis: query terbatas + cap 50 pengingat per eksekusi.
 
@@ -111,6 +113,24 @@ async function handle(req: NextRequest) {
     remindersSent++
   }
 
+  // ===== 3. Bersihkan chat kantor >30 hari (privasi + ukuran D1) =====
+  let chatSessionsDeleted = 0
+  try {
+    const chatCutoff = new Date(Date.now() - 30 * DAY_MS)
+    const oldSessions = await db.kantorChatSession.findMany({
+      where: { lastActiveAt: { lt: chatCutoff } },
+      select: { id: true },
+      take: 200,
+    })
+    for (const s of oldSessions) {
+      await db.kantorChatMessage.deleteMany({ where: { sessionId: s.id } })
+      await db.kantorChatSession.delete({ where: { id: s.id } })
+      chatSessionsDeleted++
+    }
+  } catch (e) {
+    console.error('[cron/daily] pembersihan chat gagal:', (e as Error).message?.slice(0, 120))
+  }
+
   return ok({
     ok: true,
     job: 'daily',
@@ -118,6 +138,7 @@ async function handle(req: NextRequest) {
     reminderCandidates: payments.length,
     remindersSent,
     skipped,
+    chatSessionsDeleted,
     durationMs: Date.now() - startedAt,
   })
 }

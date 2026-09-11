@@ -20,6 +20,20 @@ const STATEMENTS: string[] = [
     "name" TEXT, "message" TEXT NOT NULL, "ip" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS "Feedback_divisionId_createdAt_idx" ON "Feedback"("divisionId", "createdAt")`,
+  // Task 57 — chat Head Office asinkron (antrian D1, dijawab agen via cron)
+  `CREATE TABLE IF NOT EXISTS "KantorChatSession" ("id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL, "userRole" TEXT NOT NULL, "userName" TEXT NOT NULL,
+    "userEmail" TEXT NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastActiveAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE INDEX IF NOT EXISTS "KantorChatSession_userId_lastActiveAt_idx" ON "KantorChatSession"("userId", "lastActiveAt")`,
+  `CREATE TABLE IF NOT EXISTS "KantorChatMessage" ("id" TEXT NOT NULL PRIMARY KEY,
+    "sessionId" TEXT NOT NULL, "role" TEXT NOT NULL, "content" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'done', "claimedAt" DATETIME, "answeredAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "KantorChatMessage_sessionId_fkey" FOREIGN KEY ("sessionId")
+    REFERENCES "KantorChatSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE)`,
+  `CREATE INDEX IF NOT EXISTS "KantorChatMessage_sessionId_createdAt_idx" ON "KantorChatMessage"("sessionId", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "KantorChatMessage_status_createdAt_idx" ON "KantorChatMessage"("status", "createdAt")`,
 ]
 
 /** Jalankan sekali per isolate — aman dipanggil di setiap handler API kantor. */
