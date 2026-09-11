@@ -140,6 +140,9 @@ model Session {
   locAt       DateTime? // waktu titik diambil (bisa diperbarui ustadz dari dialog QR)
 
   attendances Attendance[]
+
+  // Task 49: index utk stats harian + laporan bulanan (filter rentang date)
+  @@index([date])
 }
 
 model Attendance {
@@ -170,6 +173,16 @@ model Attendance {
   deviceHash    String?   // Task 42: fingerprint ringan perangkat check-in (anti 1 HP banyak santri)
 
   @@unique([sessionId, studentId])
+
+  // ==== Task 49: index performa (audit query) ====
+  // (status, createdAt)        → panel "Absen Mencurigakan" (scan 30 hari, order desc)
+  // (sessionId, status, hash)  → hot path check-in: dup koordinat + dup perangkat
+  // (sessionId, createdAt)     → list presensi per sesi (order createdAt desc)
+  // (studentId, createdAt)     → riwayat per santri / portal orang tua
+  @@index([status, createdAt])
+  @@index([sessionId, status, deviceHash])
+  @@index([sessionId, createdAt])
+  @@index([studentId, createdAt])
 }
 
 // ===================== HAFALAN PROGRESS =====================
