@@ -35,6 +35,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SuspiciousPanel } from './suspicious-panel'
 import {
   Table,
   TableBody,
@@ -628,6 +629,9 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Task 44 — panel temuan anti-kecurangan lintas-sesi */}
+      <SuspiciousPanel onReviewed={() => void load()} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Panel kiri: Buka sesi */}

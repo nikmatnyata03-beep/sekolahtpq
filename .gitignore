@@ -80,3 +80,4 @@ scripts/qa-wali-checkin.ts
 scripts/qa-pentest-guru.ts
 scripts/tmp-set-pentest-pw.ts
 scripts/tmp-inspect.ts
+scripts/seed-qa-suspicious.ts
