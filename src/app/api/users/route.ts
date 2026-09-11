@@ -60,7 +60,19 @@ export async function GET(req: NextRequest) {
   const g = await guard(req, ['ADMIN'])
   if ('res' in g) return g.res
   const users = await db.user.findMany({
-    select: { id: true, email: true, name: true, phone: true, role: true, createdAt: true, teacherId: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      role: true,
+      createdAt: true,
+      teacherId: true,
+      // Task 46: kelas yang diampu profil guru — badge di tabel Pengguna
+      teacherProfile: {
+        select: { classes: { select: { id: true, name: true, level: true }, orderBy: { name: 'asc' } } },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   })
   return ok(users)

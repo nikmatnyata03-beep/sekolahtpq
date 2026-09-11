@@ -201,6 +201,8 @@ export interface AppUser {
   phone: string | null
   role: Role
   teacherId?: string | null
+  // Task 46: kelas diampu (via profil guru) untuk badge tabel Pengguna
+  teacherProfile?: { classes: { id: string; name: string; level: string }[] } | null
   createdAt?: string
 }
 

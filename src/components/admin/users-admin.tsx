@@ -16,7 +16,8 @@ import {
 } from 'lucide-react'
 import type { AppUser, AuthUser, ClassRoom, Role, Teacher } from '@/lib/types'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
-import { ClassAssignmentEditor } from '@/components/admin/class-assignment-editor'
+import { cn } from '@/lib/utils'
+import { ClassAssignmentEditor, levelLabel } from '@/components/admin/class-assignment-editor'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -72,6 +73,13 @@ function roleBadgeClass(role: string): string {
   if (role === 'GURU') return 'border-amber-200 bg-amber-100 text-amber-800'
   if (role === 'DEVELOPER') return 'border-purple-200 bg-purple-100 text-purple-800'
   return 'border-stone-200 bg-stone-100 text-stone-600'
+}
+
+// Task 46: warna badge kelas konsisten dengan weekly-schedule (IQRA emerald · TAHFIDZ amber · lainnya teal)
+function classBadgeClass(level: string): string {
+  if (level === 'IQRA') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (level === 'TAHFIDZ') return 'border-amber-200 bg-amber-50 text-amber-700'
+  return 'border-teal-200 bg-teal-50 text-teal-700'
 }
 
 function roleLabel(role: string): string {
@@ -288,13 +296,14 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
       ) : (
         <Card className="rounded-2xl border-stone-200 py-0 shadow-sm">
           <div className="overflow-x-auto">
-            <Table className="min-w-[720px]">
+            <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow className="bg-stone-50/60 hover:bg-stone-50/60">
                   <TableHead>Nama</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telepon</TableHead>
                   <TableHead>Peran</TableHead>
+                  <TableHead>Kelas Diampu</TableHead>
                   <TableHead>Dibuat</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -311,6 +320,29 @@ export function UsersAdmin({ user }: { user?: AuthUser }) {
                     <TableCell className="text-sm text-stone-600">{u.email}</TableCell>
                     <TableCell className="text-sm text-stone-600">{u.phone ?? '—'}</TableCell>
                     <TableCell><Badge className={roleBadgeClass(u.role)}>{roleLabel(u.role)}</Badge></TableCell>
+                    {/* Task 46: badge kelas yang diampu guru — admin melihat penugasan tanpa membuka menu lain */}
+                    <TableCell data-testid="kelas-diampu">
+                      {u.role === 'GURU' ? (
+                        u.teacherProfile?.classes?.length ? (
+                          <div className="flex max-w-56 flex-wrap gap-1">
+                            {u.teacherProfile.classes.map((c) => (
+                              <Badge
+                                key={c.id}
+                                variant="outline"
+                                title={`Jenjang ${levelLabel(c.level)}`}
+                                className={cn('text-[11px] font-medium', classBadgeClass(c.level))}
+                              >
+                                {c.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-stone-400">Belum ada kelas</span>
+                        )
+                      ) : (
+                        <span className="text-stone-300">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-stone-600">{u.createdAt ? formatShortDate(u.createdAt) : '—'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
