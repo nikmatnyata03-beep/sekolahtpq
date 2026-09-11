@@ -129,14 +129,14 @@ function KpiCard({
   iconClass: string
 }) {
   return (
-    <Card className="rounded-2xl border-stone-200 shadow-sm">
+    <Card className="rounded-2xl border-stone-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-md">
       <CardContent className="flex items-start gap-2.5 p-3 sm:gap-3 sm:p-4">
         <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-10', iconClass)}>
           <Icon className="size-4 sm:size-5" />
         </div>
         <div className="min-w-0">
           <p className="text-xs font-medium text-stone-500">{label}</p>
-          <p className="break-words text-base font-bold text-stone-900 sm:text-xl">{value}</p>
+          <p className="break-words text-base font-bold text-stone-900 tabular-nums sm:text-xl">{value}</p>
           <p className="mt-0.5 hidden text-[11px] text-stone-400 sm:block">{hint}</p>
         </div>
       </CardContent>
@@ -335,9 +335,9 @@ export function OverviewSection() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {STATUS_DOTS.map((s) => (
-                <div key={s.key} className="rounded-xl border border-stone-100 bg-stone-50 p-3 text-center">
+                <div key={s.key} className="rounded-xl border border-stone-100 bg-stone-50 p-3 text-center transition-colors duration-150 hover:border-stone-200 hover:bg-stone-100/70">
                   <span className={cn('mx-auto mb-1.5 block size-2.5 rounded-full', s.dot)} />
-                  <p className="text-lg font-bold text-stone-900">{stats.attendanceToday[s.key]}</p>
+                  <p className="text-lg font-bold text-stone-900 tabular-nums">{stats.attendanceToday[s.key]}</p>
                   <p className="text-[11px] text-stone-500">{s.label}</p>
                 </div>
               ))}
@@ -347,7 +347,7 @@ export function OverviewSection() {
                 <span className="font-medium text-stone-600">Tingkat Kehadiran</span>
                 <span className="font-bold text-emerald-700">{stats.attendanceRate}%</span>
               </div>
-              <Progress value={stats.attendanceRate} className="h-2.5" />
+              <Progress value={stats.attendanceRate} className="h-2.5 bg-emerald-100 [&>div]:bg-emerald-600" aria-label={`Tingkat kehadiran ${stats.attendanceRate}%`} />
             </div>
           </CardContent>
         </Card>
@@ -369,7 +369,7 @@ export function OverviewSection() {
             ) : (
               <div className="max-h-60 space-y-3 overflow-y-auto pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300">
                 {stats.activeSessions.map((s) => (
-                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3">
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3 transition-colors duration-150 hover:border-emerald-100 hover:bg-emerald-50/50">
                     <div className="rounded-lg bg-white p-1.5 shadow-sm">
                       <RotatingQr code={s.code} size={64} compact />
                     </div>
@@ -645,7 +645,7 @@ function RecentList({
         ) : (
           <ul className="max-h-64 divide-y divide-stone-100 overflow-y-auto pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-3 py-2.5">
+              <li key={item.id} className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors duration-150 hover:bg-stone-50">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-stone-800">{item.title}</p>
                   <p className="truncate text-xs text-stone-500">{item.subtitle}</p>
