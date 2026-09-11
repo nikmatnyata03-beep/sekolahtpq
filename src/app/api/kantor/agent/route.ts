@@ -140,6 +140,20 @@ export async function POST(req: NextRequest) {
           { status: 402 },
         )
       }
+      // Geo-block / kredensial: egress di wilayah tak didukung (mis. sandbox via HK)
+      // bisa memunculkan 400 lokasi atau 401 kredensial walau key valid.
+      if (/location is not supported/i.test(msg)) {
+        return NextResponse.json(
+          { error: 'Lokasi server ini tidak didukung Google Gemini (geo-block). Jalankan dari produksi (Cloudflare).' },
+          { status: 502 },
+        )
+      }
+      if (/UNAUTHENTICATED|invalid authentication credentials/i.test(msg)) {
+        return NextResponse.json(
+          { error: 'Gemini menolak kredensial (kemungkinan geo-block server uji atau API key salah). Cek key/project di https://aistudio.google.com/apikey.' },
+          { status: 502 },
+        )
+      }
       const status = upstream.status === 429 ? 429 : 502
       return NextResponse.json(
         {
