@@ -2,12 +2,17 @@
 // Sumber data = tabel Asset (di-seed dari src/lib/kantor/data.ts oleh
 // ensureKantorSchema). Scene 3D & panel membaca endpoint ini — komponen
 // TIDAK mem-hardcode daftar aset. Termasuk jumlah feedback per divisi.
-import { NextResponse } from 'next/server'
+// Task 52: Kantor AI hanya untuk ADMIN & DEVELOPER (akses penuh) dan GURU
+// (lihat saja) — tamu/orang tua mendapat 401.
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ensureKantorSchema } from '@/lib/kantor/bootstrap'
+import { guard } from '@/lib/session'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'DEVELOPER', 'GURU'])
+    if ('res' in g) return g.res
     await ensureKantorSchema()
     const [assets, grouped, latest] = await Promise.all([
       db.asset.findMany({ where: { kind: 'CHARACTER' }, orderBy: { assetKey: 'asc' } }),
@@ -42,7 +47,7 @@ export async function GET() {
         office: { kind: 'PROCEDURAL', modelUrl: null },
         feedbackCounts,
       },
-      { headers: { 'Cache-Control': 'public, max-age=60' } },
+      { headers: { 'Cache-Control': 'private, max-age=60' } },
     )
   } catch (e) {
     console.error('[kantor/assets GET]', e)

@@ -1,6 +1,7 @@
 // POST /api/feedback — kritik & saran dari web 3D Kantor AI Agent (Task 51).
 // Validasi zod + rate-limit per-IP (maks 5/menit, window geser in-memory).
-// GET (admin) — ringkasan untuk panel Head Office: jumlah per divisi + 10 terbaru.
+// Task 52: POST hanya ADMIN & DEVELOPER (guru = mode lihat saja), nama default
+// dari sesi login. GET — ringkasan Head Office untuk ADMIN & DEVELOPER.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
@@ -46,6 +47,8 @@ function clientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const g = await guard(req, ['ADMIN', 'DEVELOPER'])
+    if ('res' in g) return g.res
     await ensureKantorSchema()
     const ip = clientIp(req)
     if (rateLimited(ip)) {
@@ -61,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
     const { divisionId, name, message } = parsed.data
     const saved = await db.feedback.create({
-      data: { divisionId, name: name || null, message, ip },
+      data: { divisionId, name: name || g.session.name, message, ip },
     })
     return NextResponse.json(
       { ok: true, id: saved.id, result: 'Terima kasih! Masukanmu sudah diterima kantor.' },
@@ -74,7 +77,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const g = await guard(req, ['ADMIN'])
+  const g = await guard(req, ['ADMIN', 'DEVELOPER'])
   if ('res' in g) return g.res
   try {
     await ensureKantorSchema()

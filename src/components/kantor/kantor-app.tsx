@@ -1,6 +1,8 @@
 'use client'
 // Kantor AI Agent — app shell: fetch manifest /api/assets, header kontrol,
 // panel divisi + form kritik/saran, loading bar, fallback 2D. (Task 51)
+// Task 52 — kontrol akses: access='full' (ADMIN/DEVELOPER) dapat kritik-saran
+// + Chat Head Office (Gemini live); access='view' (GURU) hanya melihat.
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -13,9 +15,10 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { dispatchFeedbackAnimation } from './agent-registry'
+import { HeadChat } from './head-chat'
 import { useKantorStore, type ManifestCharacter } from './kantor-store'
 import { DIVISION_LABELS, KANTOR_CHARACTERS, type KantorDivision } from '@/lib/kantor/data'
-import { Home, Loader2, MapPin, Orbit, Presentation, Sparkles } from 'lucide-react'
+import { Bot, Eye, Home, Loader2, MapPin, Orbit, Presentation, Sparkles } from 'lucide-react'
 
 const KantorScene = dynamic(() => import('./kantor-scene').then((m) => m.KantorScene), {
   ssr: false,
@@ -25,9 +28,11 @@ const KantorScene = dynamic(() => import('./kantor-scene').then((m) => m.KantorS
 const OVERVIEW = { key: 'overview', pos: [0, 8.2, 10.4] as [number, number, number], look: [0, 0.8, 0] as [number, number, number] }
 const PODIUM = { key: 'podium', pos: [0, 2.5, 1.4] as [number, number, number], look: [0, 1.15, -3.55] as [number, number, number] }
 
-export function KantorApp() {
+export function KantorApp({ access = 'full', userName }: { access?: 'full' | 'view'; userName?: string }) {
   const { manifest, loading, loadError, selected, quality, autoRotate, setManifest, setLoading, setLoadError, select, setQuality, setPreset, setAutoRotate, webglOk, setWebglOk, bumpFeedback } = useKantorStore()
   const { progress, active } = useProgress()
+  const [chatOpen, setChatOpen] = useState(false)
+  const canInteract = access === 'full'
 
   useEffect(() => {
     try {
@@ -92,6 +97,18 @@ export function KantorApp() {
               <span className="text-[11px] font-medium text-stone-600">Putar otomatis</span>
               <Switch checked={autoRotate} onCheckedChange={setAutoRotate} aria-label="Putar otomatis kamera" />
             </div>
+            {canInteract && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-8 gap-1.5 text-xs ${chatOpen ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : ''}`}
+                onClick={() => setChatOpen((v) => !v)}
+                aria-expanded={chatOpen}
+                data-testid="tombol-chat-head"
+              >
+                <Bot className="h-3.5 w-3.5" /> Chat Head Office
+              </Button>
+            )}
             <div className="flex overflow-hidden rounded-lg border border-stone-200" role="group" aria-label="Kualitas grafik">
               {(['LOW', 'HIGH'] as const).map((q) => (
                 <button
@@ -111,6 +128,14 @@ export function KantorApp() {
         </div>
         <span id="kantor-fps" className="absolute end-2 bottom-0.5 hidden text-[10px] text-stone-400 sm:inline" />
       </header>
+
+      {/* Banner mode lihat saja (GURU) */}
+      {!canInteract && (
+        <div className="z-20 flex items-center justify-center gap-1.5 border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-center text-[11px] font-medium text-amber-800" data-testid="banner-lihat-saja">
+          <Eye className="h-3.5 w-3.5" />
+          Mode lihat saja — kritik, saran & chat Head Office khusus Admin/Developer.
+        </div>
+      )}
 
       {/* Scene / fallback */}
       <main className="relative min-h-[520px] flex-1">
@@ -139,8 +164,18 @@ export function KantorApp() {
 
         {/* Panel divisi / head */}
         {sel && (
-          <DivisionPanel key={sel.division} data={sel} onClose={() => select(null)} onSubmitted={() => bumpFeedback(sel.division)} />
+          <DivisionPanel
+            key={sel.division}
+            data={sel}
+            canInteract={canInteract}
+            defaultName={userName}
+            onClose={() => select(null)}
+            onSubmitted={() => bumpFeedback(sel.division)}
+          />
         )}
+
+        {/* Chat Head Office (ADMIN/DEVELOPER) */}
+        {canInteract && chatOpen && <HeadChat userName={userName ?? 'Pengguna'} onClose={() => setChatOpen(false)} />}
       </main>
 
       {/* Footer sticky */}
@@ -153,7 +188,7 @@ export function KantorApp() {
 
 /* ---------------- Panel divisi + form kritik/saran ---------------- */
 
-function DivisionPanel({ data, onClose, onSubmitted }: { data: ManifestCharacter; onClose: () => void; onSubmitted: () => void }) {
+function DivisionPanel({ data, canInteract, defaultName, onClose, onSubmitted }: { data: ManifestCharacter; canInteract: boolean; defaultName?: string; onClose: () => void; onSubmitted: () => void }) {
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -224,23 +259,32 @@ function DivisionPanel({ data, onClose, onSubmitted }: { data: ManifestCharacter
         </ul>
       </div>
 
-      <form onSubmit={submit} className="mt-4 space-y-2.5 rounded-xl border border-stone-200 bg-stone-50/60 p-3" data-testid={`form-${data.division}`}>
-        <p className="text-[11px] font-bold text-stone-700">Kirim kritik & saran untuk divisi ini</p>
-        <div>
-          <Label htmlFor={`nama-${data.division}`} className="text-[11px] text-stone-500">Nama (boleh anonim)</Label>
-          <Input id={`nama-${data.division}`} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="mis. Wali Santri A" className="h-8 bg-white text-xs" />
+      {canInteract ? (
+        <form onSubmit={submit} className="mt-4 space-y-2.5 rounded-xl border border-stone-200 bg-stone-50/60 p-3" data-testid={`form-${data.division}`}>
+          <p className="text-[11px] font-bold text-stone-700">Kirim kritik & saran untuk divisi ini</p>
+          <div>
+            <Label htmlFor={`nama-${data.division}`} className="text-[11px] text-stone-500">Nama (kosongkan = nama akunmu)</Label>
+            <Input id={`nama-${data.division}`} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder={defaultName ?? 'Nama'} className="h-8 bg-white text-xs" />
+          </div>
+          <div>
+            <Label htmlFor={`pesan-${data.division}`} className="text-[11px] text-stone-500">Pesan (5–500 karakter)</Label>
+            <Textarea id={`pesan-${data.division}`} required minLength={5} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Saran untuk divisi ini…" className="min-h-[64px] resize-none bg-white text-xs" data-testid={`pesan-${data.division}`} />
+            <p className="mt-0.5 text-end text-[10px] text-stone-400">{message.length}/500</p>
+          </div>
+          <Button type="submit" disabled={sending || message.trim().length < 5} className="h-9 w-full gap-2 bg-emerald-700 text-xs text-white hover:bg-emerald-800" data-testid={`kirim-${data.division}`}>
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {sending ? 'Mengirim…' : 'Kirim masukan'}
+          </Button>
+          <p className="text-center text-[10px] text-stone-400">Masukan memicu agen melapor ke Head Office</p>
+        </form>
+      ) : (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3" data-testid="panel-lihat-saja">
+          <Eye className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
+          <p className="text-[11px] leading-relaxed text-amber-800">
+            Mode lihat saja — kritik &amp; saran hanya bisa dikirim oleh Admin/Developer.
+          </p>
         </div>
-        <div>
-          <Label htmlFor={`pesan-${data.division}`} className="text-[11px] text-stone-500">Pesan (5–500 karakter)</Label>
-          <Textarea id={`pesan-${data.division}`} required minLength={5} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Saran untuk divisi ini…" className="min-h-[64px] resize-none bg-white text-xs" data-testid={`pesan-${data.division}`} />
-          <p className="mt-0.5 text-end text-[10px] text-stone-400">{message.length}/500</p>
-        </div>
-        <Button type="submit" disabled={sending || message.trim().length < 5} className="h-9 w-full gap-2 bg-emerald-700 text-xs text-white hover:bg-emerald-800" data-testid={`kirim-${data.division}`}>
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {sending ? 'Mengirim…' : 'Kirim masukan'}
-        </Button>
-        <p className="text-center text-[10px] text-stone-400">Masukan memicu agen melapor ke Head Office</p>
-      </form>
+      )}
     </div>
   )
 }
