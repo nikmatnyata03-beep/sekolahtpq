@@ -35,6 +35,12 @@ const STATEMENTS: string[] = [
   // Task 42: fingerprint ringan perangkat check-in (anti 1 HP banyak santri)
   `ALTER TABLE "Attendance" ADD COLUMN "deviceHash" TEXT`,
   `CREATE INDEX IF NOT EXISTS "Attendance_sessionId_method_idx" ON "Attendance"("sessionId", "method")`,
+  // ==== Task 49: index performa (audit query) — samakan dgn prisma/schema.prisma ====
+  `CREATE INDEX IF NOT EXISTS "Attendance_status_createdAt_idx" ON "Attendance"("status", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "Attendance_sessionId_status_deviceHash_idx" ON "Attendance"("sessionId", "status", "deviceHash")`,
+  `CREATE INDEX IF NOT EXISTS "Attendance_sessionId_createdAt_idx" ON "Attendance"("sessionId", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "Attendance_studentId_createdAt_idx" ON "Attendance"("studentId", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "Session_date_idx" ON "Session"("date")`,
 ]
 
 /** Jalankan sekali per isolate — aman dipanggil di setiap handler API absensi. */
