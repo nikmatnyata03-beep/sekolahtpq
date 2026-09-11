@@ -17,6 +17,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Hero } from './hero'
 import { AnnouncementsTicker } from './announcements-ticker'
 import { AboutSection } from './about-section'
@@ -104,6 +105,8 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
 
           {/* Desktop actions */}
           <div className="hidden items-center gap-2 md:flex">
+            {/* Task 48: pengalih tema */}
+            <ThemeToggle />
             <Button
               size="sm"
               variant="outline"
@@ -152,6 +155,10 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
                   </button>
                 ))}
                 <Separator className="my-2" />
+                {/* Task 48: pengalih tema (mobile) */}
+                <div className="py-1">
+                  <ThemeToggle />
+                </div>
                 <Button
                   variant="outline"
                   className="justify-start border-amber-500/60 text-amber-800 hover:bg-amber-50"

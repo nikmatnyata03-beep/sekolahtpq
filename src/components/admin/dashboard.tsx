@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { OverviewSection } from './overview'
 import { GuruOverview, type GuruOverviewSection } from './guru-overview'
@@ -296,6 +297,9 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
             <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">{headerDef.label}</h1>
             <p className="hidden truncate text-xs text-stone-500 sm:block">{headerDef.description}</p>
           </div>
+
+          {/* Task 48: pengalih tema Terang/Gelap/Sistem */}
+          <ThemeToggle />
 
           <button
             type="button"
