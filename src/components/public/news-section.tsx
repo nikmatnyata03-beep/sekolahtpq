@@ -62,6 +62,27 @@ function getVisitorId(): string {
   return id
 }
 
+/** Task 67 — bentuk komentar artikel ala sosial media. */
+interface PostComment {
+  id: string
+  name: string
+  content: string
+  createdAt: string
+}
+
+/** Label waktu relatif gaya sosial media (Indonesia). */
+function timeAgo(iso: string): string {
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (sec < 60) return 'baru saja'
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min} menit lalu`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} jam lalu`
+  const day = Math.floor(hr / 24)
+  if (day < 7) return `${day} hari lalu`
+  return formatDate(iso)
+}
+
 /**
  * Tombol like ala sosial media — hati terisi bila sudah disukai perangkat
  * ini. Klik TIDAK membuka dialog artikel (stopPropagation).
@@ -120,6 +141,184 @@ function LikeButton({
   )
 }
 
+/**
+ * Task 67 — kolom komentar ala sosial media di dialog baca artikel.
+ * Publik: siapa pun bisa membaca & menulis (nama opsional, anti-spam 30 dtk).
+ * ADMIN (cookie sesi domain sama): tombol hapus per komentar.
+ */
+function CommentsSection({ postId, isAdmin }: { postId: string; isAdmin: boolean }) {
+  const [comments, setComments] = useState<PostComment[] | null>(null)
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [sending, setSending] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const data = await apiGet<PostComment[]>(
+        `/api/posts/comments?postId=${encodeURIComponent(postId)}`,
+      )
+      setComments(Array.isArray(data) ? data : [])
+    } catch {
+      setComments([])
+    }
+  }, [postId])
+
+  useEffect(() => {
+    setComments(null)
+    setNotice(null)
+    void load()
+  }, [load])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const text = content.trim()
+    if (!text || sending) return
+    setSending(true)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/posts/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId,
+          visitorId: getVisitorId(),
+          name: name.trim() || undefined,
+          content: text,
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | (PostComment & { error?: string })
+        | { error?: string }
+        | null
+      if (!res.ok) {
+        setNotice(data?.error ?? 'Gagal mengirim komentar, coba lagi.')
+      } else if (data && 'id' in data) {
+        setContent('')
+        setComments((cs) => [...(cs ?? []), data as PostComment])
+      }
+    } catch {
+      setNotice('Jaringan bermasalah — periksa koneksi dan coba lagi.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function remove(id: string) {
+    if (deletingId) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/posts/comments?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) setComments((cs) => (cs ?? []).filter((c) => c.id !== id))
+    } catch {
+      // jaringan gagal — biarkan daftar tetap tampil
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div className="mt-8 rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <MessageCircle className="size-4 text-emerald-700" />
+        <h4 className="text-sm font-bold text-stone-800">
+          Komentar
+          {comments ? <span className="ml-1 font-normal text-stone-400">({comments.length})</span> : null}
+        </h4>
+      </div>
+
+      {/* Form tulis komentar */}
+      <form onSubmit={submit} className="space-y-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={60}
+            placeholder="Nama (opsional)"
+            aria-label="Nama untuk komentar"
+            className="w-full rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 outline-none placeholder:text-stone-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 sm:w-44"
+          />
+          <div className="flex flex-1 gap-2">
+            <input
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              maxLength={500}
+              placeholder="Tulis komentar…"
+              aria-label="Isi komentar"
+              className="w-full flex-1 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 outline-none placeholder:text-stone-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!content.trim() || sending}
+              aria-label="Kirim komentar"
+              className="shrink-0 rounded-full bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-40"
+            >
+              {sending ? <RefreshCw className="size-4 animate-spin" /> : <Send className="size-4" />}
+            </Button>
+          </div>
+        </div>
+        {notice && <p className="text-xs text-rose-600">{notice}</p>}
+      </form>
+
+      {/* Daftar komentar — tinggi maksimum + scroll halus */}
+      <div className="mt-4 max-h-96 space-y-3 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-emerald-200">
+        {comments === null && (
+          <div className="space-y-2">
+            <Skeleton className="h-12 rounded-xl bg-stone-200/60" />
+            <Skeleton className="h-12 rounded-xl bg-stone-200/60" />
+          </div>
+        )}
+        {comments !== null && comments.length === 0 && (
+          <p className="py-2 text-center text-xs text-stone-400">
+            Belum ada komentar. Jadilah yang pertama mengirim ucapan!
+          </p>
+        )}
+        {comments?.map((c) => (
+          <div
+            key={c.id}
+            className="flex items-start gap-2.5 rounded-xl border border-stone-100 bg-white p-3"
+          >
+            <div
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800"
+              aria-hidden="true"
+            >
+              {c.name.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-xs font-semibold text-stone-700">{c.name}</span>
+                <span className="shrink-0 text-[10px] text-stone-400">{timeAgo(c.createdAt)}</span>
+              </div>
+              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-600">
+                {c.content}
+              </p>
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => void remove(c.id)}
+                disabled={deletingId === c.id}
+                aria-label={`Hapus komentar dari ${c.name}`}
+                className="shrink-0 rounded-full p-1.5 text-stone-300 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+              >
+                {deletingId === c.id ? (
+                  <RefreshCw className="size-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="size-3.5" />
+                )}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Cover image dengan fallback gradien — <img> pola sesuai kontrak (tanpa next/image). */
 function CoverImage({
   src,
@@ -159,6 +358,14 @@ export function NewsSection() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<string>('SEMUA')
   const [selected, setSelected] = useState<Post | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // Task 67 — deteksi ADMIN (cookie sesi domain sama) untuk tombol hapus komentar.
+  useEffect(() => {
+    apiGet<{ role?: string }>('/api/auth/me')
+      .then((u) => setIsAdmin(u?.role === 'ADMIN'))
+      .catch(() => setIsAdmin(false))
+  }, [])
 
   /** Task 66 — perbarui satu post di state (hasil toggle like). */
   function patchPost(updated: Post) {
@@ -401,6 +608,8 @@ export function NewsSection() {
                     <LikeButton post={selected} onToggled={patchPost} size="md" />
                   </div>
                 )}
+                {/* Task 67 — komentar ala sosial media */}
+                {selected && <CommentsSection postId={selected.id} isAdmin={isAdmin} />}
               </div>
             </>
           )}
