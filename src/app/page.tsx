@@ -13,6 +13,11 @@ export default function Home() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  // Task 62 — override tampilan publik: /?view=public (portal live) dan
+  // /?preview=1 (pratinjau draf) tetap menampilkan portal publik meski
+  // pengguna sedang login — dipakai tautan "Portal Live"/"Pratinjau Draf"
+  // dari Landing Editor yang membuka tab baru.
+  const [publicView, setPublicView] = useState(false)
 
   // Restore session after mount (deferred callback keeps hydration consistent)
   useEffect(() => {
@@ -20,6 +25,8 @@ export default function Home() {
     // rejection) — error otomatis masuk antrean agen AI via /api/dev/errors.
     installRuntimeErrorHook()
     const timer = setTimeout(() => {
+      const params = new URLSearchParams(window.location.search)
+      setPublicView(params.get('view') === 'public' || params.get('preview') === '1')
       void apiGet<AuthUser>('/api/auth/me')
         .then(setUser)
         .catch(() => setUser(null))
@@ -52,7 +59,7 @@ export default function Home() {
     )
   }
 
-  if (user) {
+  if (user && !publicView) {
     if (user.role === 'ORANG_TUA') {
       return (
         <div className="flex min-h-screen flex-col">

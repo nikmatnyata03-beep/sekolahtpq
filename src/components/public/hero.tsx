@@ -64,6 +64,7 @@ export function Hero({
 }) {
   const { settings } = usePortalSettings()
   const hero = settings.hero
+  const brand = settings.theme?.primary ?? '#047857'
 
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,7 +105,12 @@ export function Hero({
     <section
       id="beranda"
       ref={sectionRef}
-      className="relative overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-800 to-emerald-700 text-white"
+      className="relative overflow-hidden text-white"
+      style={{
+        // Task 62 — gradien hero mengikuti warna merek CMS (var --brand dipasang
+        // di akar portal; fallback emerald bila tema belum tersedia).
+        backgroundImage: `linear-gradient(to bottom right, color-mix(in srgb, ${brand} 85%, black), color-mix(in srgb, ${brand} 92%, black) 45%, ${brand})`,
+      }}
     >
       {/* ===== Layer 0 — latar ilustrasi masjid (CMS) + overlay kontras, parallax kedalaman ===== */}
       <div aria-hidden="true" className="absolute inset-0">
@@ -117,7 +123,13 @@ export function Hero({
               draggable={false}
               className="h-full w-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/95 via-emerald-900/85 to-emerald-800/70" />
+            <div
+              className="absolute inset-0"
+              style={{
+                // Overlay kontras: gelap kiri-atas → brand kanan-bawah agar foto CMS tetap terbaca.
+                backgroundImage: `linear-gradient(to bottom right, rgba(0, 0, 0, 0.72), color-mix(in srgb, ${brand} 78%, black))`,
+              }}
+            />
           </ParallaxY>
         )}
       </div>
@@ -145,7 +157,8 @@ export function Hero({
         aria-hidden="true"
       />
       <MosqueSilhouette
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-auto w-full text-emerald-950/60"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-auto w-full"
+        style={{ color: `color-mix(in srgb, ${brand} 55%, black)` }}
         aria-hidden="true"
       />
 
@@ -211,7 +224,8 @@ export function Hero({
             >
               <Button
                 size="lg"
-                className="min-h-11 w-full bg-amber-500 font-semibold text-emerald-950 shadow-lg shadow-amber-900/30 hover:bg-amber-400 sm:w-auto"
+                className="min-h-11 w-full font-semibold text-white shadow-lg hover:opacity-90 sm:w-auto"
+                style={{ backgroundColor: 'var(--brand-accent)', boxShadow: '0 10px 15px -3px color-mix(in srgb, var(--brand-accent) 40%, transparent)' }}
                 onClick={() => onNavigate('ppdb')}
               >
                 Daftar Santri Baru

@@ -59,7 +59,27 @@ export interface PortalSettings {
   gallery: GalleryItem[]
   /** Urutan render section utama portal publik (Task 59-b — layout editor). */
   sectionOrder: string[]
+  /** Warna merek portal (Task 62 — template tema) dalam hex #rrggbb. */
+  theme: ThemeSettings
 }
+
+/** Tema warna portal publik — diaplikasikan via CSS variables (--brand/--brand-accent). */
+export interface ThemeSettings {
+  /** Warna utama (tombol, aksen merek, gradien hero). */
+  primary: string
+  /** Warna sekunder/aksen (garis progres, highlight). */
+  accent: string
+}
+
+/** Preset tema siap pakai — sekali klik mengganti pasangan warna. */
+export const THEME_PRESETS: { id: string; name: string; primary: string; accent: string }[] = [
+  { id: 'zamrud', name: 'Zamrud (Bawaan)', primary: '#047857', accent: '#d97706' },
+  { id: 'fajar', name: 'Teal Fajar', primary: '#0f766e', accent: '#f59e0b' },
+  { id: 'senja', name: 'Amber Senja', primary: '#b45309', accent: '#065f46' },
+  { id: 'marun', name: 'Marun Klasik', primary: '#9f1239', accent: '#ca8a04' },
+  { id: 'hutan', name: 'Hijau Hutan', primary: '#166534', accent: '#65a30d' },
+  { id: 'tinta', name: 'Tinta Terung', primary: '#6d28d9', accent: '#f59e0b' },
+]
 
 /**
  * Kunci section utama landing page beserta urutan bawaannya.
@@ -198,6 +218,7 @@ export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
     },
   ],
   sectionOrder: [...DEFAULT_SECTION_ORDER],
+  theme: { primary: '#047857', accent: '#d97706' },
 }
 
 export const SETTING_KEYS = ['hero', 'about', 'contact', 'faqs', 'testimonials', 'gallery'] as const
@@ -290,6 +311,18 @@ function sanitizeSectionOrder(v: unknown): string[] {
   return out
 }
 
+/**
+ * Sanitasi warna hex (#rgb / #rrggbb) — terima bentuk ringkas, kembalikan
+ * bentuk normal #rrggbb. Selain itu pakai fallback. Cegah injeksi nilai CSS.
+ */
+function sanitizeHex(v: unknown, fallback: string): string {
+  if (typeof v !== 'string') return fallback
+  const s = v.trim().toLowerCase()
+  if (/^#[0-9a-f]{6}$/.test(s)) return s
+  if (/^#[0-9a-f]{3}$/.test(s)) return '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]
+  return fallback
+}
+
 /** Deep-merge payload (parsial, bentuk bebas) di atas default — aman untuk data lama/rusak. */
 export function mergePortalSettings(raw: unknown): PortalSettings {
   const r = (raw ?? {}) as Record<string, unknown>
@@ -365,5 +398,16 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
     testimonials,
     gallery,
     sectionOrder: sanitizeSectionOrder(r.sectionOrder),
+    theme: sanitizeTheme(r.theme),
+  }
+}
+
+/** Gabungkan tema — data lama tanpa theme otomatis pakai warna bawaan. */
+function sanitizeTheme(v: unknown): ThemeSettings {
+  const d = DEFAULT_PORTAL_SETTINGS.theme
+  const o = (v ?? {}) as Record<string, unknown>
+  return {
+    primary: sanitizeHex(o.primary, d.primary),
+    accent: sanitizeHex(o.accent, d.accent),
   }
 }

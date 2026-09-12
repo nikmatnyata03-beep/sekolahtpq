@@ -4,7 +4,7 @@
 // Satu sumber komponen dekoratif: pola geometris, bintang khatam, lengkung
 // mihrab, siluet masjid, reveal 3D saat scroll, dan parallax.
 
-import { useRef, type ReactNode } from 'react'
+import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -124,12 +124,19 @@ export function ParallaxY({
 }
 
 /** Siluet arsitektur masjid: kubah bawang, menara, puncak bintang — satu warna currentColor. */
-export function MosqueSilhouette({ className }: { className?: string }) {
+export function MosqueSilhouette({
+  className,
+  style,
+}: {
+  className?: string
+  style?: CSSProperties
+}) {
   return (
     <svg
       viewBox="0 0 1200 200"
       preserveAspectRatio="xMidYMax meet"
       className={className}
+      style={style}
       aria-hidden="true"
       focusable="false"
     >

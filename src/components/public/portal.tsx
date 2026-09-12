@@ -3,7 +3,7 @@
 // Public portal composition — header, sections, footer.
 // Consumed by the root SPA view switcher: <PublicPortal onOpenLogin={...} />
 
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { LogIn, Menu, MoonStar, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -48,8 +48,15 @@ const NAV_ITEMS = [
 
 export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { settings } = usePortalSettings()
+  const { settings, previewing } = usePortalSettings()
   const logoUrl = settings.hero.logoUrl
+
+  // Task 62 — tema CMS: warna merek dipasang sebagai CSS variables di akar
+  // portal sehingga seluruh section turunan bisa memakai var(--brand).
+  const brandVars = {
+    '--brand': settings.theme.primary,
+    '--brand-accent': settings.theme.accent,
+  } as CSSProperties
 
   // Progres scroll halaman — menggerakkan garis gradien tipis di tepi bawah header.
   const { scrollYProgress } = useScroll()
@@ -90,7 +97,14 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-800">
+    <div className="min-h-screen bg-stone-50 text-stone-800" style={brandVars}>
+      {/* Task 62 — banner pratinjau draf (hanya saat ?preview=1 + login admin) */}
+      {previewing && (
+        <div className="sticky top-0 z-50 border-b border-amber-300 bg-amber-400 px-4 py-2 text-center text-xs font-semibold text-amber-950">
+          MODE PRATINJAU — ini tampilan DRAF yang belum dipublikasikan. Kembali ke editor lalu tekan “Publish ke Portal” untuk menerapkan.
+        </div>
+      )}
+
       {/* ============ HEADER ============ */}
       <header className="sticky top-0 z-40 border-b border-emerald-100 bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/75">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
@@ -99,7 +113,10 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
               // Logo lembaga dari CMS — teks merek di sebelahnya sudah deskriptif
               <img src={logoUrl} alt="" className="size-10 shrink-0 rounded-xl object-cover ring-1 ring-emerald-200" />
             ) : (
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-900 text-white shadow-md shadow-emerald-900/20">
+              <span
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white shadow-md"
+                style={{ backgroundImage: 'linear-gradient(to bottom right, color-mix(in srgb, var(--brand) 70%, black), var(--brand))' }}
+              >
                 <MoonStar className="size-5" />
               </span>
             )}
@@ -141,7 +158,12 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
               <ScanLine className="size-4" />
               Cek-in Absensi
             </Button>
-            <Button size="sm" className="bg-emerald-700 shadow-sm hover:bg-emerald-800" onClick={onOpenLogin}>
+            <Button
+              size="sm"
+              className="shadow-sm hover:opacity-90"
+              style={{ backgroundColor: 'var(--brand)' }}
+              onClick={onOpenLogin}
+            >
               <LogIn className="size-4" />
               Masuk
             </Button>
@@ -160,7 +182,10 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
                   {logoUrl ? (
                     <img src={logoUrl} alt="" className="size-8 rounded-lg object-cover ring-1 ring-emerald-200" />
                   ) : (
-                    <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-900 text-white">
+                    <span
+                      className="flex size-8 items-center justify-center rounded-lg text-white"
+                      style={{ backgroundImage: 'linear-gradient(to bottom right, color-mix(in srgb, var(--brand) 70%, black), var(--brand))' }}
+                    >
                       <MoonStar className="size-4" />
                     </span>
                   )}
@@ -192,7 +217,11 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
                   <ScanLine className="size-4" />
                   Cek-in Absensi
                 </Button>
-                <Button className="justify-start bg-emerald-700 hover:bg-emerald-800" onClick={onOpenLogin}>
+                <Button
+                  className="justify-start hover:opacity-90"
+                  style={{ backgroundColor: 'var(--brand)' }}
+                  onClick={onOpenLogin}
+                >
                   <LogIn className="size-4" />
                   Masuk Portal
                 </Button>
@@ -201,10 +230,10 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
           </Sheet>
         </div>
 
-        {/* Garis progres scroll — tipis di tepi bawah header (dekoratif) */}
+        {/* Garis progres scroll — tipis di tepi bawah header (warna mengikuti tema CMS) */}
         <motion.span
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-gradient-to-r from-emerald-600 via-amber-400 to-emerald-600"
+          className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-gradient-to-r from-[var(--brand)] via-[var(--brand-accent)] to-[var(--brand)]"
           style={{ scaleX: progressX }}
         />
       </header>
