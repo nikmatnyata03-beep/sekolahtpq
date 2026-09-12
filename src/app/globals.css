@@ -431,3 +431,29 @@
     }
   }
 }
+
+/* ===== Gelombang 14 (#16 slice) — kedalaman interaktif pointer, nol dependensi =====
+   Posisi kursor dinormalisasi hero.tsx ke --tilt-x/--tilt-y (rentang -1..1) pada
+   elemen section; tiap lapisan ornamen memetakan variabel itu ke pergeseran dengan
+   faktor berbeda = parallax 3D nyata (lapisan jauh berlawanan arah, dekat mengikuti
+   lebih jauh). Aktif HANYA bila pointer halus (mouse) dan tidak reduce-motion —
+   perangkat sentuh & pengguna reduce-motion melihat hero statis seperti sebelumnya. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hero-tilt-far {
+    transform: translate3d(calc(var(--tilt-x, 0) * -0.45rem), calc(var(--tilt-y, 0) * -0.3rem), 0);
+    transition: transform 200ms ease-out;
+    will-change: transform;
+  }
+
+  .hero-tilt-mid {
+    transform: translate3d(calc(var(--tilt-x, 0) * 0.8rem), calc(var(--tilt-y, 0) * 0.55rem), 0);
+    transition: transform 200ms ease-out;
+    will-change: transform;
+  }
+
+  .hero-tilt-near {
+    transform: translate3d(calc(var(--tilt-x, 0) * 1.35rem), calc(var(--tilt-y, 0) * 0.8rem), 0);
+    transition: transform 200ms ease-out;
+    will-change: transform;
+  }
+}

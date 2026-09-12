@@ -95,6 +95,41 @@ export function Hero({
   const contentOpacity = useTransform(scrollYProgress, [0, 0.9], [1, 0.4])
   const contentScale = useTransform(scrollYProgress, [0, 1], [1, 0.96])
 
+  // Gelombang 14 (#16 slice): kedalaman interaktif — posisi kursor dinormalisasi ke
+  // --tilt-x/--tilt-y (rentang -1..1) pada section; CSS memetakannya ke pergeseran
+  // per lapisan (lihat .hero-tilt-* di globals.css). rAF-throttle agar hemat; hanya
+  // pointer halus (mouse) dan dihormati prefers-reduced-motion — sentuh = statis.
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (!finePointer.matches || reducedMotion.matches) return
+    let raf = 0
+    const onMove = (e: PointerEvent) => {
+      const rect = el.getBoundingClientRect()
+      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        el.style.setProperty('--tilt-x', nx.toFixed(3))
+        el.style.setProperty('--tilt-y', ny.toFixed(3))
+      })
+    }
+    const onLeave = () => {
+      cancelAnimationFrame(raf)
+      el.style.setProperty('--tilt-x', '0')
+      el.style.setProperty('--tilt-y', '0')
+    }
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerleave', onLeave)
+    return () => {
+      cancelAnimationFrame(raf)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerleave', onLeave)
+    }
+  }, [])
+
   const chips = [
     { icon: Users, value: stats?.students ?? null, label: 'Santri Aktif' },
     { icon: GraduationCap, value: stats?.teachers ?? null, label: 'Ustadz & Ustadzah' },
@@ -139,30 +174,36 @@ export function Hero({
            lapisan jauh/dekat tenggelam dengan kecepatan beda = kedalaman parallax murni CSS. */}
       <StarLattice
         id="dj-hero-star"
-        className="hero-lattice absolute inset-0 h-full w-full text-white opacity-[0.07]"
+        className="hero-lattice hero-tilt-far absolute inset-0 h-full w-full text-white opacity-[0.07]"
       />
       <div
-        className="pointer-events-none absolute -left-24 top-10 size-72 rounded-full bg-amber-400/10 blur-3xl"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute -right-24 bottom-0 size-80 rounded-full bg-emerald-400/10 blur-3xl"
+        className="hero-tilt-mid pointer-events-none absolute -left-24 top-10 size-72 rounded-full bg-amber-400/10 blur-3xl"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute right-[14%] top-1/3 size-64 rounded-full bg-amber-300/[0.06] blur-3xl"
+        className="hero-tilt-mid pointer-events-none absolute -right-24 bottom-0 size-80 rounded-full bg-emerald-400/10 blur-3xl"
         aria-hidden="true"
       />
-      {/* Siluet skyline ganda: lapis putih samar di belakang (jauh) + zamrud gelap di depan */}
-      <MosqueSilhouette
-        className="hero-sink-far pointer-events-none absolute -bottom-2 left-1/2 w-[140%] max-w-none -translate-x-1/2 text-white/[0.05]"
+      <div
+        className="hero-tilt-far pointer-events-none absolute right-[14%] top-1/3 size-64 rounded-full bg-amber-300/[0.06] blur-3xl"
         aria-hidden="true"
       />
-      <MosqueSilhouette
-        className="hero-sink-near pointer-events-none absolute inset-x-0 bottom-0 h-auto w-full"
-        style={{ color: `color-mix(in srgb, ${brand} 55%, black)` }}
-        aria-hidden="true"
-      />
+      {/* Siluet skyline ganda: lapis putih samar di belakang (jauh) + zamrud gelap di depan.
+          Gelombang 14: masing-masing dibungkus lapisan tilt pointer (kedalaman interaktif) —
+          pembungkus transform, anak tetap scroll-driven (keduanya komposisi elemen beda). */}
+      <div className="hero-tilt-far pointer-events-none absolute inset-0" aria-hidden="true">
+        <MosqueSilhouette
+          className="hero-sink-far pointer-events-none absolute -bottom-2 left-1/2 w-[140%] max-w-none -translate-x-1/2 text-white/[0.05]"
+          aria-hidden="true"
+        />
+      </div>
+      <div className="hero-tilt-near pointer-events-none absolute inset-0" aria-hidden="true">
+        <MosqueSilhouette
+          className="hero-sink-near pointer-events-none absolute inset-x-0 bottom-0 h-auto w-full"
+          style={{ color: `color-mix(in srgb, ${brand} 55%, black)` }}
+          aria-hidden="true"
+        />
+      </div>
 
       {/* ===== Layer konten — slide-scroll 3D (fade + scale) + parallax lambat ===== */}
       <motion.div
