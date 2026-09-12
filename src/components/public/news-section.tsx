@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
+  BookOpen,
   CalendarDays,
   ChevronRight,
   ImageOff,
@@ -120,6 +121,13 @@ export function NewsSection() {
           <p className="mt-3 text-muted-foreground">
             Ikuti kabar terbaru, kegiatan santri, dan artikel seputar pendidikan Al-Qur&apos;an.
           </p>
+          {/* Task 63 — blog terpisah: tautan ke halaman blog penuh */}
+          <Button asChild size="sm" variant="outline" className="mt-4 border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800">
+            <a href="/?page=blog">
+              <BookOpen className="size-4" />
+              Buka Blog Lengkap
+            </a>
+          </Button>
         </div>
 
         {/* Tabs kategori */}
@@ -305,6 +313,16 @@ export function NewsSection() {
                 <p className="mt-6 text-center font-serif text-emerald-800" dir="rtl" lang="ar">
                   وَقُل رَّبِّ زِدْنِي عِلْمًا
                 </p>
+                {/* Task 63 — buka artikel ini di halaman blog penuh */}
+                <div className="mt-4 text-center">
+                  <a
+                    href={`/?page=blog&slug=${encodeURIComponent(selected.slug)}`}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                  >
+                    <BookOpen className="size-3.5" />
+                    Buka di Blog — halaman penuh
+                  </a>
+                </div>
               </div>
             </>
           )}
