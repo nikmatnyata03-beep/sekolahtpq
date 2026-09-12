@@ -51,6 +51,20 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
   const { settings } = usePortalSettings()
   const logoUrl = settings.hero.logoUrl
 
+  // Progres scroll halaman — menggerakkan garis gradien tipis di tepi bawah header.
+  const { scrollYProgress } = useScroll()
+  const progressX = useTransform(scrollYProgress, [0, 1], [0, 1])
+
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setMobileOpen(false)
+  }
+
+  const goHome = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setMobileOpen(false)
+  }
+
   // Task 59-b: urutan section utama mengikuti CMS (settings.sectionOrder);
   // fallback ke urutan bawaan bila kosong/tidak valid.
   const sectionOrder =
@@ -73,20 +87,6 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
     faq: <FaqSection />,
     ppdb: <PpdbSection />,
     checkin: <CheckinSection />,
-  }
-
-  // Progres scroll halaman — menggerakkan garis gradien tipis di tepi bawah header.
-  const { scrollYProgress } = useScroll()
-  const progressX = useTransform(scrollYProgress, [0, 1], [0, 1])
-
-  const scrollToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setMobileOpen(false)
-  }
-
-  const goHome = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-    setMobileOpen(false)
   }
 
   return (
