@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { PublicPortal } from '@/components/public/portal'
-import { BlogView } from '@/components/public/blog-view'
 import { AdminDashboard } from '@/components/admin/dashboard'
 import { ParentPortal } from '@/components/parent/parent-portal'
 import { LoginDialog } from '@/components/auth/login-dialog'
@@ -19,8 +18,6 @@ export default function Home() {
   // pengguna sedang login — dipakai tautan "Portal Live"/"Pratinjau Draf"
   // dari Landing Editor yang membuka tab baru.
   const [publicView, setPublicView] = useState(false)
-  // Task 63 — halaman blog terpisah (deep-link): /?page=blog & /?page=blog&slug=…
-  const [blogView, setBlogView] = useState(false)
 
   // Restore session after mount (deferred callback keeps hydration consistent)
   useEffect(() => {
@@ -30,7 +27,6 @@ export default function Home() {
     const timer = setTimeout(() => {
       const params = new URLSearchParams(window.location.search)
       setPublicView(params.get('view') === 'public' || params.get('preview') === '1')
-      setBlogView(params.get('page') === 'blog')
       void apiGet<AuthUser>('/api/auth/me')
         .then(setUser)
         .catch(() => setUser(null))
@@ -61,12 +57,6 @@ export default function Home() {
         </div>
       </div>
     )
-  }
-
-  // Task 63 — halaman blog publik: tampil untuk semua (login maupun tidak),
-  // sebelum pemilihan view dashboard/portal.
-  if (blogView) {
-    return <BlogView />
   }
 
   if (user && !publicView) {

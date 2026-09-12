@@ -16,7 +16,6 @@ const QUICK_LINKS = [
   { id: 'guru', label: 'Biodata Guru' },
   { id: 'materi', label: 'Materi Ajar' },
   { id: 'berita', label: 'Berita & Kegiatan' },
-  { id: 'blog', label: 'Blog', href: '/?page=blog' },
   { id: 'testimoni', label: 'Testimoni' },
   { id: 'faq', label: 'FAQ' },
   { id: 'ppdb', label: 'PPDB Online' },
@@ -102,30 +101,17 @@ export function Footer({ onNavigate }: { onNavigate?: (id: string) => void }) {
               <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 md:grid-cols-1">
                 {QUICK_LINKS.map((link) => (
                   <li key={link.id}>
-                    {link.href ? (
-                      <a
-                        href={link.href}
-                        className="group flex min-h-11 items-center gap-1.5 text-sm text-emerald-100/80 transition-colors hover:text-amber-300"
-                      >
-                        <span
-                          className="size-1.5 rotate-45 bg-emerald-500/70 transition-colors group-hover:bg-amber-400"
-                          aria-hidden="true"
-                        />
-                        {link.label}
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onNavigate?.(link.id)}
-                        className="group flex min-h-11 items-center gap-1.5 text-sm text-emerald-100/80 transition-colors hover:text-amber-300"
-                      >
-                        <span
-                          className="size-1.5 rotate-45 bg-emerald-500/70 transition-colors group-hover:bg-amber-400"
-                          aria-hidden="true"
-                        />
-                        {link.label}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.(link.id)}
+                      className="group flex min-h-11 items-center gap-1.5 text-sm text-emerald-100/80 transition-colors hover:text-amber-300"
+                    >
+                      <span
+                        className="size-1.5 rotate-45 bg-emerald-500/70 transition-colors group-hover:bg-amber-400"
+                        aria-hidden="true"
+                      />
+                      {link.label}
+                    </button>
                   </li>
                 ))}
               </ul>
