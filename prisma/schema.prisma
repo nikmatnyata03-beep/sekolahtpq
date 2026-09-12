@@ -245,6 +245,7 @@ model Post {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   likes      PostLike[]
+  comments   PostComment[]
 }
 
 // Task 66 — like ala sosial media: pengunjung publik (tanpa login) ditandai
@@ -257,6 +258,20 @@ model PostLike {
   createdAt DateTime @default(now())
 
   @@unique([postId, visitorId])
+}
+
+// Task 67 — komentar ala sosial media: pengunjung publik menulis komentar
+// (tanpa login, nama opsional), admin dapat menghapus.
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  visitorId String
+  name      String   @default("Pengunjung")
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
 }
 
 model Announcement {

@@ -17,6 +17,14 @@ const STATEMENTS: string[] = [
     REFERENCES "Post" ("id") ON DELETE CASCADE ON UPDATE CASCADE)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "PostLike_postId_visitorId_key" ON "PostLike"("postId", "visitorId")`,
   `CREATE INDEX IF NOT EXISTS "PostLike_postId_idx" ON "PostLike"("postId")`,
+  // Task 67 — komentar artikel (publik tulis, admin hapus)
+  `CREATE TABLE IF NOT EXISTS "PostComment" ("id" TEXT NOT NULL PRIMARY KEY,
+    "postId" TEXT NOT NULL, "visitorId" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT 'Pengunjung', "content" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PostComment_postId_fkey" FOREIGN KEY ("postId")
+    REFERENCES "Post" ("id") ON DELETE CASCADE ON UPDATE CASCADE)`,
+  `CREATE INDEX IF NOT EXISTS "PostComment_postId_createdAt_idx" ON "PostComment"("postId", "createdAt")`,
 ]
 
 async function run(): Promise<void> {

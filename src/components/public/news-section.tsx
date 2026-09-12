@@ -10,8 +10,11 @@ import {
   ChevronRight,
   Heart,
   ImageOff,
+  MessageCircle,
   Newspaper,
   RefreshCw,
+  Send,
+  Trash2,
   User,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
