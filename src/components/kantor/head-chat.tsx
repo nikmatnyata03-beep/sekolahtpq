@@ -5,18 +5,23 @@
 // sistem, silahkan tunggu…" — balasan disusun agen AI (cron 5 menit) dan
 // diambil klien lewat polling GET /api/kantor/chat saat ada pesan pending.
 // Sesi tersimpan server-side → obrolan utuh walau panel ditutup/direfresh.
+//
+// Task 59 — MODE EKSEKUSI LANGSUNG: pesan assistant berstatus 'progress'
+// tampil sebagai baris timeline gaya terminal (langkah kerja agen live);
+// polling berjalan terus selama panel terpasang agar progres real-time.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { getAgent } from './agent-registry'
-import { Bot, Loader2, MessageSquarePlus, Send, X } from 'lucide-react'
+import { Bot, Loader2, MessageSquarePlus, Send, Terminal, X } from 'lucide-react'
 
 interface ChatMsg {
   id: string
   role: 'user' | 'assistant'
   content: string
-  status?: string // user: pending|processing|answered|error
+  status?: string // user: pending|processing|answered|error; assistant: done|progress
   error?: boolean // bubble merah (gagal kirim / jawaban gagal dari agen)
+  progress?: boolean // baris timeline langkah kerja agen (Task 59)
 }
 
 const WAIT_TEXT = 'Sedang di proses sistem, silahkan tunggu…'
@@ -82,7 +87,8 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.content,
           status: m.status,
-          error: m.role === 'assistant' && m.content.startsWith('⚠️'),
+          error: m.role === 'assistant' && m.status !== 'progress' && m.content.startsWith('⚠️'),
+          progress: m.role === 'assistant' && m.status === 'progress',
         }))
         setSessionId(body.session.id)
         setMessages(list)
@@ -109,12 +115,12 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
     void refresh(null).finally(() => setLoaded(true))
   }, [])
 
-  // Polling tiap 5 detik HANYA saat ada pesan pending.
+  // Polling tiap 5 detik selama panel terpasang — progres live tanpa jeda (Task 59).
   useEffect(() => {
-    if (!sessionId || pendingCount === 0) return
+    if (!sessionId) return
     const t = setInterval(() => void refresh(), 5_000)
     return () => clearInterval(t)
-  }, [sessionId, pendingCount, refresh])
+  }, [sessionId, refresh])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -181,7 +187,15 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
   }
 
   const view: ChatMsg[] = [...welcome, ...messages]
-  const showWaiting = pendingCount > 0 && !sending
+  // Bubble "menunggu" hilang begitu baris progres pertama muncul setelahnya.
+  const showWaiting =
+    !sending &&
+    view.some(
+      (m, i) =>
+        m.role === 'user' &&
+        (m.status === 'pending' || m.status === 'processing') &&
+        !view.slice(i + 1).some((p) => p.role === 'assistant' && p.progress),
+    )
 
   return (
     <div
@@ -217,21 +231,33 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
       {/* Pesan */}
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-white px-3 py-3" data-testid="chat-messages">
         {loaded ? (
-          view.map((m) => (
-            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${
-                  m.role === 'user'
-                    ? 'rounded-br-sm bg-emerald-700 text-white'
-                    : m.error
-                      ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
-                      : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
-                }`}
-              >
-                {m.content}
+          view.map((m) =>
+            m.progress ? (
+              // Baris timeline langkah kerja agen (Task 59) — gaya terminal.
+              <div key={m.id} className="flex justify-start" data-testid="chat-progress">
+                <div className="flex max-w-[90%] items-start gap-1.5 rounded-lg border border-stone-100 bg-stone-50/70 px-2.5 py-1.5">
+                  <Terminal className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
+                  <span className="break-words font-mono text-[10.5px] leading-relaxed text-stone-600">
+                    {m.content}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))
+            ) : (
+              <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${
+                    m.role === 'user'
+                      ? 'rounded-br-sm bg-emerald-700 text-white'
+                      : m.error
+                        ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
+                        : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
+                  }`}
+                >
+                  {m.content}
+                </div>
+              </div>
+            ),
+          )
         ) : (
           <div className="flex justify-center py-6">
             <Loader2 className="h-4 w-4 animate-spin text-stone-300" aria-label="Memuat obrolan" />

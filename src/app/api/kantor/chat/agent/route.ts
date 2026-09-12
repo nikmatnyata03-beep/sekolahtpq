@@ -1,7 +1,11 @@
 // /api/kantor/chat/agent — jembatan agen AI sandbox ↔ antrian chat D1 (Task 57).
 //
-// Autentikasi: header `x-agent-key` == AGENT_API_KEY (constant-time compare,
-// pola sama dengan AI Fix Bridge di /api/auth/login). TIDAK untuk browser user.
+// Task 59 — MODE EKSEKUSI LANGSUNG: permintaan/perintah pengembangan yang masuk
+// lewat chat D1 dikerjakan langsung oleh agen (tanpa menunggu GitHub issue),
+// dengan tiap langkah di-broadcast via aksi 'progress' agar terlihat live di
+// bubble chat user. Autentikasi: header `x-agent-key` == AGENT_API_KEY
+// (constant-time compare, pola sama dengan AI Fix Bridge di /api/auth/login).
+// TIDAK untuk browser user.
 //
 //   GET  ?limit=10            → pesan 'pending' ( + 'processing' basi >10 mnt )
 //                               terlama dulu, lengkap konteks user + riwayat sesi.
@@ -9,6 +13,10 @@
 //                               (aman dari balapan antar sesi cron paralel).
 //   POST { messageId, reply }  → simpan jawaban + tandai 'answered'.
 //   POST { messageId, error }  → tandai 'error' + bubble penjelasan ke user.
+//   POST { messageId, progress } → Task 59: baris timeline langkah kerja live
+//                               (assistant status 'progress') — tampil real-time
+//                               di bubble chat via polling; boleh dikirim
+//                               berulang saat tugas dieksekusi bertahap.
 //
 // Protokol pemakaian oleh agen: docs/KANTOR-CHAT-AGENT.md
 import { NextRequest, NextResponse } from 'next/server'
@@ -58,6 +66,7 @@ const postSchema = z.object({
   action: z.enum(['claim']).optional(),
   reply: z.string().trim().min(1).max(4000).optional(),
   error: z.string().trim().min(1).max(600).optional(),
+  progress: z.string().trim().min(1).max(600).optional(), // Task 59: langkah kerja live
 })
 
 // ============================== GET — ambil antrian ==============================
@@ -133,7 +142,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
-    const { messageId, action, reply, error } = parsed.data
+    const { messageId, action, reply, error, progress } = parsed.data
 
     // ---- CLAIM: atomik, hanya sukses bila masih 'pending' ----
     if (action === 'claim') {
@@ -151,12 +160,34 @@ export async function POST(req: NextRequest) {
     if (!msg || msg.role !== 'user') {
       return NextResponse.json({ error: 'Pesan tidak ditemukan' }, { status: 404 })
     }
-    if (msg.status === 'answered') {
-      return NextResponse.json({ error: 'Pesan sudah dijawab' }, { status: 409 })
+
+    // ---- PROGRESS (Task 59): baris timeline langkah kerja live ----
+    // Boleh berulang selama tugas berjalan ('processing') maupun lanjutan tugas
+    // yang sudah berakhir ('answered') — eksekusi multi-giliran cron.
+    if (progress) {
+      if (msg.status !== 'processing' && msg.status !== 'answered') {
+        return NextResponse.json(
+          { error: 'Klaim pesan dulu sebelum kirim progress', claimed: false },
+          { status: 409 },
+        )
+      }
+      const row = await db.kantorChatMessage.create({
+        data: { sessionId: msg.sessionId, role: 'assistant', content: progress, status: 'progress' },
+      })
+      await db.kantorChatSession.update({
+        where: { id: msg.sessionId },
+        data: { lastActiveAt: new Date() },
+      })
+      return NextResponse.json({ ok: true, progressId: row.id })
     }
 
     // ---- REPLY: jawaban agen → bubble assistant + status answered ----
+    // Task 59: pesan 'answered' boleh menerima reply lanjutan (laporan akhir
+    // tugas multi-tahap) — bubble tambahan, status tetap 'answered'.
     if (reply) {
+      if (msg.status !== 'processing' && msg.status !== 'answered') {
+        return NextResponse.json({ error: 'Pesan belum diklaim / status tidak valid' }, { status: 409 })
+      }
       const [assistantMsg] = await db.$transaction([
         db.kantorChatMessage.create({
           data: { sessionId: msg.sessionId, role: 'assistant', content: reply, status: 'done' },
@@ -174,6 +205,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ---- ERROR: agen tidak bisa menjawab → bubble penjelasan ----
+    if (msg.status === 'answered') {
+      return NextResponse.json({ error: 'Pesan sudah dijawab' }, { status: 409 })
+    }
     if (error) {
       await db.$transaction([
         db.kantorChatMessage.create({

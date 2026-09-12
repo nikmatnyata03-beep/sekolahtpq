@@ -107,31 +107,47 @@ bash scripts/ai-task.sh reject 12 "alasan"  # butuh info
 bash scripts/ai-task.sh setup-labels        # siapkan label sekali di awal
 ```
 
-## 7. Baris `#CHAT-…` — antrian chat Head Office (Task 57-c)
+## 7. Baris `#CHAT-…` — kanal perintah langsung dari D1 (Task 59)
 
-Sejak Task 57, chat Head Office di `/kantor` bersifat asinkron: pesan pengguna
-tersimpan di D1 dan dijawab agen saat poller berjalan. `ai-task.sh list` kini
-JUGA menampilkan antrian tersebut sebagai baris:
+Sejak Task 57, chat Head Office di `/kantor` + bubble chat dashboard bersifat
+asinkron: pesan pengguna tersimpan di D1 dan dijawab agen saat poller berjalan.
+`ai-task.sh list` menampilkan antrian tersebut sebagai baris:
 
 ```
 #CHAT-<messageId> | [KANTOR-CHAT] <ROLE> <nama> | <cuplikan isi pesan>
 ```
+
+**Task 59 — MODE EKSEKUSI LANGSUNG**: antrian chat D1 kini adalah kanal perintah
+utama. Permintaan/perintah pengembangan dari ADMIN/DEVELOPER **langsung
+dikerjakan** — tidak perlu menunggu GitHub issue berlabel `ai-task`. GitHub
+issue tetap diproses lebih dulu bila ada (murah dicek), tetapi chat D1 tidak
+pernah "dilempar balik" ke issue hanya agar tuntas.
 
 Aturan pemrosesan (jangan tertukar dengan issue GitHub):
 
 1. `#CHAT-...` **BUKAN** GitHub issue — JANGAN pakai `show/claim/done/reject`
    `ai-task.sh` untuk itu (semuanya akan error).
 2. Bila ada issue GitHub terbuka → kerjakan issue itu dulu seperti biasa;
-   chat boleh menyusul di giliran berikutnya.
-3. Proses chat maksimal **5 pesan** per giliran sesuai
-   **docs/KANTOR-CHAT-AGENT.md**:
+   chat menyusul di giliran yang sama bila ringan, atau giliran berikutnya.
+3. Proses chat maksimal **5 pesan** per giliran; tugas EKSEKUSI (perubahan
+   kode) **satu saja** per giliran sesuai **docs/KANTOR-CHAT-AGENT.md**:
    ```bash
    bash scripts/kantor-chat-agent.sh pending            # sudah tampil di list
-   bash scripts/kantor-chat-agent.sh claim <messageId>  # wajib sebelum jawab (409 = diambil agen lain)
-   bash scripts/kantor-chat-agent.sh reply <messageId> "jawaban"
+   bash scripts/kantor-chat-agent.sh claim <messageId>  # wajib sebelum bekerja (409 = diambil agen lain)
+   bash scripts/kantor-chat-agent.sh progress <messageId> "langkah kerja"   # WAJIB tiap tahap — live di bubble
+   bash scripts/kantor-chat-agent.sh reply <messageId> "jawaban / laporan akhir"
    bash scripts/kantor-chat-agent.sh error <messageId> "alasan tak bisa dijawab"
    ```
-4. Jawab sesuai role pengirim & batasan keamanan §4 — rinciannya ada di
-   docs/KANTOR-CHAT-AGENT.md (DEVELOPER: bebas topik pengembangan web;
-   ADMIN: informatif saja; larangan kebocoran kredensial/data sensitif tetap mutlak).
-5. Laporan akhir giliran sebut jumlah chat diproses, mis. "chat: 2 dijawab".
+4. **Mode eksekusi (ADMIN/DEVELOPER)** — alur wajib:
+   `claim` → `progress` di SETIAP tahap (analisis, implementasi, QA, lint,
+   commit, push/deploy — contoh: `"→ lint: 0 error"`, `"→ commit a1b2c3d"`) →
+   `reply` laporan akhir. Tugas multi-giliran: tulis progres di worklog.md,
+   lanjutkan giliran berikutnya, `progress`/`reply` boleh dikirim ulang ke
+   pesan yang sudah `answered` (aksi progress/reply mendukungnya).
+   **Subagent** yang dipakai untuk mengerjakan tugas WAJIB diinstruksikan
+   menjalankan `scripts/kantor-chat-agent.sh progress <messageId> "..."` pada
+   tiap milestone agar sinkron tampil di bubble chat.
+5. **Mode informasional (GURU, dan ADMIN yang bertanya)** — jawab langsung
+   `reply` tanpa kode/data sensitif; pertanyaan operasional diarahkan ke
+   dashboard. Larangan kebocoran kredensial/data sensitif tetap mutlak.
+6. Laporan akhir giliran sebut jumlah chat diproses, mis. "chat: 2 dijawab".

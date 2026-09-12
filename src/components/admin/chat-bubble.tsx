@@ -10,17 +10,22 @@
 //  - badge jumlah pending + titik "belum dibaca" di FAB (terlihat saat tertutup)
 //  - polling tetap berjalan saat panel tertutup agar badge akurat
 //  - tanpa ketergantungan scene 3D (agent-registry) milik halaman kantor
+//
+// Task 59 — MODE EKSEKUSI LANGSUNG: pesan assistant berstatus 'progress'
+// ditampilkan sebagai baris timeline gaya terminal (langkah kerja agen live);
+// polling berjalan setiap saat panel terbuka agar progres muncul real-time.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Bot, Loader2, MessageSquarePlus, MessagesSquare, Send, X } from 'lucide-react'
+import { Bot, Loader2, MessageSquarePlus, MessagesSquare, Send, Terminal, X } from 'lucide-react'
 
 interface ChatMsg {
   id: string
   role: 'user' | 'assistant'
   content: string
-  status?: string // user: pending|processing|answered|error
+  status?: string // user: pending|processing|answered|error; assistant: done|progress
   error?: boolean // bubble merah (gagal kirim / jawaban gagal dari agen)
+  progress?: boolean // baris timeline langkah kerja agen (Task 59)
 }
 
 const WAIT_TEXT = 'Sedang di proses sistem, silahkan tunggu…'
@@ -89,7 +94,8 @@ export function ChatBubble({ userName }: { userName: string }) {
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.content,
           status: m.status,
-          error: m.role === 'assistant' && m.content.startsWith('⚠️'),
+          error: m.role === 'assistant' && m.status !== 'progress' && m.content.startsWith('⚠️'),
+          progress: m.role === 'assistant' && m.status === 'progress',
         }))
         setSessionId(body.session.id)
         setMessages(list)
@@ -115,12 +121,13 @@ export function ChatBubble({ userName }: { userName: string }) {
     void refresh(null).finally(() => setLoaded(true))
   }, [])
 
-  // Polling tiap 5 detik HANYA saat ada pesan pending — panel terbuka atau tertutup.
+  // Polling: panel terbuka → selalu 4 dtk (progres live); tertutup → 5 dtk saat ada pending.
   useEffect(() => {
-    if (!sessionId || pendingCount === 0) return
-    const t = setInterval(() => void refresh(), 5_000)
+    if (!sessionId) return
+    if (!open && pendingCount === 0) return
+    const t = setInterval(() => void refresh(), open ? 4_000 : 5_000)
     return () => clearInterval(t)
-  }, [sessionId, pendingCount, refresh])
+  }, [sessionId, pendingCount, open, refresh])
 
   // Buka panel → reset badge, muat ulang dari server, fokus ke input.
   const openPanel = () => {
@@ -194,7 +201,16 @@ export function ChatBubble({ userName }: { userName: string }) {
   }
 
   const view: ChatMsg[] = [...welcome, ...messages]
-  const showWaiting = pendingCount > 0 && !sending
+  // Bubble "menunggu" hanya tampil bila belum ada baris progres setelah pesan
+  // yang diproses — begitu agen mulai bekerja, timeline progres menggantikannya.
+  const showWaiting =
+    !sending &&
+    view.some(
+      (m, i) =>
+        m.role === 'user' &&
+        (m.status === 'pending' || m.status === 'processing') &&
+        !view.slice(i + 1).some((p) => p.role === 'assistant' && p.progress),
+    )
   const fabBadge = pendingCount + unread
 
   return (
@@ -241,21 +257,33 @@ export function ChatBubble({ userName }: { userName: string }) {
           {/* Pesan */}
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-white px-3 py-3" data-testid="chat-messages">
             {loaded ? (
-              view.map((m) => (
-                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${
-                      m.role === 'user'
-                        ? 'rounded-br-sm bg-emerald-700 text-white'
-                        : m.error
-                          ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
-                          : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
-                    }`}
-                  >
-                    {m.content}
+              view.map((m) =>
+                m.progress ? (
+                  // Baris timeline langkah kerja agen (Task 59) — gaya terminal.
+                  <div key={m.id} className="flex justify-start" data-testid="chat-progress">
+                    <div className="flex max-w-[90%] items-start gap-1.5 rounded-lg border border-stone-100 bg-stone-50/70 px-2.5 py-1.5">
+                      <Terminal className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
+                      <span className="break-words font-mono text-[10.5px] leading-relaxed text-stone-600">
+                        {m.content}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))
+                ) : (
+                  <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs leading-relaxed ${
+                        m.role === 'user'
+                          ? 'rounded-br-sm bg-emerald-700 text-white'
+                          : m.error
+                            ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
+                            : 'rounded-bl-sm border border-stone-200 bg-stone-50 text-stone-800'
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+                  </div>
+                ),
+              )
             ) : (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-4 w-4 animate-spin text-stone-300" aria-label="Memuat obrolan" />

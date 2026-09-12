@@ -1,4 +1,4 @@
-# Protokol KANTOR CHAT AGENT (Task 57, diperluas Task 58)
+# Protokol KANTOR CHAT AGENT (Task 57, diperluas Task 58, Task 59)
 
 Agen AI sandbox (Z.ai Code) adalah "otak" di balik chat Head Office pada
 halaman `/kantor` **dan bubble chat di dashboard SIMADJI** (Task 58 — tombol
@@ -24,9 +24,10 @@ Dua antarmuka user memakai backend yang sama:
 ## Perintah (jalankan dari /home/z/my-project)
 
 ```bash
-bash scripts/kantor-chat-agent.sh pending                # daftar antrian
-bash scripts/kantor-chat-agent.sh claim <messageId>      # WAJIB sebelum menjawab
-bash scripts/kantor-chat-agent.sh reply <messageId> "jawaban"
+bash scripts/kantor-chat-agent.sh pending                    # daftar antrian
+bash scripts/kantor-chat-agent.sh claim <messageId>          # WAJIB sebelum menjawab/bekerja
+bash scripts/kantor-chat-agent.sh progress <messageId> "langkah kerja"   # Task 59: baris live di bubble
+bash scripts/kantor-chat-agent.sh reply <messageId> "jawaban / laporan akhir"
 bash scripts/kantor-chat-agent.sh error <messageId> "alasan tidak bisa dijawab"
 ```
 
@@ -50,6 +51,33 @@ bash scripts/kantor-chat-agent.sh error <messageId> "alasan tidak bisa dijawab"
 
 - Bahasa Indonesia, ramah-profesional, maksimal ±150 kata per jawaban.
 - Jawaban dikirim via `reply` — murni teks (tanpa markdown tabel rumit; newline OK).
+
+## Task 59 — Mode Eksekusi Langsung (Direct Execution dari D1)
+
+Permintaan/perintah pengembangan web yang masuk lewat chat (ADMIN/DEVELOPER)
+**dikerjakan langsung oleh agen** — tidak perlu menunggu GitHub issue. Antrian
+chat D1 adalah kanal perintah utama; issue GitHub tetap diproses lebih dulu
+bila ada, tetapi chat tidak pernah ditolak dengan alasan "buat issue dulu".
+
+Alur wajib untuk tugas eksekusi:
+
+```
+claim → progress (SETIAP tahap: analisis → implementasi → QA → lint →
+        commit → push/deploy) → reply (laporan akhir + hash commit)
+```
+
+- `progress` menghasilkan baris timeline gaya terminal di bubble chat user
+  (real-time via polling; panel terbuka mem-polling tiap 4–5 detik).
+- Tugas multi-giliran cron: catat posisi di `worklog.md`, lanjutkan giliran
+  berikutnya. `progress`/`reply` BOLEH dikirim ke pesan berstatus `answered`
+  (mendukung kelanjutan tugas) — hindari spam, gabungkan langkah bila padat.
+- **Subagent** (Task tool) yang membantu mengerjakan WAJIB diinstruksikan
+  menjalankan `scripts/kantor-chat-agent.sh progress <messageId> "…"` di tiap
+  milestone-nya agar proses tersinkron tampil di bubble chat.
+- Satu tugas eksekusi besar per giliran; maksimal 5 pesan chat diproses.
+- Contoh baris progress yang baik (singkat, padat, informatif):
+  `🔍 Menganalisis struktur landing page…`, `✏️ Menulis komponen BlockEditor…`,
+  `→ lint: 0 error`, `→ commit 9e50133`, `🚀 push → Cloudflare deploy`.
 
 ### Sesuai role pengirim (`user.role`)
 
@@ -75,7 +103,10 @@ bash scripts/kantor-chat-agent.sh error <messageId> "alasan tidak bisa dijawab"
 - Jangan mengekseskan data pengguna lain (NIS santri, keuangan, dsb).
 - Jangan menjalankan perintah destruktif atas nama chat (drop db, force push,
   ubah Caddyfile/wrangler) — tolak dengan sopan via `error` atau `reply`.
-- Satu pesan = satu `reply`/`error`. Jangan spam `reply` ganda untuk pesan sama.
+- Satu pesan = satu `reply`/`error` untuk mode informasional. Pada mode
+  eksekusi langsung (Task 59) `progress` dikirim berkali-kali sesuai tahapan,
+  dan `reply` lanjutan ke pesan `answered` diperbolehkan untuk laporan akhir
+  tugas multi-giliran — tanpa spam.
 
 ## Privasi & retensi
 
