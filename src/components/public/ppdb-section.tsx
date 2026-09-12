@@ -52,6 +52,9 @@ import { useToast } from '@/hooks/use-toast'
 import { apiGet, apiSend, formatShortDate } from '@/lib/api-client'
 import type { Registration } from '@/lib/types'
 import { TurnstileWidget } from '@/components/security/turnstile-widget'
+import { AnimatedGradientText } from '@/components/velora/animated-gradient-text'
+import { BorderBeam } from '@/components/velora/border-beam'
+import { Meteors } from '@/components/velora/meteors'
 
 const DOC_OPTIONS = ['KTP Orang Tua', 'Kartu Keluarga', 'Akta Kelahiran']
 
@@ -270,28 +273,33 @@ export function PpdbSection() {
   return (
     <section id="ppdb" className="scroll-mt-20 bg-stone-50 py-16">
       <div className="mx-auto max-w-6xl px-4">
-        {/* Heading + affordance cek status */}
-        <div className="mx-auto mb-8 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-700">
-            PPDB Online
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Pendaftaran Santri Baru</h2>
-          <p className="mt-3 text-muted-foreground">
-            Tahun Ajaran 2025/2026 telah dibuka. Isi formulir daring berikut — tanpa perlu datang
-            langsung, konfirmasi dikirim lewat WhatsApp.
-          </p>
-          <div className="mt-5">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCheckOpen((v) => !v)}
-              aria-expanded={checkOpen}
-              aria-controls="ppdb-status-check"
-              className="min-h-11 gap-2 rounded-full border-emerald-300 bg-white px-5 text-sm font-semibold text-emerald-700 shadow-xs transition-colors hover:bg-emerald-50 hover:text-emerald-800"
-            >
-              <FileSearch className="size-4" />
-              Sudah mendaftar? Cek Status
-            </Button>
+        {/* Heading + affordance cek status — panel Velora: meteor jatuh + badge gradien brand */}
+        <div className="relative mx-auto mb-8 max-w-2xl overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/90 to-white px-6 py-8 text-center shadow-sm">
+          <Meteors number={9} className="opacity-35" />
+          <div className="relative">
+            <span className="mb-3 inline-block rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-widest">
+              <AnimatedGradientText className="from-emerald-700 via-amber-500 to-emerald-700">
+                PPDB Online
+              </AnimatedGradientText>
+            </span>
+            <h2 className="text-3xl font-bold tracking-tight text-stone-800">Pendaftaran Santri Baru</h2>
+            <p className="mt-3 text-muted-foreground">
+              Tahun Ajaran 2025/2026 telah dibuka. Isi formulir daring berikut — tanpa perlu datang
+              langsung, konfirmasi dikirim lewat WhatsApp.
+            </p>
+            <div className="mt-5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCheckOpen((v) => !v)}
+                aria-expanded={checkOpen}
+                aria-controls="ppdb-status-check"
+                className="min-h-11 gap-2 rounded-full border-emerald-300 bg-white px-5 text-sm font-semibold text-emerald-700 shadow-xs transition-colors hover:bg-emerald-50 hover:text-emerald-800"
+              >
+                <FileSearch className="size-4" />
+                Sudah mendaftar? Cek Status
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -738,7 +746,9 @@ export function PpdbSection() {
             {/* Cek status kini berupa panel collapsible di bawah judul seksi (aman via /api/registrations/check) */}
 
             {/* Bantuan */}
-            <div className="rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-6 shadow-sm">
+            <div className="relative rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-6 shadow-sm">
+              {/* Velora BorderBeam — berkas cahaya mengelilingi tepi kartu */}
+              <BorderBeam size={56} duration={7} colorFrom="#f59e0b" colorTo="#047857" />
               <h3 className="flex items-center gap-2 text-base font-bold text-stone-800">
                 <span className="flex size-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
                   <MessageCircle className="size-4.5" />

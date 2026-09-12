@@ -14,6 +14,8 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, BookOpen, GraduationCap, LogIn, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { NumberTicker } from '@/components/velora/number-ticker'
+import { ShimmerButton } from '@/components/velora/shimmer-button'
 import { apiGet } from '@/lib/api-client'
 import type { DashboardStats } from '@/lib/types'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
@@ -29,32 +31,6 @@ const HeroScene3d = dynamic(() => import('./hero-scene-3d'), {
   ssr: false,
   loading: () => null,
 })
-
-/** Angka statistik menghitung naik dari 0 (ease-out ~1.2s), berakhir tepat pada nilai. */
-function useCountUp(target: number, duration = 1200): number {
-  const [display, setDisplay] = useState(0)
-
-  useEffect(() => {
-    if (!Number.isFinite(target) || target < 0) return
-    let raf = 0
-    const start = performance.now()
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3) // ease-out cubic
-      setDisplay(progress < 1 ? Math.round(target * eased) : target)
-      if (progress < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [target, duration])
-
-  return display
-}
-
-function CountUpValue({ value }: { value: number }) {
-  const display = useCountUp(value)
-  return <span className="block text-xl font-bold tabular-nums">{display}</span>
-}
 
 /** Koreografi masuk berjenjang — fade + naik dengan delay konsisten. */
 const riseIn = (delay: number) => ({
@@ -302,15 +278,17 @@ export function Hero({
               {...riseIn(0.45)}
               className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row"
             >
-              <Button
-                size="lg"
-                className="min-h-11 w-full font-semibold text-white shadow-lg hover:opacity-90 sm:w-auto"
-                style={{ backgroundColor: 'var(--brand-accent)', boxShadow: '0 10px 15px -3px color-mix(in srgb, var(--brand-accent) 40%, transparent)' }}
+              <ShimmerButton
+                className="h-11 min-h-11 w-full px-6 text-sm font-semibold text-white shadow-lg hover:scale-[1.02] sm:w-auto"
+                style={{
+                  backgroundColor: 'var(--brand-accent)',
+                  boxShadow: '0 10px 15px -3px color-mix(in srgb, var(--brand-accent) 40%, transparent)',
+                }}
                 onClick={() => onNavigate('ppdb')}
               >
                 Daftar Santri Baru
                 <ArrowRight className="size-4" />
-              </Button>
+              </ShimmerButton>
               <Button
                 size="lg"
                 variant="outline"
@@ -343,7 +321,8 @@ export function Hero({
                       ) : chip.value == null ? (
                         <span className="block text-xl font-bold">—</span>
                       ) : (
-                        <CountUpValue value={chip.value} />
+                        // Velora NumberTicker — spring mengikuti viewport (reduce-motion = angka langsung)
+                        <NumberTicker value={chip.value} className="block text-xl font-bold" />
                       )}
                       <span className="block text-[11px] font-medium text-emerald-100/80">
                         {chip.label}

@@ -16,6 +16,7 @@ import {
   Users,
 } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
+import { AuroraBackground } from '@/components/velora/aurora-background'
 import { KhatamStar, OrnamentDivider, ParallaxY, ScrollReveal, StarLattice } from './ornaments'
 
 const SEJARAH = [
@@ -96,8 +97,10 @@ export function AboutSection() {
   const { settings } = usePortalSettings()
 
   return (
-    <section id="tentang" className="scroll-mt-20 bg-white py-16">
-      <div className="mx-auto max-w-6xl px-4">
+    <section id="tentang" className="relative scroll-mt-20 overflow-hidden bg-white py-16">
+      {/* Velora AuroraBackground (subtle) — kabut emerald melayang di belakang konten */}
+      <AuroraBackground intensity="subtle" />
+      <div className="relative mx-auto max-w-6xl px-4">
         {/* Heading */}
         <ScrollReveal className="mx-auto max-w-2xl text-center">
           <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">

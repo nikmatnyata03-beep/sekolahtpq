@@ -43,9 +43,66 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* ===== Velora UI (velora.colorlib.com, MIT) — token & animasi =====
+     Warna brand DIPEMAPSKAN ke palet emerald lembaga (registry bawaan biru).
+     --brand mengikuti warna CMS portal (inline var) bila tersedia. */
+  --color-brand: var(--brand);
+  --color-brand-from: var(--brand-from);
+  --color-brand-via: var(--brand-via);
+  --color-brand-to: var(--brand-to);
+  --animate-shimmer: shimmer 2.5s linear infinite;
+  --animate-gradient: gradient 6s ease infinite;
+  --animate-marquee: marquee var(--duration, 40s) linear infinite;
+  --animate-marquee-vertical: marquee-vertical var(--duration, 40s) linear infinite;
+  --animate-meteor: meteor 5s linear infinite;
+  --animate-aurora-1: aurora-1 14s ease-in-out infinite alternate;
+  --animate-aurora-2: aurora-2 18s ease-in-out infinite alternate;
+  --animate-aurora-3: aurora-3 22s ease-in-out infinite alternate;
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes gradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(calc(-100% - var(--gap))); }
+  }
+  @keyframes marquee-vertical {
+    from { transform: translateY(0); }
+    to { transform: translateY(calc(-100% - var(--gap))); }
+  }
+  @keyframes meteor {
+    0% { transform: rotate(var(--meteor-angle, 215deg)) translateX(0); opacity: 1; }
+    70% { opacity: 1; }
+    100% { transform: rotate(var(--meteor-angle, 215deg)) translateX(-600px); opacity: 0; }
+  }
+  @keyframes aurora-1 {
+    0% { transform: translate(-10%, -12%) scale(1); }
+    50% { transform: translate(12%, 8%) scale(1.25); }
+    100% { transform: translate(-6%, 14%) scale(0.95); }
+  }
+  @keyframes aurora-2 {
+    0% { transform: translate(12%, 10%) scale(1.1); }
+    50% { transform: translate(-14%, -6%) scale(0.9); }
+    100% { transform: translate(8%, -12%) scale(1.2); }
+  }
+  @keyframes aurora-3 {
+    0% { transform: translate(0%, 16%) scale(0.95); }
+    50% { transform: translate(10%, -10%) scale(1.15); }
+    100% { transform: translate(-12%, 4%) scale(1); }
+  }
 }
 
 :root {
+  /* Velora brand ramp — default emerald Darul Jinan (ditimpa CMS via inline --brand*) */
+  --brand: #047857;
+  --brand-from: #047857;
+  --brand-via: #059669;
+  --brand-to: #34d399;
   /* Gelombang 1: radius 16px — bahasa visual modern 2026 (riset UIUX-RESEARCH-01) */
   --radius: 1rem;
   --background: oklch(1 0 0);

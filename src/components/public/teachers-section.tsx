@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SpotlightCard } from '@/components/velora/spotlight-card'
 import { apiGet, formatShortDate } from '@/lib/api-client'
 import type { Teacher } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -244,27 +245,30 @@ export function TeachersSection() {
         {!loading && !error && teachers.length > 0 && (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {teachers.map((teacher) => (
-              <div
+              // Velora SpotlightCard — kilau radial mengikuti kursor (warna --brand)
+              <SpotlightCard
                 key={teacher.id}
-                className="flex flex-col items-center rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg"
+                className="transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg"
               >
-                <TeacherAvatar key={`${teacher.id}-${teacher.photoUrl}`} teacher={teacher} className="size-16" />
-                <h3 className="mt-3 text-sm font-bold leading-snug text-stone-800">{teacher.fullName}</h3>
-                <p className="mt-1 text-xs text-emerald-700">{teacher.expertise}</p>
-                <Badge variant="outline" className="mt-3 border-amber-200 bg-amber-50 text-amber-700">
-                  <Award className="size-3" />
-                  {yearsLabel(teacher.joinDate)}
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                  onClick={() => setSelected(teacher)}
-                >
-                  <Eye className="size-4" />
-                  Lihat Profil
-                </Button>
-              </div>
+                <div className="flex flex-col items-center p-6 text-center">
+                  <TeacherAvatar key={`${teacher.id}-${teacher.photoUrl}`} teacher={teacher} className="size-16" />
+                  <h3 className="mt-3 text-sm font-bold leading-snug text-stone-800">{teacher.fullName}</h3>
+                  <p className="mt-1 text-xs text-emerald-700">{teacher.expertise}</p>
+                  <Badge variant="outline" className="mt-3 border-amber-200 bg-amber-50 text-amber-700">
+                    <Award className="size-3" />
+                    {yearsLabel(teacher.joinDate)}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                    onClick={() => setSelected(teacher)}
+                  >
+                    <Eye className="size-4" />
+                    Lihat Profil
+                  </Button>
+                </div>
+              </SpotlightCard>
             ))}
           </div>
         )}

@@ -1,14 +1,15 @@
 'use client'
 
 // Testimoni wali santri — konten CMS dari /api/settings via usePortalSettings
-// (admin dapat menyunting daftar testimoni). Inisial avatar dihitung dari nama;
-// reveal 3D stagger per kartu untuk kesan slide-scroll yang artistik.
+// (admin dapat menyunting daftar testimoni). Inisial avatar dihitung dari nama.
+// Velora Marquee (velora.colorlib.com, MIT): kartu mengalir dua baris berlawanan
+// arah, berhenti saat kursor di atasnya; reduce-motion menghormati prefers-reduced.
 
 import { Quote, Star } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { cn } from '@/lib/utils'
+import { Marquee } from '@/components/velora/marquee'
 import { ScrollReveal } from './ornaments'
-import { TiltCard } from './tilt-card'
 
 /** Inisial nama: huruf pertama dari dua kata pertama (mis. "Ibu Ratna Sari" → "IR"). */
 function initialsOf(name: string): string {
@@ -20,9 +21,56 @@ function initialsOf(name: string): string {
     .join('')
 }
 
+type Testimonial = { name: string; role: string; quote: string }
+
+/** Kartu testimoni — lebar tetap agar pas di aliran marquee. */
+function TestimonialCard({ t, variant }: { t: Testimonial; variant: 0 | 1 }) {
+  return (
+    <figure
+      className={cn(
+        'relative flex w-[300px] shrink-0 flex-col rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-all duration-300 sm:w-[340px]',
+        // rotasi halus bergantian + luruh saat hover
+        variant === 0 ? 'md:-rotate-1' : 'md:rotate-1',
+        'hover:rotate-0 hover:shadow-lg',
+      )}
+    >
+      <Quote
+        className="pointer-events-none absolute right-4 top-4 size-8 text-emerald-50"
+        aria-hidden="true"
+      />
+
+      <div className="flex gap-0.5" role="img" aria-label="Penilaian 5 dari 5 bintang">
+        {Array.from({ length: 5 }).map((_, s) => (
+          <Star key={s} className="size-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+        ))}
+      </div>
+
+      <blockquote className="mt-4 flex-1 font-serif text-sm italic leading-relaxed text-stone-600">
+        &ldquo;{t.quote}&rdquo;
+      </blockquote>
+
+      <figcaption className="mt-5 flex items-center gap-3 border-t border-stone-100 pt-4">
+        <span
+          className={cn(
+            'flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-sm',
+            variant === 0 ? 'bg-emerald-700 text-white' : 'bg-amber-500 text-emerald-950',
+          )}
+          aria-hidden="true"
+        >
+          {initialsOf(t.name)}
+        </span>
+        <span className="leading-tight">
+          <span className="block text-sm font-semibold text-stone-800">{t.name}</span>
+          <span className="mt-0.5 block text-xs text-stone-500">{t.role}</span>
+        </span>
+      </figcaption>
+    </figure>
+  )
+}
+
 export function TestimonialsSection() {
   const { settings } = usePortalSettings()
-  const items = settings.testimonials
+  const items: Testimonial[] = settings.testimonials
 
   return (
     <section id="testimoni" className="scroll-mt-20 bg-stone-50 py-16">
@@ -53,60 +101,20 @@ export function TestimonialsSection() {
             </div>
           </ScrollReveal>
         ) : (
-          /* Kartu testimoni */
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            {items.map((t, i) => (
-              <ScrollReveal
-                key={`${t.name}-${i}`}
-                delay={i * 0.08}
-                y={56}
-                rotate={9}
-                className="h-full"
-              >
-                {/* Tilt 3D + kilau (mouse) — rotasi statis bergantian tetap dipertahankan */}
-                <TiltCard className="h-full rounded-2xl" max={6} lift={3}>
-                <figure
-                  className={cn(
-                    'relative flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-all duration-300',
-                    // rotasi halus bergantian + luruh saat hover
-                    i % 2 === 0 ? 'md:-rotate-1' : 'md:rotate-1',
-                    'hover:rotate-0 hover:shadow-lg',
-                  )}
-                >
-                  <Quote
-                    className="pointer-events-none absolute right-4 top-4 size-8 text-emerald-50"
-                    aria-hidden="true"
-                  />
-
-                  <div className="flex gap-0.5" role="img" aria-label="Penilaian 5 dari 5 bintang">
-                    {Array.from({ length: 5 }).map((_, s) => (
-                      <Star key={s} className="size-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                    ))}
-                  </div>
-
-                  <blockquote className="mt-4 flex-1 font-serif text-sm italic leading-relaxed text-stone-600">
-                    &ldquo;{t.quote}&rdquo;
-                  </blockquote>
-
-                  <figcaption className="mt-5 flex items-center gap-3 border-t border-stone-100 pt-4">
-                    <span
-                      className={cn(
-                        'flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-sm',
-                        i % 2 === 0 ? 'bg-emerald-700 text-white' : 'bg-amber-500 text-emerald-950',
-                      )}
-                      aria-hidden="true"
-                    >
-                      {initialsOf(t.name)}
-                    </span>
-                    <span className="leading-tight">
-                      <span className="block text-sm font-semibold text-stone-800">{t.name}</span>
-                      <span className="mt-0.5 block text-xs text-stone-500">{t.role}</span>
-                    </span>
-                  </figcaption>
-                </figure>
-                </TiltCard>
-              </ScrollReveal>
-            ))}
+          /* Aliran marquee Velora — baris kedua muncul hanya jika konten cukup */
+          <div className="space-y-5">
+            <Marquee pauseOnHover repeat={2} className="[--duration:65s]">
+              {items.map((t, i) => (
+                <TestimonialCard key={`${t.name}-${i}`} t={t} variant={i % 2 === 0 ? 0 : 1} />
+              ))}
+            </Marquee>
+            {items.length >= 4 && (
+              <Marquee pauseOnHover reverse repeat={2} className="[--duration:80s]">
+                {[...items].reverse().map((t, i) => (
+                  <TestimonialCard key={`rev-${t.name}-${i}`} t={t} variant={i % 2 === 0 ? 1 : 0} />
+                ))}
+              </Marquee>
+            )}
           </div>
         )}
       </div>
