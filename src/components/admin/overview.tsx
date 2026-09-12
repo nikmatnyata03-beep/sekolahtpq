@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { InsightToday } from './insight-today'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RotatingQr } from './rotating-qr'
@@ -401,6 +402,9 @@ export function OverviewSection() {
           <KpiCard icon={ClipboardList} label="Pendaftar Menunggu" value={String(stats.registrationsPending)} numeric={stats.registrationsPending} hint="PPDB perlu diverifikasi" iconClass={stats.registrationsPending > 0 ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500'} />
         </Reveal>
       </div>
+
+      {/* Gelombang 4.5 — Insight Hari Ini (item #10 riset): prioritas lintas-domain */}
+      <InsightToday />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Kehadiran hari ini */}

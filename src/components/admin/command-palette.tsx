@@ -52,13 +52,14 @@ export function CommandPalette({
   const [studentsError, setStudentsError] = useState(false)
 
   // Ambil data santri sekali per sesi palette (lazy, saat pertama dibuka).
+  // Respons /api/students = array langsung (ok() tanpa wrapper).
   useEffect(() => {
     if (!open || !canSearchStudents || students || studentsError) return
     let alive = true
     fetch('/api/students')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: { data?: Student[] }) => {
-        if (alive) setStudents(Array.isArray(d.data) ? d.data : [])
+      .then((d: unknown) => {
+        if (alive) setStudents(Array.isArray(d) ? (d as Student[]) : [])
       })
       .catch(() => {
         if (alive) setStudentsError(true)
