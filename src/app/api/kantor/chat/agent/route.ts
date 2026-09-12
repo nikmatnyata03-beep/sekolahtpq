@@ -174,10 +174,18 @@ export async function POST(req: NextRequest) {
     const { messageId, action, reply, error, progress } = parsed.data
     await touchHeartbeat() // Task 61: aksi agen (claim/progress/reply/error) = tetap hidup
 
-    // ---- CLAIM: atomik, hanya sukses bila masih 'pending' ----
+    // ---- CLAIM: atomik, hanya sukses bila masih 'pending' ATAU 'processing'
+    // basi (>10 menit — pemegang klaim lama kemungkinan besar sudah mati).
+    // Dahulu klaim hanya menerima 'pending' → pesan milik isolat cron yang
+    // mati terjebak 'processing' selamanya (bug antrean macet).
     if (action === 'claim') {
+      const staleBefore = new Date(Date.now() - STALE_MS)
       const r = await db.kantorChatMessage.updateMany({
-        where: { id: messageId, role: 'user', status: 'pending' },
+        where: {
+          id: messageId,
+          role: 'user',
+          OR: [{ status: 'pending' }, { status: 'processing', claimedAt: { lt: staleBefore } }],
+        },
         data: { status: 'processing', claimedAt: new Date() },
       })
       if (r.count !== 1) {

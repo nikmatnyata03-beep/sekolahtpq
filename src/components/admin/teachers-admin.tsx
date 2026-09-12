@@ -285,8 +285,18 @@ export function TeachersAdmin() {
     }
     try {
       if (editing) {
+        // Task 64 — saat edit: email+sandi membuat/menautkan/reset akun login guru
+        if (form.email.trim() && form.password.trim()) {
+          payload.login = { email: form.email.trim(), password: form.password }
+        }
         await apiSend('/api/teachers', 'PUT', { id: editing.id, ...payload })
-        toast({ title: 'Data guru diperbarui', description: `Biodata & penugasan kelas ${form.fullName} telah disimpan.` })
+        toast({
+          title: 'Data guru diperbarui',
+          description:
+            form.email.trim() && form.password.trim()
+              ? `Biodata & akun login ${form.fullName} telah disimpan.`
+              : `Biodata & penugasan kelas ${form.fullName} telah disimpan.`,
+        })
       } else {
         if (form.email.trim() && form.password.trim()) {
           payload.email = form.email.trim()
@@ -554,21 +564,28 @@ export function TeachersAdmin() {
             {/* Task 36: penugasan kelas + jenjang langsung dari form guru */}
             <ClassAssignmentEditor classes={classes} selected={form.classIds} onChange={(ids) => setForm((f) => ({ ...f, classIds: ids }))} />
 
-            {!editing && (
-              <div className="rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
-                <p className="mb-2 text-sm font-semibold text-emerald-800">Akun Login (opsional)</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="t-email">Email</Label>
-                    <Input id="t-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="nama@daruljinan.sch.id" />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="t-password">Kata Sandi</Label>
-                    <Input id="t-password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Min. 6 karakter" />
-                  </div>
+            {/* Task 36/64 — akun login: saat CREATE opsional; saat EDIT bisa
+                buat/tautkan/reset akun guru lewat email + sandi */}
+            <div className="rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
+              <p className="mb-2 text-sm font-semibold text-emerald-800">
+                Akun Login {editing ? '(buat / tautkan / reset)' : '(opsional)'}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="t-email">Email</Label>
+                  <Input id="t-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="nama@daruljinan.sch.id" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="t-password">Kata Sandi</Label>
+                  <Input id="t-password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Min. 6 karakter" />
                 </div>
               </div>
-            )}
+              <p className="mt-2 text-[11px] leading-relaxed text-emerald-700/80">
+                {editing
+                  ? 'Isi email + sandi lalu simpan: email baru → akun login dibuat; email yang sudah punya akun tanpa profil guru → otomatis tertaut; akun yang sudah tertaut → sandi di-reset.'
+                  : 'Isi bila guru perlu akun login dashboard. Email yang sudah terdaftar akan otomatis ditautkan ke profil guru ini.'}
+              </p>
+            </div>
           </div>
 
           <DialogFooter>

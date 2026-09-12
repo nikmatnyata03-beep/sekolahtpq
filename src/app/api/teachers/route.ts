@@ -71,11 +71,17 @@ export async function POST(req: NextRequest) {
     await syncTeacherClasses(teacher.id, b.classIds)
     // optionally create login account
     if (b.email && b.password) {
-      const exists = await db.user.findUnique({ where: { email: String(b.email).toLowerCase() } })
+      const email = String(b.email).toLowerCase()
+      const exists = await db.user.findUnique({ where: { email } })
       if (!exists) {
         await db.user.create({
-          data: { email: String(b.email).toLowerCase(), name: b.fullName, phone: b.phone || null, password: hashPassword(String(b.password)), role: 'GURU', teacherId: teacher.id },
+          data: { email, name: b.fullName, phone: b.phone || null, password: hashPassword(String(b.password)), role: 'GURU', teacherId: teacher.id },
         })
+      } else if (!exists.teacherId) {
+        // Task 64 — akun sudah ada (mis. didaftarkan lebih dulu): TAUTKAN
+        // profil guru ini ke akun tsb, jangan diam-diam dilewati — dahulu
+        // akun seperti ini selamanya kosong (bug "guru tidak bisa apa-apa").
+        await db.user.update({ where: { email }, data: { teacherId: teacher.id } })
       }
     }
     return ok(teacher)
@@ -111,6 +117,34 @@ export async function PUT(req: NextRequest) {
     })
     // Task 36: sinkronisasi kelas yang diampu saat edit
     await syncTeacherClasses(teacher.id, b.classIds)
+
+    // Task 64 — kelola akun login guru dari menu Guru:
+    // b.login = { email, password? } → buat akun GURU baru, tautkan akun yang
+    // sudah ada, atau reset sandi bila akun sudah tertaut ke guru ini.
+    if (b.login && b.login.email) {
+      const email = String(b.login.email).toLowerCase()
+      const target = await db.user.findUnique({ where: { email } })
+      if (!target) {
+        if (!b.login.password) return bad('Sandi wajib untuk membuat akun login baru')
+        await db.user.create({
+          data: { email, name: teacher.fullName, phone: teacher.phone || null, password: hashPassword(String(b.login.password)), role: 'GURU', teacherId: teacher.id },
+        })
+      } else if (target.teacherId === teacher.id) {
+        // akun sudah milik guru ini — izinkan reset sandi bila diberikan
+        if (b.login.password) {
+          await db.user.update({ where: { email }, data: { password: hashPassword(String(b.login.password)) } })
+        }
+      } else if (!target.teacherId) {
+        // akun lama tanpa profil guru → tautkan sekarang
+        await db.user.update({ where: { email }, data: { teacherId: teacher.id } })
+        if (b.login.password) {
+          await db.user.update({ where: { email }, data: { password: hashPassword(String(b.login.password)) } })
+        }
+      } else {
+        return bad('Email sudah dipakai akun guru lain')
+      }
+    }
+
     return ok(teacher)
   } catch {
     return bad('Gagal memperbarui guru')
