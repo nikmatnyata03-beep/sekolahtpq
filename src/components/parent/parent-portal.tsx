@@ -188,7 +188,7 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
   return (
     <div className="min-h-screen bg-stone-50">
       {/* ==== Sticky header ==== */}
-      <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+      <header className="glass sticky top-0 z-40 shadow-sm">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-2 px-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-700 text-white shadow-sm">

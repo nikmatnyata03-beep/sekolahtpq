@@ -106,7 +106,7 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
       )}
 
       {/* ============ HEADER ============ */}
-      <header className="sticky top-0 z-40 border-b border-emerald-100 bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/75">
+      <header className="glass sticky top-0 z-40 shadow-sm">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <button type="button" onClick={goHome} className="flex items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
             {logoUrl ? (

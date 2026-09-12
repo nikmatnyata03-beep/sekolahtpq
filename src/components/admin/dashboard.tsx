@@ -264,7 +264,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-stone-200 bg-white/90 px-4 backdrop-blur md:px-6">
+        <header className="glass sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 px-4 shadow-sm md:px-6">
           {/* Hamburger mobile */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>

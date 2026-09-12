@@ -73,7 +73,7 @@ export function KantorApp({ access = 'full', userName }: { access?: 'full' | 'vi
       <Toaster position="top-center" richColors />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/90 backdrop-blur">
+      <header className="glass sticky top-0 z-30 shadow-sm">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 sm:px-5">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-700 text-white shadow"><Sparkles className="h-5 w-5" /></div>
