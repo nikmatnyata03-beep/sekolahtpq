@@ -388,3 +388,46 @@
     animation: none !important;
   }
 }
+
+/* Gelombang 9 (#15 matriks riset) — scroll-driven ornamen hero publik (nol JS):
+   lapisan dekoratif bergerak mengikuti scroll lewat animation-timeline: view().
+   Browser tanpa dukungan → ornamen statis (dekoratif, aman tidak jalan).
+   Reduce-motion → tidak diterapkan (guard no-preference). */
+@keyframes hero-sink {
+  to {
+    transform: translateY(var(--sink, 10%));
+  }
+}
+
+@keyframes hero-lattice-fade {
+  to {
+    opacity: 0.035;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Lapisan jauh (siluet putih samar): tenggelam pelan */
+    .hero-sink-far {
+      animation: hero-sink linear both;
+      animation-timeline: view();
+      animation-range: exit 0% exit 100%;
+      --sink: 7%;
+    }
+
+    /* Lapisan dekat (siluet zamrud depan): tenggelam lebih dalam — rasa kedalaman */
+    .hero-sink-near {
+      animation: hero-sink linear both;
+      animation-timeline: view();
+      animation-range: exit 0% exit 100%;
+      --sink: 16%;
+    }
+
+    /* Kisi bintang: memudar halus saat hero keluar viewport */
+    .hero-lattice {
+      animation: hero-lattice-fade linear both;
+      animation-timeline: view();
+      animation-range: exit 0% exit 60%;
+    }
+  }
+}

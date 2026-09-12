@@ -45,7 +45,7 @@ function useCountUp(target: number, duration = 1200): number {
 
 function CountUpValue({ value }: { value: number }) {
   const display = useCountUp(value)
-  return <span className="block text-lg font-bold tabular-nums">{display}</span>
+  return <span className="block text-xl font-bold tabular-nums">{display}</span>
 }
 
 /** Koreografi masuk berjenjang — fade + naik dengan delay konsisten. */
@@ -134,10 +134,12 @@ export function Hero({
         )}
       </div>
 
-      {/* ===== Layer 1 — pola geometris, cahaya lembut, siluet masjid ===== */}
+      {/* ===== Layer 1 — pola geometris, cahaya lembut, siluet masjid =====
+           Gelombang 9 (#15): ornamen scroll-driven (CSS animation-timeline, nol JS) —
+           lapisan jauh/dekat tenggelam dengan kecepatan beda = kedalaman parallax murni CSS. */}
       <StarLattice
         id="dj-hero-star"
-        className="absolute inset-0 h-full w-full text-white opacity-[0.07]"
+        className="hero-lattice absolute inset-0 h-full w-full text-white opacity-[0.07]"
       />
       <div
         className="pointer-events-none absolute -left-24 top-10 size-72 rounded-full bg-amber-400/10 blur-3xl"
@@ -153,11 +155,11 @@ export function Hero({
       />
       {/* Siluet skyline ganda: lapis putih samar di belakang (jauh) + zamrud gelap di depan */}
       <MosqueSilhouette
-        className="pointer-events-none absolute -bottom-2 left-1/2 w-[140%] max-w-none -translate-x-1/2 text-white/[0.05]"
+        className="hero-sink-far pointer-events-none absolute -bottom-2 left-1/2 w-[140%] max-w-none -translate-x-1/2 text-white/[0.05]"
         aria-hidden="true"
       />
       <MosqueSilhouette
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-auto w-full"
+        className="hero-sink-near pointer-events-none absolute inset-x-0 bottom-0 h-auto w-full"
         style={{ color: `color-mix(in srgb, ${brand} 55%, black)` }}
         aria-hidden="true"
       />
@@ -185,7 +187,7 @@ export function Hero({
               {...riseIn(0.05)}
               dir="rtl"
               lang="ar"
-              className="font-serif text-xl leading-relaxed text-amber-300 drop-shadow-sm md:text-2xl"
+              className="font-serif text-xl leading-relaxed text-amber-300 drop-shadow-[0_0_14px_rgba(251,191,36,0.35)] md:text-2xl"
             >
               {hero.bismillah}
             </motion.p>
@@ -201,12 +203,14 @@ export function Hero({
               <HijriDate variant="dark" className="mt-4" />
             </motion.div>
 
+            {/* Gelombang 9 (#15): tipografi display — ukuran clamp besar, leading rapat,
+                gradasi putih→emas di teks (karakter "signature" portal publik) */}
             <motion.h1
               initial={{ opacity: 0, y: 30, rotateX: 12 }}
               animate={{ opacity: 1, y: 0, rotateX: 0 }}
               transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
               style={{ transformPerspective: 900 }}
-              className="mt-4 text-4xl font-extrabold tracking-tight drop-shadow-sm sm:text-5xl md:text-6xl"
+              className="mt-4 bg-gradient-to-b from-white via-white to-amber-100/95 bg-clip-text text-[clamp(2.25rem,7vw,4.5rem)] font-extrabold leading-[1.06] tracking-tight text-transparent drop-shadow-sm"
             >
               {hero.title}
             </motion.h1>
@@ -252,7 +256,7 @@ export function Hero({
                 {chips.map((chip) => (
                   <div
                     key={chip.label}
-                    className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5 backdrop-blur-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300/40 hover:bg-white/15"
                   >
                     <span className="flex size-9 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300">
                       <chip.icon className="size-4.5" />
@@ -261,7 +265,7 @@ export function Hero({
                       {loading ? (
                         <Skeleton className="mb-1 h-5 w-10 bg-white/20" />
                       ) : chip.value == null ? (
-                        <span className="block text-lg font-bold">—</span>
+                        <span className="block text-xl font-bold">—</span>
                       ) : (
                         <CountUpValue value={chip.value} />
                       )}
