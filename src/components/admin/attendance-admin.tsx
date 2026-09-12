@@ -122,6 +122,20 @@ function formatPct(pct: number): string {
   return pct.toLocaleString('id-ID', { maximumFractionDigits: 1 })
 }
 
+// Gelombang 5 (#12): warna & label sel heat-grid — konsisten dengan RECAP_CHIPS.
+const HEAT_CELL: Record<AttStatus, string> = {
+  HADIR: 'bg-emerald-500',
+  IZIN: 'bg-amber-500',
+  SAKIT: 'bg-orange-500',
+  ALPA: 'bg-red-500',
+}
+const HEAT_LABEL: Record<AttStatus, string> = {
+  HADIR: 'Hadir',
+  IZIN: 'Izin',
+  SAKIT: 'Sakit',
+  ALPA: 'Alpa',
+}
+
 function initials(name: string): string {
   return name
     .split(' ')
@@ -452,6 +466,20 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
       perStudent[r.studentId] = agg
     }
     const pertemuan = sessionIds.size
+
+    // Gelombang 5 (#12): matriks santri × pertemuan untuk heat-grid.
+    // Kolom = sesi unik bulan tsb (urut tanggal dari createdAt), sel = status
+    // terakhir santri pada sesi itu (rekap ulang menimpa — last write wins).
+    const sessionMap = new Map<string, string>() // sessionId → YYYY-MM-DD
+    const cellMap = new Map<string, AttStatus>()
+    for (const r of monthRecords) {
+      if (!sessionMap.has(r.sessionId)) sessionMap.set(r.sessionId, r.createdAt.slice(0, 10))
+      cellMap.set(`${r.studentId}|${r.sessionId}`, r.status)
+    }
+    const sessions = [...sessionMap.entries()]
+      .map(([id, sesDate]) => ({ id, date: sesDate }))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+
     const rows: RecapRow[] = [...recapData.roster]
       .sort(
         (a, b) =>
@@ -466,6 +494,8 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
       totals,
       pertemuan,
       rows,
+      sessions,
+      cellMap,
       rate: monthRecords.length > 0 ? Math.round((totals.HADIR / monthRecords.length) * 1000) / 10 : 0,
     }
   }, [recapData, recapMonth])
@@ -1171,6 +1201,69 @@ export function AttendanceAdmin({ user }: { user?: AuthUser }) {
                     className="mt-2 h-2 bg-stone-200 [&>div]:bg-emerald-600"
                   />
                 </div>
+              </div>
+
+              {/* Gelombang 5 (#12): heat-grid kehadiran — baris santri × kolom pertemuan,
+                  pola ala contribution graph: siapa yang bolong di tanggal berapa langsung terlihat. */}
+              <div className="rounded-xl border border-stone-100 bg-stone-50/60 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Peta Kehadiran</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {RECAP_CHIPS.map((chip) => (
+                      <span key={chip.status} className="flex items-center gap-1 text-[10px] text-stone-500">
+                        <span aria-hidden="true" className={cn('size-2 rounded-[3px]', chip.dot)} /> {chip.label}
+                      </span>
+                    ))}
+                    <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                      <span aria-hidden="true" className="size-2 rounded-[3px] bg-stone-200" /> Tidak tercatat
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                      <span aria-hidden="true" className="size-2 rounded-[3px] bg-stone-100 ring-1 ring-inset ring-stone-200" /> Tanpa sesi
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto pb-1 [scrollbar-width:thin]">
+                  <div className="min-w-max">
+                    {/* Header: nomor tanggal tiap pertemuan (lebar 132px = kolom nama 128px + gap 4px) */}
+                    <div className="flex items-end gap-1 pl-[132px]">
+                      {recap.sessions.map((s) => (
+                        <span
+                          key={s.id}
+                          title={formatShortDate(s.date)}
+                          className="w-5 shrink-0 text-center font-mono text-[9px] leading-none text-stone-400 tabular-nums"
+                        >
+                          {s.date.slice(8, 10)}
+                        </span>
+                      ))}
+                    </div>
+                    {recap.rows.map((row) => (
+                      <div key={row.student.id} className="mt-1 flex items-center gap-1">
+                        <span
+                          className="sticky left-0 z-10 w-32 shrink-0 truncate bg-stone-50 pr-2 text-[11px] font-medium text-stone-700"
+                          title={row.student.fullName}
+                        >
+                          {row.student.fullName}
+                        </span>
+                        {recap.sessions.map((s) => {
+                          const st = recap.cellMap.get(`${row.student.id}|${s.id}`)
+                          return (
+                            <span
+                              key={s.id}
+                              role="img"
+                              title={`${row.student.fullName} · ${formatShortDate(s.date)} — ${st ? HEAT_LABEL[st] : 'Tidak tercatat'}`}
+                              aria-label={`${row.student.fullName} ${formatShortDate(s.date)}: ${st ? HEAT_LABEL[st] : 'tidak tercatat'}`}
+                              className={cn(
+                                'size-5 shrink-0 rounded-[4px] transition-transform duration-150 hover:scale-110',
+                                st ? HEAT_CELL[st] : 'bg-stone-100 ring-1 ring-inset ring-stone-200'
+                              )}
+                            />
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-stone-400">Angka kolom = tanggal sesi. Arahkan kursor ke sel untuk detail per santri.</p>
               </div>
 
               {/* Tabel per santri — kontainer tabel (data-slot) menjadi area scroll agar thead sticky bekerja */}
