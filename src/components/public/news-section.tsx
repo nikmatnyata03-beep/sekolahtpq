@@ -8,6 +8,7 @@ import {
   AlertCircle,
   CalendarDays,
   ChevronRight,
+  Heart,
   ImageOff,
   Newspaper,
   RefreshCw,
@@ -42,6 +43,78 @@ function excerpt(content: string | null | undefined, max = 150): string {
 
 function categoryBadge(category: string | undefined): string {
   return CATEGORY_BADGE[category ?? ''] ?? 'border-stone-200 bg-stone-50 text-stone-600'
+}
+
+/**
+ * Task 66 — identitas pengunjung anonim untuk like (UUID di localStorage).
+ * Tanpa login: satu perangkat = satu suara like per artikel.
+ */
+function getVisitorId(): string {
+  if (typeof window === 'undefined') return ''
+  let id = window.localStorage.getItem('dj_visitor_id')
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : `v-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    window.localStorage.setItem('dj_visitor_id', id)
+  }
+  return id
+}
+
+/**
+ * Tombol like ala sosial media — hati terisi bila sudah disukai perangkat
+ * ini. Klik TIDAK membuka dialog artikel (stopPropagation).
+ */
+function LikeButton({
+  post,
+  onToggled,
+  size = 'sm',
+}: {
+  post: Post
+  onToggled: (updated: Post) => void
+  size?: 'sm' | 'md'
+}) {
+  const [busy, setBusy] = useState(false)
+  async function toggle(e: React.MouseEvent | React.KeyboardEvent) {
+    e.stopPropagation()
+    if (busy) return
+    setBusy(true)
+    const visitorId = getVisitorId()
+    // optimis: perbarui UI seketika, korreksi bila server menolak
+    onToggled({ ...post, liked: !post.liked, likes: post.likes + (post.liked ? -1 : 1) })
+    try {
+      const res = await fetch('/api/posts/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, visitorId }),
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { liked: boolean; count: number }
+        onToggled({ ...post, liked: data.liked, likes: data.count })
+      }
+    } catch {
+      // jaringan gagal — biarkan nilai optimis (non-kritis)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      role="button"
+      aria-pressed={post.liked}
+      aria-label={post.liked ? `Batalkan suka, ${post.likes} suka` : `Sukai artikel, ${post.likes} suka`}
+      onClick={toggle}
+      className={`inline-flex items-center gap-1.5 rounded-full border transition-colors ${
+        post.liked
+          ? 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100'
+          : 'border-stone-200 bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700'
+      } ${size === 'md' ? 'px-4 py-2 text-sm' : 'px-2.5 py-1 text-xs'}`}
+    >
+      <Heart
+        className={`${size === 'md' ? 'size-4' : 'size-3.5'} transition-transform ${post.liked ? 'fill-rose-500 text-rose-500 scale-110' : ''}`}
+      />
+      <span className="font-semibold tabular-nums">{post.likes}</span>
+    </button>
+  )
 }
 
 /** Cover image dengan fallback gradien — <img> pola sesuai kontrak (tanpa next/image). */
@@ -84,11 +157,17 @@ export function NewsSection() {
   const [tab, setTab] = useState<string>('SEMUA')
   const [selected, setSelected] = useState<Post | null>(null)
 
+  /** Task 66 — perbarui satu post di state (hasil toggle like). */
+  function patchPost(updated: Post) {
+    setPosts((ps) => ps.map((p) => (p.id === updated.id ? updated : p)))
+    setSelected((s) => (s && s.id === updated.id ? updated : s))
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await apiGet<Post[]>('/api/posts?published=1')
+      const data = await apiGet<Post[]>(`/api/posts?published=1&visitorId=${encodeURIComponent(getVisitorId())}`)
       setPosts(Array.isArray(data) ? data : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal memuat berita')
@@ -216,6 +295,10 @@ export function NewsSection() {
                     Baca Selengkapnya
                     <ChevronRight className="size-4" />
                   </span>
+                  {/* Task 66 — like ala sosial media */}
+                  <div className="mt-1 flex items-center gap-2">
+                    <LikeButton post={featured} onToggled={patchPost} size="md" />
+                  </div>
                 </div>
               </article>
             )}
@@ -252,6 +335,10 @@ export function NewsSection() {
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
                         Baca Artikel
                         <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                      {/* Task 66 — like ala sosial media */}
+                      <span className="mt-1">
+                        <LikeButton post={post} onToggled={patchPost} />
                       </span>
                     </div>
                   </article>
@@ -305,6 +392,12 @@ export function NewsSection() {
                 <p className="mt-6 text-center font-serif text-emerald-800" dir="rtl" lang="ar">
                   وَقُل رَّبِّ زِدْنِي عِلْمًا
                 </p>
+                {/* Task 66 — like di dialog baca artikel */}
+                {selected && (
+                  <div className="mt-4 flex justify-center">
+                    <LikeButton post={selected} onToggled={patchPost} size="md" />
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -244,6 +244,19 @@ model Post {
   author     Teacher? @relation(fields: [authorId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  likes      PostLike[]
+}
+
+// Task 66 — like ala sosial media: pengunjung publik (tanpa login) ditandai
+// visitorId acak di sisi klien; satu pasangan (postId, visitorId) = satu like.
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  visitorId String
+  createdAt DateTime @default(now())
+
+  @@unique([postId, visitorId])
 }
 
 model Announcement {

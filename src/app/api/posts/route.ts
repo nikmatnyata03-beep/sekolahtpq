@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db, ok, bad } from '@/lib/api'
 import { getSession, guard } from '@/lib/session'
+import { ensurePostLikeSchema } from '@/lib/blog/bootstrap'
 
 function slugify(text: string) {
   return text
@@ -12,8 +13,10 @@ function slugify(text: string) {
 }
 
 export async function GET(req: NextRequest) {
+  await ensurePostLikeSchema() // Task 66 — tabel like dibuat idempoten saat runtime
   const session = await getSession(req)
   const published = req.nextUrl.searchParams.get('published')
+  const visitorId = req.nextUrl.searchParams.get('visitorId')?.slice(0, 64) || null
   const where = session?.role === 'ADMIN' || session?.role === 'DEVELOPER'
     ? published === '1' ? { published: true } : {}
     : session?.role === 'GURU'
@@ -23,10 +26,29 @@ export async function GET(req: NextRequest) {
       : { published: true }
   const posts = await db.post.findMany({
     where,
-    include: { author: { select: { id: true, fullName: true } } },
+    include: {
+      author: { select: { id: true, fullName: true } },
+      _count: { select: { likes: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })
-  return ok(posts)
+  // Task 66 — sertakan jumlah like; bila visitorId dikirim, sertakan juga
+  // flag 'liked' agar UI bisa menampilkan hati yang sudah ditekan.
+  let likedSet = new Set<string>()
+  if (visitorId) {
+    const likes = await db.postLike.findMany({
+      where: { visitorId, postId: { in: posts.map((p) => p.id) } },
+      select: { postId: true },
+    })
+    likedSet = new Set(likes.map((l) => l.postId))
+  }
+  return ok(
+    posts.map(({ _count, ...p }) => ({
+      ...p,
+      likes: _count.likes,
+      liked: likedSet.has(p.id),
+    })),
+  )
 }
 
 export async function POST(req: NextRequest) {

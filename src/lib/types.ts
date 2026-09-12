@@ -173,6 +173,9 @@ export interface Post {
   authorId: string | null
   author?: { id: string; fullName: string } | null
   createdAt: string
+  /** Task 66 — feed sosial: jumlah like + status like pengunjung ini. */
+  likes: number
+  liked: boolean
 }
 
 export interface Announcement {
