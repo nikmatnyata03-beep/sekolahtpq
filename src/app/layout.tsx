@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
+import "@fontsource-variable/plus-jakarta-sans";
+import "@fontsource/amiri/400.css";
+import "@fontsource/amiri/700.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
+// Gelombang 1 UI/UX (riset UIUX-RESEARCH-01): tipografi identitas —
+// Plus Jakarta Sans Variable (karya desainer Indonesia) sebagai sans utama,
+// Amiri untuk teks Arab/ayat, Geist Mono tetap untuk kode/angka teknis.
+// Font via fontsource (bundled) agar build tidak bergantung unduhan runtime.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -50,7 +52,7 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <ThemeProvider>
           {children}
