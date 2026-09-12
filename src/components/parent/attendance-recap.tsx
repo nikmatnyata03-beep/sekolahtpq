@@ -3,6 +3,7 @@
 import { useMemo, type JSX } from 'react'
 import { CalendarRange } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatShortDate } from '@/lib/api-client'
 
 // ==== contract ====
 
@@ -92,6 +93,40 @@ function monthLabelLong(key: string): string {
   return dateFromKey(key).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
 }
 
+/** Deterministic day-of-month ("05") — prefers the ISO date-string prefix, falls back to Date parse. */
+function dayNumberOf(date: string): string {
+  if (MONTH_KEY_RE.test(date)) return date.slice(8, 10)
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return '·'
+  return String(d.getDate()).padStart(2, '0')
+}
+
+/**
+ * Attendance points grouped per month ("YYYY-MM"), newest month first, sessions
+ * ascending within a month (older left → newer right) — mirroring the admin heat-grid.
+ */
+interface HeatMonth {
+  key: string
+  label: string
+  points: AttendancePoint[]
+}
+
+function groupHeatMonths(attendances: AttendancePoint[]): HeatMonth[] {
+  const sorted = [...attendances].sort((a, b) => a.date.localeCompare(b.date))
+  const byMonth = new Map<string, AttendancePoint[]>()
+  for (const a of sorted) {
+    const key = monthKeyOf(a.date)
+    if (!key) continue
+    const arr = byMonth.get(key)
+    if (arr) arr.push(a)
+    else byMonth.set(key, [a])
+  }
+  return [...byMonth.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, MAX_MONTHS)
+    .map(([key, points]) => ({ key, label: monthLabel(key), points }))
+}
+
 /**
  * Group attendance records per month ("YYYY-MM"), newest first.
  * Returns at most the 6 most recent months that have data.
@@ -122,6 +157,9 @@ export function aggregateMonthly(attendances: AttendancePoint[]): MonthAgg[] {
 
 export function AttendanceRecap({ attendances }: { attendances: AttendancePoint[] }): JSX.Element | null {
   const months = useMemo(() => aggregateMonthly(attendances), [attendances])
+  const heatMonths = useMemo(() => groupHeatMonths(attendances), [attendances])
+  // When the santri attends more than one class, tooltip must disambiguate which class the session belonged to.
+  const multiClass = useMemo(() => new Set(attendances.map((a) => a.className)).size > 1, [attendances])
   if (attendances.length === 0 || months.length === 0) return null
 
   // Legend shows only statuses actually present in the (visible) data.
@@ -196,6 +234,68 @@ export function AttendanceRecap({ attendances }: { attendances: AttendancePoint[
                 {STATUS_LABEL[st]}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* Gelombang 6 (#12 portal wali): peta kehadiran per pertemuan ala contribution graph —
+            pola hadir/alpa sepanjang bulan langsung terlihat tanpa membaca angka.
+            Warna sel memakai BAR_SEGMENT yang sama dengan bar bulanan di atas (konsisten). */}
+        {heatMonths.length > 0 && (
+          <div className="rounded-xl border border-stone-100 bg-stone-50/60 p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Peta Kehadiran</p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {presentStatuses.map((st) => (
+                  <span key={st} className="flex items-center gap-1 text-[10px] text-stone-500">
+                    <span aria-hidden="true" className={`size-2 rounded-[3px] ${BAR_SEGMENT[st]}`} /> {STATUS_LABEL[st]}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="overflow-x-auto pb-1 [scrollbar-width:thin]">
+              <div className="min-w-max space-y-2.5">
+                {heatMonths.map((month) => (
+                  <div key={month.key}>
+                    {/* Baris angka tanggal (per bulan, karena tanggal tiap bulan berbeda) */}
+                    <div className="flex items-end gap-1">
+                      <span className="sticky left-0 z-10 w-20 shrink-0 bg-stone-50 pr-2 text-[11px] font-semibold text-stone-700">
+                        {month.label}
+                      </span>
+                      {month.points.map((a) => (
+                        <span
+                          key={`d-${a.id}`}
+                          className="w-5 shrink-0 text-center font-mono text-[9px] leading-none text-stone-400 tabular-nums"
+                        >
+                          {dayNumberOf(a.date)}
+                        </span>
+                      ))}
+                    </div>
+                    {/* Baris sel status */}
+                    <div className="mt-1 flex items-center gap-1">
+                      <span className="sticky left-0 z-10 w-20 shrink-0 bg-stone-50 pr-2" aria-hidden="true" />
+                      {month.points.map((a) => {
+                        const tip =
+                          `${formatShortDate(a.date)} — ${STATUS_LABEL[a.status]}` +
+                          (a.topic ? ` · ${a.topic}` : '') +
+                          (multiClass ? ` · ${a.className}` : '')
+                        return (
+                          <span
+                            key={a.id}
+                            role="img"
+                            title={tip}
+                            aria-label={tip}
+                            className={`size-5 shrink-0 rounded-[4px] transition-transform duration-150 hover:scale-110 ${BAR_SEGMENT[a.status]}`}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="mt-2 text-[10px] text-stone-400">
+              Angka di atas sel = tanggal pertemuan. Arahkan kursor untuk melihat status &amp; materi hari itu.
+            </p>
           </div>
         )}
 
