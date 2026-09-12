@@ -337,7 +337,7 @@ function CoverImage({
           src={src}
           alt={alt}
           loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:group-hover:scale-100"
           onError={(e) => {
             e.currentTarget.style.display = 'none'
           }}
@@ -475,7 +475,7 @@ export function NewsSection() {
                     setSelected(featured)
                   }
                 }}
-                className="grid cursor-pointer overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-600 md:grid-cols-2"
+                className="group grid cursor-pointer overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-600 md:grid-cols-2"
               >
                 <CoverImage
                   src={featured.coverImage}
