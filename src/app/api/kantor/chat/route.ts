@@ -42,19 +42,23 @@ const AGENT_AWAY_NOTICE =
 /** Baca denyut terakhir agen; true bila masih dalam window aktif. */
 async function agentOnline(): Promise<boolean> {
   try {
-    const rows = await db.$queryRawUnsafe<{ lastSeenAt: string }[]>(
+    const rows = await db.$queryRawUnsafe<{ lastSeenAt: string | Date }[]>(
       `SELECT "lastSeenAt" FROM "AgentHeartbeat" WHERE "agentKey" = ? LIMIT 1`,
       HEARTBEAT_AGENT,
     )
     const last = rows[0]?.lastSeenAt
     if (!last) return false
-    // CURRENT_TIMESTAMP SQLite = UTC 'YYYY-MM-DD HH:MM:SS' → parse sebagai UTC.
-    // Bentuk lain (ISO 'T'/'Z' dari adapter) diparse apa adanya.
-    const s = String(last)
-    const seen = new Date(
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s) ? `${s.replace(' ', 'T')}Z` : s,
-    ).getTime()
-    return Number.isFinite(seen) && Date.now() - seen < ACTIVE_WINDOW_MS
+    // Prisma raw SQLite: DATETIME bisa terkonversi jadi Date, atau string
+    // 'YYYY-MM-DD HH:MM:SS' (UTC, dari CURRENT_TIMESTAMP) → parse sebagai UTC.
+    const seenMs =
+      last instanceof Date
+        ? last.getTime()
+        : new Date(
+            /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(String(last))
+              ? `${String(last).replace(' ', 'T')}Z`
+              : String(last),
+          ).getTime()
+    return Number.isFinite(seenMs) && Date.now() - seenMs < ACTIVE_WINDOW_MS
   } catch {
     return false // tabel belum ada / query gagal → anggap agen offline
   }
