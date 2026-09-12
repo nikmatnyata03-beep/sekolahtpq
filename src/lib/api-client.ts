@@ -75,7 +75,14 @@ export async function apiGet<T>(url: string): Promise<T> {
 }
 
 export async function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> {
-  const { data } = await apiSendFull<T>(url, method, body)
+  // PENTING: kontrak apiSend adalah MELEMPAR error saat respons tidak sukses —
+  // 26 pemanggil (login, PPDB, hafalan, dsb.) mengandalkan blok catch untuk
+  // menampilkan pesan ke pengguna. Jangan kembalikan 4xx diam-diam seperti
+  // apiSendFull (varian no-throw khusus alur yang membaca status terstruktur).
+  const { status, data } = await apiSendFull<T>(url, method, body)
+  if (status >= 400) {
+    throw new Error(data?.error || 'Terjadi kesalahan')
+  }
   return data
 }
 
