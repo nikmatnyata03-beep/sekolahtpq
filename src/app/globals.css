@@ -312,3 +312,37 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Gelombang 7 (#9 matriks riset) — View Transitions antar-section admin:
+   cross-fade + slide vertikal halus (out 150ms → in 220ms, easing standar).
+   Browser tanpa dukungan → hard cut via fallback util; reduce-motion → swap instan. */
+::view-transition-old(root) {
+  animation: 150ms cubic-bezier(0.4, 0, 0.2, 1) both vt-section-out;
+}
+
+::view-transition-new(root) {
+  animation: 220ms cubic-bezier(0.4, 0, 0.2, 1) both vt-section-in;
+}
+
+@keyframes vt-section-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes vt-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-image-pair(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

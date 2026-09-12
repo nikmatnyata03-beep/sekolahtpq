@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { withViewTransition } from '@/lib/view-transition'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -175,7 +176,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         return user.role === 'GURU' ? (
           <GuruOverview
             user={user}
-            onNavigate={(section: GuruOverviewSection) => setActive(section)}
+            onNavigate={(section: GuruOverviewSection) => withViewTransition(() => setActive(section))}
           />
         ) : (
           <OverviewSection />
@@ -231,7 +232,13 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
             key={section.key}
             type="button"
             onClick={() => {
-              setActive(section.key)
+              // Gelombang 7 (#9): perpindahan section via View Transitions (fallback hard cut);
+              // klik section yang sama tidak dipicu ulang agar tidak snapshot sia-sia
+              if (section.key === active) {
+                onNavigate?.()
+                return
+              }
+              withViewTransition(() => setActive(section.key))
               onNavigate?.()
             }}
             className={cn(
@@ -272,7 +279,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         sections={visible}
-        onNavigate={(k) => setActive(k as SectionKey)}
+        onNavigate={(k) => withViewTransition(() => setActive(k as SectionKey))}
         canSearchStudents={isAdmin || user.role === 'GURU'}
         studentTargetKey={isAdmin ? 'students' : 'hafalan'}
       />
