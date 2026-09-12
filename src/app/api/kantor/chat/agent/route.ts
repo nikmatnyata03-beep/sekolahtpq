@@ -18,6 +18,11 @@
 //                               di bubble chat via polling; boleh dikirim
 //                               berulang saat tugas dieksekusi bertahap.
 //
+// Task 61 — HEARTBEAT: setiap panggilan sah agen (GET/POST) mencatat denyut
+//           terakhir di tabel AgentHeartbeat. /api/kantor/chat memakainya
+//           membedakan agen AKTIF (live-watch, tanpa auto-reply AI) vs
+//           TIMEOUT (notice "mencoba pulih").
+//
 // Protokol pemakaian oleh agen: docs/KANTOR-CHAT-AGENT.md
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -61,6 +66,28 @@ function authorized(req: NextRequest): boolean {
 
 const STALE_MS = 10 * 60_000 // klaim basi >10 menit dianggap hangus → boleh diambil lagi
 
+// ---- Task 61: heartbeat agen (denyut ke D1) ----
+// Tulis hanya bila denyut terakhir >15 detik — mode live-watch mem-polling
+// tiap ±5 detik, hemat kuota tulis D1. Kegagalan tidak fatal (chat tetap jalan,
+// hanya dianggap agen offline → notice "mencoba pulih" yang muncul).
+const HEARTBEAT_AGENT = 'head-office'
+const HEARTBEAT_THROTTLE_SEC = 15
+
+async function touchHeartbeat(): Promise<void> {
+  try {
+    await db.$executeRawUnsafe(
+      `INSERT INTO "AgentHeartbeat" ("id", "agentKey", "lastSeenAt")
+       VALUES (lower(hex(randomblob(16))), ?, CURRENT_TIMESTAMP)
+       ON CONFLICT("agentKey") DO UPDATE SET "lastSeenAt" = CURRENT_TIMESTAMP
+       WHERE "AgentHeartbeat"."lastSeenAt" < datetime('now', ?)`,
+      HEARTBEAT_AGENT,
+      `-${HEARTBEAT_THROTTLE_SEC} seconds`,
+    )
+  } catch (e) {
+    console.error('[agent-heartbeat]', e instanceof Error ? e.message : e)
+  }
+}
+
 const postSchema = z.object({
   messageId: z.string().trim().min(1).max(64),
   action: z.enum(['claim']).optional(),
@@ -74,6 +101,8 @@ export async function GET(req: NextRequest) {
   if (!authorized(req)) return unauthorized()
   try {
     await ensureKantorSchema()
+
+    await touchHeartbeat() // Task 61: denyut agen — dipolling = masih hidup
 
     const url = new URL(req.url)
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? '10') || 10, 1), 20)
@@ -143,6 +172,7 @@ export async function POST(req: NextRequest) {
       )
     }
     const { messageId, action, reply, error, progress } = parsed.data
+    await touchHeartbeat() // Task 61: aksi agen (claim/progress/reply/error) = tetap hidup
 
     // ---- CLAIM: atomik, hanya sukses bila masih 'pending' ----
     if (action === 'claim') {

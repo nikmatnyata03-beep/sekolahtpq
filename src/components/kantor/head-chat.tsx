@@ -9,6 +9,8 @@
 // Task 59 — MODE EKSEKUSI LANGSUNG: pesan assistant berstatus 'progress'
 // tampil sebagai baris timeline gaya terminal (langkah kerja agen live);
 // polling berjalan terus selama panel terpasang agar progres real-time.
+// Task 61 — INDIKATOR STATUS: GET kini membawa flag agentOnline (heartbeat
+// agen); header panel menampilkan "Head Office online" vs "mencoba pulih…".
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,6 +34,7 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [agentOnline, setAgentOnline] = useState<boolean | null>(null) // Task 61
   const scrollRef = useRef<HTMLDivElement>(null)
   const refreshBusy = useRef(false)
   const seenAssistant = useRef<Set<string>>(new Set())
@@ -74,7 +77,9 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
         const body = (await res.json()) as {
           session?: { id: string } | null
           messages?: { id: string; role: string; content: string; status: string }[]
+          agentOnline?: boolean
         }
+        if (typeof body.agentOnline === 'boolean') setAgentOnline(body.agentOnline) // Task 61
         if (!body.session) {
           if (!target) {
             setSessionId(null)
@@ -209,11 +214,27 @@ export function HeadChat({ userName, onClose }: { userName: string; onClose: () 
       <div className="flex items-center gap-2.5 border-b border-stone-100 bg-stone-50/80 px-3 py-2.5">
         <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-stone-900 text-white">
           <Bot className="h-5 w-5" />
-          <span className="absolute -end-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" aria-hidden />
+          <span
+            className={`absolute -end-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white ${
+              agentOnline === false ? 'bg-amber-500' : 'bg-emerald-500'
+            }`}
+            aria-hidden
+          />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-stone-900">Head Office</p>
-          <p className="text-[10px] font-medium text-emerald-600">AI Agent · antrian ±5 mnt</p>
+          <p
+            className={`text-[10px] font-medium ${
+              agentOnline === false ? 'text-amber-600' : 'text-emerald-600'
+            }`}
+            data-testid="head-chat-status"
+          >
+            {agentOnline === false
+              ? 'Head Office tidak aktif — mencoba pulih…'
+              : agentOnline
+                ? 'Head Office online — balasan cepat'
+                : 'AI Agent · antrian ±5 mnt'}
+          </p>
         </div>
         <button
           onClick={newSession}

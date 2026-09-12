@@ -34,6 +34,11 @@ const STATEMENTS: string[] = [
     REFERENCES "KantorChatSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE)`,
   `CREATE INDEX IF NOT EXISTS "KantorChatMessage_sessionId_createdAt_idx" ON "KantorChatMessage"("sessionId", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "KantorChatMessage_status_createdAt_idx" ON "KantorChatMessage"("status", "createdAt")`,
+  // Task 61 — heartbeat agen Head Office: denyut terakhir agen sandbox,
+  // dipakai /api/kantor/chat membedakan agen AKTIF vs TIMEOUT.
+  `CREATE TABLE IF NOT EXISTS "AgentHeartbeat" ("id" TEXT NOT NULL PRIMARY KEY,
+    "agentKey" TEXT NOT NULL, "lastSeenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "AgentHeartbeat_agentKey_key" ON "AgentHeartbeat"("agentKey")`,
 ]
 
 /** Jalankan sekali per isolate — aman dipanggil di setiap handler API kantor. */

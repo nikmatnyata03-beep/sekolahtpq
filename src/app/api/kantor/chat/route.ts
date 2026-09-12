@@ -7,16 +7,17 @@
 //   POST  → pesan user disimpan berstatus 'pending' (TANPA memanggil AI).
 //           Balasan disusun agen AI di sandbox (cron 5 menit) lewat
 //           /api/kantor/chat/agent — protokol: docs/KANTOR-CHAT-AGENT.md.
-// Task 60 — LAPIS 1 REAL-TIME: POST kini memanggil AI auto-responder instan
-//           (Workers AI, always-on di edge):
-//           • pertanyaan umum → jawaban langsung tersimpan + pesan user
-//             'answered' (agen sandbox TIDAK memproses dobel);
-//           • permintaan pengembangan → ack instan (baris progres) + pesan
-//             tetap 'pending' untuk agen sandbox (Lapis 2);
-//           • AI gagal/rate limit habis → pesan tetap 'pending' (Lapis 2).
-//           Tanpa perubahan skema & tanpa perubahan kontrak endpoint agen.
+// Task 60 — LAPIS 1 REAL-TIME: AI auto-responder instan (Workers AI).
+// Task 61 — LAPIS 1 SADAR-HEARTBEAT (instruksi owner): AI binding TIDAK dipakai
+//           selagi agen Head Office AKTIF (live-watch, denyut <2 mnt) — pesan
+//           dibiarkan 'pending' dan dijawab pribadi oleh agen dalam hitungan
+//           detik. Hanya saat agen TIMEOUT/tidak terdeteksi sistem menampilkan
+//           notice statis "Head Office sedang mencoba pulih" (instan & hemat
+//           kuota AI). Pesan user SELALU 'pending' untuk agen — tidak ada
+//           jawaban dobel.
 //   GET   → sesi terakhir milik user (+ ?sessionId= utk sesi tertentu) dan
-//           seluruh pesannya; klien mem-polling endpoint ini saat ada pending.
+//           seluruh pesannya (+ flag agentOnline utk indikator UI); klien
+//           mem-polling endpoint ini saat ada pending.
 //
 // Privasi: satu sesi = satu user. Sesi/pesan user lain tidak bisa diakses.
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,7 +25,6 @@ import { z } from 'zod'
 import { guard } from '@/lib/session'
 import { db } from '@/lib/db'
 import { ensureKantorSchema } from '@/lib/kantor/bootstrap'
-import { runAi } from '@/lib/ai'
 import { rateLimit } from '@/lib/rate-limit'
 
 const chatSchema = z.object({
@@ -32,24 +32,33 @@ const chatSchema = z.object({
   sessionId: z.string().trim().min(1).max(64).optional(),
 })
 
-// ---- Task 60: deteksi permintaan pengembangan (diteruskan ke agen sandbox) ----
-// Kata kerja aksi/objek teknis — false positive hanya berarti jawaban menyusul
-// ≤5 menit via agen (tetap terjawab), jadi regex sengaja longgar.
-const TASK_RE =
-  /(buat(kan)?|tambah(kan)?|perbaiki|ganti(han)?|hapus|edit|ubah|unggah|upload|integrasi|fitur|bug|error|layout|lapor(an)?|minta)/i
+// ---- Task 61: deteksi agen Head Office aktif vs timeout (heartbeat D1) ----
+const ACTIVE_WINDOW_MS = 120_000 // denyut <2 menit = agen masih online (live-watch ±5 dtk)
+const HEARTBEAT_AGENT = 'head-office'
 
-/** Teks hasil AI yang tampak seperti string error internal tidak boleh tampil. */
-function aiOutputLooksSafe(text: string): boolean {
-  return !/Workers AI:|fallback SDK:|Layanan AI sedang tidak tersedia/i.test(text)
+const AGENT_AWAY_NOTICE =
+  '🛰️ Head Office sedang tidak aktif sesaat — sistem mencoba pulih. Pesan Anda sudah masuk antrian dan akan dibalas segera setelah Head Office kembali online.'
+
+/** Baca denyut terakhir agen; true bila masih dalam window aktif. */
+async function agentOnline(): Promise<boolean> {
+  try {
+    const rows = await db.$queryRawUnsafe<{ lastSeenAt: string }[]>(
+      `SELECT "lastSeenAt" FROM "AgentHeartbeat" WHERE "agentKey" = ? LIMIT 1`,
+      HEARTBEAT_AGENT,
+    )
+    const last = rows[0]?.lastSeenAt
+    if (!last) return false
+    // CURRENT_TIMESTAMP SQLite = UTC 'YYYY-MM-DD HH:MM:SS' → parse sebagai UTC.
+    // Bentuk lain (ISO 'T'/'Z' dari adapter) diparse apa adanya.
+    const s = String(last)
+    const seen = new Date(
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s) ? `${s.replace(' ', 'T')}Z` : s,
+    ).getTime()
+    return Number.isFinite(seen) && Date.now() - seen < ACTIVE_WINDOW_MS
+  } catch {
+    return false // tabel belum ada / query gagal → anggap agen offline
+  }
 }
-
-const AUTOREPLY_ACK =
-  'Permintaan diterima & diteruskan ke agen pengembang. Balasan lengkap menyusul (umumnya ≤ 5 menit) — progres dikerjakan live di chat ini.'
-
-const AUTOREPLY_PERSONA = (userName: string, userRole: string) =>
-  `Kamu asisten SIMADJI (TPQ Darul Jinan). Pengirim: ${userName} (role ${userRole}).
-Aturan: Bahasa Indonesia ramah, maks ±150 kata, JANGAN menampilkan data sensitif santri/keuangan milik orang lain, JANGAN berjanji perubahan kode (untuk itu arahkan menunggu agen pengembang).
-Konteks sistem: dashboard santri/kelas/absensi/hafalan/keuangan/materi/PPDB/landing editor; santri berriwayat tidak bisa dihapus (ubah status NONAKTIF/LULUS); PPDB cek status via /cek-pendaftaran dengan nomor registrasi + 5 digit HP.`
 
 /** Sesi terakhir milik user (atau null bila belum pernah chat). */
 async function latestSession(userId: string) {
@@ -136,61 +145,43 @@ export async function POST(req: NextRequest) {
       data: { lastActiveAt: new Date(), userRole: session.role, userName: session.name },
     })
 
-    // ===== Task 60: Lapis 1 — AI auto-responder real-time =====
-    // • Dev task → ack instan (baris progres) + pesan tetap 'pending' → Lapis 2.
-    // • Pertanyaan umum → jawaban instan Workers AI + user 'answered'
-    //   (agen sandbox tidak akan memproses dobel — GET hanya ambil 'pending').
-    // • AI gagal / kuota autoreply habis → tetap 'pending' → Lapis 2.
-    let autoReplied = false
+    // ===== Task 61: Lapis 1 — notice "mencoba pulih" hanya saat agen timeout =====
+    // Agen AKTIF  → tanpa bubble otomatis (agen menjawab pribadi ±detik).
+    // Agen TIMEOUT → notice statis instan (1×/10 mnt per sesi); pesan user
+    //                tetap 'pending' untuk agen — tidak pernah ditandai
+    //                'answered' oleh sistem.
+    let agentIsOnline = false
+    let noticed = false
     try {
-      if (TASK_RE.test(message)) {
+      agentIsOnline = await agentOnline()
+      if (!agentIsOnline && rateLimit(`notice:${kantorSession.id}`, 1, 10 * 60_000)) {
         await db.kantorChatMessage.create({
           data: {
             sessionId: kantorSession.id,
             role: 'assistant',
-            content: AUTOREPLY_ACK,
-            status: 'progress',
+            content: AGENT_AWAY_NOTICE,
+            status: 'done',
           },
         })
-        autoReplied = true
-      } else if (rateLimit(`autoreply:${kantorSession.id}`, 10, 10 * 60_000)) {
-        const ai = await runAi(
-          AUTOREPLY_PERSONA(kantorSession.userName, kantorSession.userRole),
-          message,
-          600,
-        )
-        if (ai && aiOutputLooksSafe(ai)) {
-          await db.$transaction([
-            db.kantorChatMessage.create({
-              data: {
-                sessionId: kantorSession.id,
-                role: 'assistant',
-                content: ai.trim(),
-                status: 'done',
-              },
-            }),
-            db.kantorChatMessage.update({
-              where: { id: msg.id },
-              data: { status: 'answered', answeredAt: new Date() },
-            }),
-          ])
-          autoReplied = true
-        }
+        noticed = true
       }
-    } catch (aiErr) {
+    } catch (noticeErr) {
       console.error(
-        '[kantor/chat autoreply]',
-        aiErr instanceof Error ? aiErr.message : aiErr,
+        '[kantor/chat notice]',
+        noticeErr instanceof Error ? noticeErr.message : noticeErr,
       )
-      // sunyi — Lapis 2 (agen sandbox) yang menjawab pesan pending ini
+      // sunyi — pesan tetap pending, agen Head Office yang menjawab
     }
 
     return NextResponse.json({
       sessionId: kantorSession.id,
       messageId: msg.id,
-      pending: !autoReplied,
-      autoReplied,
-      waitHint: autoReplied ? undefined : 'Sedang di proses sistem, silahkan tunggu…',
+      pending: true,
+      agentOnline: agentIsOnline,
+      noticed,
+      waitHint: agentIsOnline
+        ? 'Head Office sedang aktif — balasan segera…'
+        : 'Head Office tidak aktif — pesan masuk antrian…',
     })
   } catch (e) {
     console.error('[kantor/chat POST]', e)
@@ -220,7 +211,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!kantorSession) {
-      return NextResponse.json({ session: null, messages: [] })
+      return NextResponse.json({ session: null, messages: [], agentOnline: await agentOnline() })
     }
 
     const messages = await db.kantorChatMessage.findMany({
@@ -233,6 +224,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       session: { id: kantorSession.id, createdAt: kantorSession.createdAt, lastActiveAt: kantorSession.lastActiveAt },
       messages,
+      agentOnline: await agentOnline(),
     })
   } catch (e) {
     console.error('[kantor/chat GET]', e)
