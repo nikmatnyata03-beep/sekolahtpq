@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db, ok, bad } from '@/lib/api'
 import { ensurePostLikeSchema } from '@/lib/blog/bootstrap'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 // Like artikel publik — gaya feed sosial media (Task 66).
 // Tanpa login: pengunjung diidentifikasi visitorId (UUID acak di localStorage
 // klien). Satu pasangan (postId, visitorId) = satu like (toggle).
@@ -21,6 +22,13 @@ export async function POST(req: NextRequest) {
       return bad('Data tidak valid')
     }
     const { postId, visitorId } = parsed.data
+
+    // Hardening patrol 2026-09-12: like tanpa limit sebelumnya → rentan flood
+    // (rotasi visitorId menggelembungkan jumlah like & menghantam DB).
+    // 20 toggle / menit / IP — cukup longgar untuk manusia, mematikan bot.
+    if (!rateLimit(`like:${clientIp(req)}`, 20, 60_000)) {
+      return bad('Terlalu banyak permintaan. Coba lagi sebentar lagi', 429)
+    }
 
     const post = await db.post.findUnique({ where: { id: postId }, select: { id: true, published: true } })
     if (!post || !post.published) return bad('Artikel tidak ditemukan', 404)

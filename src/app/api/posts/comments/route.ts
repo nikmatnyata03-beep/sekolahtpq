@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { db, ok, bad } from '@/lib/api'
 import { getSession, guard } from '@/lib/session'
 import { ensurePostLikeSchema } from '@/lib/blog/bootstrap'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 // Komentar artikel ala sosial media (Task 67).
 //   GET  ?postId=…              → daftar komentar (publik, terlama dulu)
 //   POST { postId, visitorId, name?, content } → tulis komentar (publik)
@@ -54,6 +55,12 @@ export async function POST(req: NextRequest) {
       return bad('Mohon beri jeda sejenak sebelum berkomentar lagi', 429)
     }
     lastCommentAt.set(visitorId, now)
+
+    // Lapisan 2 (hardening patrol 2026-09-12): batas per-IP — visitorId dikirim
+    // klien sehingga mudah dirotasi untuk bypass cooldown. 5 komentar / 5 menit / IP.
+    if (!rateLimit(`cmt:${clientIp(req)}`, 5, 300_000)) {
+      return bad('Terlalu banyak komentar dari jaringan ini. Coba beberapa menit lagi', 429)
+    }
 
     const safeName = (name && name.length > 0 ? name : 'Pengunjung').slice(0, 60)
     const created = await db.postComment.create({
