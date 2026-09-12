@@ -344,9 +344,9 @@ export function OverviewSection() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-12 lg:gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-2xl" />
+            <Skeleton key={i} className="h-20 rounded-2xl lg:col-span-4" />
           ))}
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
@@ -380,19 +380,31 @@ export function OverviewSection() {
 
   return (
     <div className="space-y-5">
-      {/* KPI row */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
-        <KpiCard icon={Users} label="Santri Aktif" value={String(stats.students)} hint="Total santri terdaftar" iconClass="bg-emerald-100 text-emerald-700" />
-        <KpiCard icon={GraduationCap} label="Guru" value={String(stats.teachers)} hint="Ustadz/ustadzah aktif" iconClass="bg-amber-100 text-amber-700" />
-        <KpiCard icon={BookOpen} label="Kelas" value={String(stats.classes)} hint="Kelas yang berjalan" iconClass="bg-teal-100 text-teal-700" />
-        <KpiCard icon={ClipboardList} label="Pendaftar Menunggu" value={String(stats.registrationsPending)} hint="PPDB perlu diverifikasi" iconClass={stats.registrationsPending > 0 ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500'} />
-        <KpiCard icon={Wallet} label="Pemasukan" value={formatRupiah(stats.revenue)} hint={`${stats.successCount} tagihan lunas`} iconClass="bg-emerald-100 text-emerald-700" />
-        <KpiCard icon={AlertTriangle} label="Tunggakan" value={formatRupiah(stats.outstanding)} hint={`${stats.pendingCount} tagihan tertunda`} iconClass="bg-red-100 text-red-600" />
+      {/* KPI bento — Gelombang 2 (riset UIUX-RESEARCH-01): hero 5 + 4 + 3 lalu 4/4/4 */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-12 lg:gap-4">
+        <Reveal className="col-span-2 lg:col-span-5">
+          <KpiCard hero icon={Users} label="Santri Aktif" value={String(stats.students)} numeric={stats.students} hint="Total santri terdaftar" iconClass="bg-emerald-100 text-emerald-700" />
+        </Reveal>
+        <Reveal className="lg:col-span-4" delay={0.05}>
+          <KpiCard icon={Wallet} label="Pemasukan" value={formatRupiah(stats.revenue)} numeric={stats.revenue} format={formatRupiah} hint={`${stats.successCount} tagihan lunas`} iconClass="bg-emerald-100 text-emerald-700" />
+        </Reveal>
+        <Reveal className="lg:col-span-3" delay={0.1}>
+          <KpiCard icon={AlertTriangle} label="Tunggakan" value={formatRupiah(stats.outstanding)} numeric={stats.outstanding} format={formatRupiah} hint={`${stats.pendingCount} tagihan tertunda`} iconClass="bg-red-100 text-red-600" />
+        </Reveal>
+        <Reveal className="lg:col-span-4" delay={0.15}>
+          <KpiCard icon={GraduationCap} label="Guru" value={String(stats.teachers)} numeric={stats.teachers} hint="Ustadz/ustadzah aktif" iconClass="bg-amber-100 text-amber-700" />
+        </Reveal>
+        <Reveal className="lg:col-span-4" delay={0.2}>
+          <KpiCard icon={BookOpen} label="Kelas" value={String(stats.classes)} numeric={stats.classes} hint="Kelas yang berjalan" iconClass="bg-teal-100 text-teal-700" />
+        </Reveal>
+        <Reveal className="lg:col-span-4" delay={0.25}>
+          <KpiCard icon={ClipboardList} label="Pendaftar Menunggu" value={String(stats.registrationsPending)} numeric={stats.registrationsPending} hint="PPDB perlu diverifikasi" iconClass={stats.registrationsPending > 0 ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500'} />
+        </Reveal>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Kehadiran hari ini */}
-        <Card className="rounded-2xl border-stone-200 shadow-sm">
+        <Card className="glass shadow-tier rounded-2xl">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarCheck className="size-4 text-emerald-700" /> Kehadiran Hari Ini
@@ -420,7 +432,7 @@ export function OverviewSection() {
         </Card>
 
         {/* Sesi aktif */}
-        <Card className="rounded-2xl border-stone-200 shadow-sm">
+        <Card className="glass shadow-tier rounded-2xl">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <QrCode className="size-4 text-emerald-700" /> Sesi Aktif
