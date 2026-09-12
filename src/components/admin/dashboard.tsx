@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Toaster } from 'sonner'
 import {
   LayoutDashboard,
@@ -116,6 +116,40 @@ const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'prese
 // Task 59-b: DEVELOPER ikut mengelola Landing Page (editor konten + urutan layout).
 const DEVELOPER_ALLOWED: SectionKey[] = ['landing', 'pentest', 'devconsole', 'pengaturan']
 
+// Gelombang 13 (#17): navigasi adaptif per peran — GURU mendapat urutan prioritas mengajar
+// (alat harian: absensi, presensi live, hafalan naik ke atas), ADMIN mempertahankan
+// urutan manajemen master. Semua anggota GURU_ALLOWED wajib ada di GURU_PRIORITY.
+const GURU_PRIORITY: SectionKey[] = ['ringkasan', 'attendance', 'presensi-live', 'hafalan', 'classes', 'materials', 'ai', 'pengaturan']
+
+// Gelombang 13 (#17): memori section terakhir per peran — tiap peran dilanjutkan
+// dari tempat terakhirnya sendiri (localStorage; try/catch untuk mode privat).
+function sectionMemoryKey(role: string): string {
+  return `simadji:last-section:${role}`
+}
+
+// Gelombang 13 (#17): salam mengikuti jam lokal perangkat (04-10 pagi, 11-14 siang,
+// 15-17 sore, sisanya malam).
+function greetingForHour(hour: number): string {
+  if (hour >= 4 && hour < 11) return 'Selamat pagi'
+  if (hour >= 11 && hour < 15) return 'Selamat siang'
+  if (hour >= 15 && hour < 18) return 'Selamat sore'
+  return 'Selamat malam'
+}
+
+// Gelombang 13 (#17): sumber salam/tanggal murni klien via useSyncExternalStore —
+// snapshot server berupa string kosong sehingga SSR & hydrate identik, tanpa
+// setState di dalam effect (aturan react-hooks/set-state-in-effect).
+const emptySubscribe = () => () => {}
+function getGreetingSnapshot(): string {
+  return greetingForHour(new Date().getHours())
+}
+function getDateSnapshot(): string {
+  return new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
+}
+function getEmptySnapshot(): string {
+  return ''
+}
+
 function roleBadgeClass(role: string): string {
   if (role === 'ADMIN') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
   if (role === 'GURU') return 'bg-amber-100 text-amber-800 border-amber-200'
@@ -142,14 +176,32 @@ function initials(name: string): string {
 export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUser; onLogout: () => void; onOpenPublic?: () => void }) {
   const isAdmin = user.role === 'ADMIN'
   const isDeveloper = user.role === 'DEVELOPER'
+  const firstName = user.name.split(' ').filter(Boolean)[0] ?? roleLabel(user.role)
   const visible = SECTIONS.filter((s) => {
     if (isAdmin) return !s.developerOnly
     if (isDeveloper) return DEVELOPER_ALLOWED.includes(s.key)
     return GURU_ALLOWED.includes(s.key)
   })
-  const [active, setActive] = useState<SectionKey>(isDeveloper ? 'pentest' : 'ringkasan')
+  if (user.role === 'GURU') {
+    visible.sort((a, b) => GURU_PRIORITY.indexOf(a.key) - GURU_PRIORITY.indexOf(b.key))
+  }
+  // Gelombang 13 (#17): pemulihan section terakhir per peran; gagal baca = fallback default
+  const [active, setActive] = useState<SectionKey>(() => {
+    if (isDeveloper) return 'pentest'
+    if (typeof window === 'undefined') return 'ringkasan'
+    try {
+      const saved = window.localStorage.getItem(sectionMemoryKey(user.role)) as SectionKey | null
+      if (saved && visible.some((s) => s.key === saved)) return saved
+    } catch {
+      /* mode privat / storage tidak tersedia — pakai default */
+    }
+    return 'ringkasan'
+  })
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // Gelombang 13 (#17): salam + tanggal hanya terisi di klien (lihat emptySubscribe di atas)
+  const greeting = useSyncExternalStore(emptySubscribe, getGreetingSnapshot, getEmptySnapshot)
+  const dateLine = useSyncExternalStore(emptySubscribe, getDateSnapshot, getEmptySnapshot)
 
   // Gelombang 4.5 — ⌘K / Ctrl+K membuka command palette (navigasi + cari santri)
   useEffect(() => {
@@ -164,6 +216,15 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
   }, [])
 
   const current: SectionDef = visible.find((s) => s.key === active) ?? visible[0]
+
+  // Gelombang 13 (#17): simpan section terakhir per peran setiap kali berpindah
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(sectionMemoryKey(user.role), active)
+    } catch {
+      /* persistensi bersifat kenyamanan — kegagalan diabaikan */
+    }
+  }, [active, user.role])
   // Role-aware header copy: guru Ringkasan is a personal teaching digest, not the institution overview
   const headerDef: SectionDef =
     active === 'ringkasan' && user.role === 'GURU'
@@ -333,8 +394,22 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
           </Sheet>
 
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">{headerDef.label}</h1>
-            <p className="hidden truncate text-xs text-stone-500 sm:block">{headerDef.description}</p>
+            {active === 'ringkasan' && greeting ? (
+              <>
+                <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">
+                  {greeting}, {firstName}
+                </h1>
+                <p className="hidden truncate text-xs text-stone-500 sm:block">
+                  {headerDef.description}
+                  {dateLine ? ` · ${dateLine}` : ''}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">{headerDef.label}</h1>
+                <p className="hidden truncate text-xs text-stone-500 sm:block">{headerDef.description}</p>
+              </>
+            )}
           </div>
 
           {/* Gelombang 4.5 — pembuka command palette (⌘K) */}
