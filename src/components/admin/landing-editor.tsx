@@ -2,15 +2,19 @@
 
 // Editor Landing Page (CMS portal publik) — mengedit seluruh konten halaman depan:
 // Hero, Tentang, Galeri, Kontak, FAQ, dan Testimoni via GET/PUT /api/settings.
+// Task 59-b: panel "Urutan Layout" — drag & drop native HTML5 + tombol panah
+// untuk menyusun urutan section portal publik (ADMIN & DEVELOPER).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  GripVertical,
   Images,
   LayoutDashboard,
+  ListOrdered,
   Loader2,
   MessageSquareQuote,
   MoonStar,
@@ -31,7 +35,7 @@ import type {
   PortalSettings,
   TestimonialItem,
 } from '@/lib/portal-settings'
-import { DEFAULT_PORTAL_SETTINGS } from '@/lib/portal-settings'
+import { DEFAULT_PORTAL_SETTINGS, DEFAULT_SECTION_ORDER, SECTION_LABELS } from '@/lib/portal-settings'
 import { apiGet, apiSend } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -88,6 +92,133 @@ function ResetSectionButton({ onClick }: { onClick: () => void }) {
 
 function ResetWarning() {
   return <p className="text-[11px] text-amber-600">Pengembalian default hanya mengubah formulir — tekan Simpan Perubahan untuk menerapkannya ke portal.</p>
+}
+
+/**
+ * Task 59-b — Panel "Urutan Layout": daftar section dgn drag & drop native HTML5
+ * (tanpa dependensi baru) + tombol panah naik/turun yang tetap bekerja di layar
+ * sentuh. Perubahan hanya lokal — diterapkan lewat tombol Simpan Perubahan.
+ */
+function LayoutOrderPanel({
+  order,
+  onReorder,
+  onMove,
+  onReset,
+}: {
+  order: string[]
+  onReorder: (from: number, to: number) => void
+  onMove: (index: number, dir: -1 | 1) => void
+  onReset: () => void
+}) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+
+  function handleDragOver(e: DragEvent<HTMLLIElement>, index: number) {
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    if (overIndex !== index) setOverIndex(index)
+  }
+  function handleDrop(e: DragEvent<HTMLLIElement>, index: number) {
+    e.preventDefault()
+    if (dragIndex !== null && dragIndex !== index) onReorder(dragIndex, index)
+    setDragIndex(null)
+    setOverIndex(null)
+  }
+  function handleDragEnd() {
+    setDragIndex(null)
+    setOverIndex(null)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <ListOrdered className="size-4" />
+          </span>
+          Urutan Layout
+        </CardTitle>
+        <CardDescription>
+          Susun urutan bagian pada portal publik — tarik gagang ⠿ ke posisi baru, atau pakai tombol panah. Terapkan dengan Simpan Perubahan.
+        </CardDescription>
+        <CardAction>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-stone-200 text-stone-500 hover:bg-stone-50 hover:text-stone-700"
+            onClick={onReset}
+          >
+            <RotateCcw className="size-3.5" />
+            Kembalikan urutan bawaan
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-2">
+          {order.map((key, i) => {
+            const label = SECTION_LABELS[key] ?? key
+            const isDragging = dragIndex === i
+            const isOver = overIndex === i && dragIndex !== null && dragIndex !== i
+            return (
+              <li
+                key={key}
+                draggable
+                onDragStart={() => setDragIndex(i)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDrop={(e) => handleDrop(e, i)}
+                onDragEnd={handleDragEnd}
+                aria-label={`Bagian urutan ${i + 1}: ${label}`}
+                className={[
+                  'flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors',
+                  isDragging
+                    ? 'border-emerald-300 bg-emerald-50/80 opacity-60'
+                    : isOver
+                      ? 'border-emerald-500 bg-emerald-50/70 ring-1 ring-emerald-400'
+                      : 'border-stone-200 bg-stone-50/60 hover:bg-stone-50',
+                ].join(' ')}
+              >
+                <span aria-hidden="true" className="cursor-grab touch-none text-stone-400 active:cursor-grabbing">
+                  <GripVertical className="size-4" />
+                </span>
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-white text-[11px] font-bold text-emerald-800 ring-1 ring-stone-200">
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">{label}</span>
+                <span className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-8 bg-white"
+                    aria-label={`Naikkan ${label}`}
+                    disabled={i === 0}
+                    onClick={() => onMove(i, -1)}
+                  >
+                    <ChevronUp className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-8 bg-white"
+                    aria-label={`Turunkan ${label}`}
+                    disabled={i === order.length - 1}
+                    onClick={() => onMove(i, 1)}
+                  >
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+        <p className="mt-3 text-[11px] text-stone-400">
+          Anchor menu (Tentang, Kurikulum, …) tetap berfungsi — hanya urutan tampil yang berubah. Footer selalu di bagian paling akhir.
+        </p>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function LandingEditor() {
@@ -155,6 +286,18 @@ export function LandingEditor() {
     if (key === 'about') setMissionsText(SECTION_DEFAULTS.about.missions.join('\n'))
   }
 
+  /** Task 59-b: pindahkan section urutan `from` ke posisi `to` (hasil drop). */
+  function reorderSections(from: number, to: number) {
+    setSettings((s) => {
+      if (!s) return s
+      const next = [...s.sectionOrder]
+      if (from < 0 || from >= next.length || to < 0 || to >= next.length) return s
+      const [item] = next.splice(from, 1)
+      next.splice(to, 0, item)
+      return { ...s, sectionOrder: next }
+    })
+  }
+
   async function handleSave() {
     if (!settings || saving) return
     setSaving(true)
@@ -166,6 +309,7 @@ export function LandingEditor() {
         faqs: settings.faqs.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })),
         testimonials: settings.testimonials.map((t) => ({ quote: t.quote.trim(), name: t.name.trim(), role: t.role.trim() })),
         gallery: settings.gallery.map((g) => ({ imageUrl: g.imageUrl.trim(), caption: g.caption.trim() })),
+        sectionOrder: settings.sectionOrder,
       }
       const saved = await apiSend<PortalSettings>('/api/settings', 'PUT', payload)
       setSettings(saved)
@@ -256,6 +400,14 @@ export function LandingEditor() {
           </CardAction>
         </CardHeader>
       </Card>
+
+      {/* ============ URUTAN LAYOUT (Task 59-b) ============ */}
+      <LayoutOrderPanel
+        order={settings.sectionOrder}
+        onReorder={reorderSections}
+        onMove={(i, dir) => setSettings((s) => (s ? { ...s, sectionOrder: moveItem(s.sectionOrder, i, dir) } : s))}
+        onReset={() => setSettings((s) => (s ? { ...s, sectionOrder: [...DEFAULT_SECTION_ORDER] } : s))}
+      />
 
       <Tabs defaultValue="hero" className="gap-4">
         <TabsList className="h-auto min-h-9 flex-wrap justify-start">

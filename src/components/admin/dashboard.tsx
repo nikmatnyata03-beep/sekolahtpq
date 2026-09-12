@@ -100,7 +100,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'payments', label: 'Keuangan', description: 'Tagihan, pembayaran, dan tunggakan', icon: Wallet, adminOnly: true },
   { key: 'laporan', label: 'Laporan', description: 'Laporan bulanan PDF: baca dan unduh arsip resmi', icon: FileBarChart, adminOnly: true },
   { key: 'content', label: 'Konten', description: 'Berita, artikel, dan pengumuman', icon: Newspaper, adminOnly: true },
-  { key: 'landing', label: 'Landing Page', description: 'Kelola konten halaman depan portal publik', icon: Palette, adminOnly: true },
+  { key: 'landing', label: 'Landing Page', description: 'Kelola konten dan urutan layout halaman depan portal publik', icon: Palette, adminOnly: true },
   { key: 'users', label: 'Pengguna', description: 'Akun admin, guru, dan wali santri', icon: UserCog, adminOnly: true },
   { key: 'whatsapp', label: 'Log WhatsApp', description: 'Riwayat notifikasi terkirim ke wali', icon: MessageCircle, adminOnly: true },
   { key: 'pentest', label: 'AI Pentest', description: 'Pemindai keamanan AI — audit otomatis seluruh endpoint', icon: ShieldCheck, adminOnly: true },
@@ -109,7 +109,8 @@ const SECTIONS: SectionDef[] = [
 ]
 
 const GURU_ALLOWED: SectionKey[] = ['ringkasan', 'classes', 'attendance', 'presensi-live', 'hafalan', 'materials', 'ai', 'pengaturan']
-const DEVELOPER_ALLOWED: SectionKey[] = ['pentest', 'devconsole', 'pengaturan']
+// Task 59-b: DEVELOPER ikut mengelola Landing Page (editor konten + urutan layout).
+const DEVELOPER_ALLOWED: SectionKey[] = ['landing', 'pentest', 'devconsole', 'pengaturan']
 
 function roleBadgeClass(role: string): string {
   if (role === 'ADMIN') return 'bg-emerald-100 text-emerald-800 border-emerald-200'

@@ -3,11 +3,12 @@
 // Public portal composition — header, sections, footer.
 // Consumed by the root SPA view switcher: <PublicPortal onOpenLogin={...} />
 
-import { useState } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { LogIn, Menu, MoonStar, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
+import { DEFAULT_SECTION_ORDER } from '@/lib/portal-settings'
 import {
   Sheet,
   SheetContent,
@@ -49,6 +50,30 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { settings } = usePortalSettings()
   const logoUrl = settings.hero.logoUrl
+
+  // Task 59-b: urutan section utama mengikuti CMS (settings.sectionOrder);
+  // fallback ke urutan bawaan bila kosong/tidak valid.
+  const sectionOrder =
+    Array.isArray(settings.sectionOrder) && settings.sectionOrder.length > 0
+      ? settings.sectionOrder
+      : DEFAULT_SECTION_ORDER
+
+  // Peta kunci section → elemen (anchor id tetap ditangani tiap komponen).
+  const sectionMap: Record<string, ReactNode> = {
+    hero: <Hero onOpenLogin={onOpenLogin} onNavigate={scrollToSection} />,
+    ticker: <AnnouncementsTicker />,
+    tentang: <AboutSection />,
+    kurikulum: <CurriculumSection />,
+    guru: <TeachersSection />,
+    materi: <MaterialsSection />,
+    berita: <NewsSection />,
+    pengumuman: <AnnouncementsSection />,
+    galeri: <GallerySection />,
+    testimoni: <TestimonialsSection />,
+    faq: <FaqSection />,
+    ppdb: <PpdbSection />,
+    checkin: <CheckinSection />,
+  }
 
   // Progres scroll halaman — menggerakkan garis gradien tipis di tepi bawah header.
   const { scrollYProgress } = useScroll()
@@ -184,21 +209,11 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
         />
       </header>
 
-      {/* ============ SECTIONS ============ */}
+      {/* ============ SECTIONS (urutan mengikuti CMS — Task 59-b) ============ */}
       <main>
-        <Hero onOpenLogin={onOpenLogin} onNavigate={scrollToSection} />
-        <AnnouncementsTicker />
-        <AboutSection />
-        <CurriculumSection />
-        <TeachersSection />
-        <MaterialsSection />
-        <NewsSection />
-        <AnnouncementsSection />
-        <GallerySection />
-        <TestimonialsSection />
-        <FaqSection />
-        <PpdbSection />
-        <CheckinSection />
+        {sectionOrder.map((key) => (
+          <Fragment key={key}>{sectionMap[key]}</Fragment>
+        ))}
       </main>
 
       <Footer onNavigate={scrollToSection} />

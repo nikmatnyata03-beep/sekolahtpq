@@ -57,6 +57,46 @@ export interface PortalSettings {
   faqs: FaqItem[]
   testimonials: TestimonialItem[]
   gallery: GalleryItem[]
+  /** Urutan render section utama portal publik (Task 59-b — layout editor). */
+  sectionOrder: string[]
+}
+
+/**
+ * Kunci section utama landing page beserta urutan bawaannya.
+ * Anchor id tiap section (beranda/tentang/kurikulum/…) tetap ditangani
+ * komponennya masing-masing — urutan ini HANYA mengatur urutan render.
+ */
+export const DEFAULT_SECTION_ORDER = [
+  'hero',
+  'ticker',
+  'tentang',
+  'kurikulum',
+  'guru',
+  'materi',
+  'berita',
+  'pengumuman',
+  'galeri',
+  'testimoni',
+  'faq',
+  'ppdb',
+  'checkin',
+] as const
+
+/** Label ramah (Indonesia) untuk tiap section — dipakai editor urutan layout. */
+export const SECTION_LABELS: Record<string, string> = {
+  hero: 'Hero (Pembuka)',
+  ticker: 'Ticker Pengumuman',
+  tentang: 'Tentang',
+  kurikulum: 'Kurikulum',
+  guru: 'Guru & Ustadz',
+  materi: 'Materi',
+  berita: 'Berita',
+  pengumuman: 'Pengumuman',
+  galeri: 'Galeri',
+  testimoni: 'Testimoni',
+  faq: 'FAQ',
+  ppdb: 'PPDB',
+  checkin: 'Cek-in Absensi',
 }
 
 export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
@@ -157,6 +197,7 @@ export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
       role: 'Wali santri — Kelas Tahsin',
     },
   ],
+  sectionOrder: [...DEFAULT_SECTION_ORDER],
 }
 
 export const SETTING_KEYS = ['hero', 'about', 'contact', 'faqs', 'testimonials', 'gallery'] as const
@@ -223,6 +264,30 @@ function strArray(v: unknown, fallback: string[]): string[] {
     .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
     .map((x) => x.trim().slice(0, LIMITS.missionItem))
   return out.length > 0 ? out : fallback
+}
+
+/**
+ * Sanitasi urutan section (Task 59-b): validasi string, dedupe, buang kunci
+ * tak dikenal, lalu APPEND kunci yang hilang sesuai urutan default —
+ * data lama tanpa sectionOrder otomatis mendapat urutan default penuh.
+ */
+function sanitizeSectionOrder(v: unknown): string[] {
+  const known = new Set<string>(DEFAULT_SECTION_ORDER)
+  const seen = new Set<string>()
+  const out: string[] = []
+  if (Array.isArray(v)) {
+    for (const item of v) {
+      if (typeof item !== 'string') continue
+      const key = item.trim()
+      if (!key || !known.has(key) || seen.has(key)) continue
+      seen.add(key)
+      out.push(key)
+    }
+  }
+  for (const key of DEFAULT_SECTION_ORDER) {
+    if (!seen.has(key)) out.push(key)
+  }
+  return out
 }
 
 /** Deep-merge payload (parsial, bentuk bebas) di atas default — aman untuk data lama/rusak. */
@@ -299,5 +364,6 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
     faqs,
     testimonials,
     gallery,
+    sectionOrder: sanitizeSectionOrder(r.sectionOrder),
   }
 }
