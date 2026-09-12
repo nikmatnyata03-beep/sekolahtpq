@@ -295,6 +295,53 @@ export function PpdbSection() {
           </div>
         </div>
 
+        {/* Gelombang 16 — stepper alur PPDB (riset 6.1.5): tiga langkah dengan garis
+            progres terisi mengikuti scroll (murni CSS animation-timeline — nol JS;
+            reduce-motion & browser lama melihat tampilan statis utuh) */}
+        <ol
+          className="relative mx-auto my-10 grid max-w-3xl gap-8 sm:grid-cols-3 sm:gap-4"
+          aria-label="Alur pendaftaran tiga langkah"
+        >
+          {/* garis penghubung lintas node (sm ke atas): track + isi progres scroll-driven */}
+          <span
+            aria-hidden="true"
+            className="absolute top-6 right-[16.67%] left-[16.67%] hidden h-0.5 rounded-full bg-emerald-100 sm:block"
+          >
+            <span className="ppdb-steps-line-fill block h-full w-full origin-left rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-amber-400" />
+          </span>
+          {[
+            {
+              icon: ClipboardList,
+              title: 'Isi Formulir Daring',
+              desc: 'Lengkapi data calon santri dan wali langsung di halaman ini — tanpa perlu datang lebih dulu.',
+            },
+            {
+              icon: FileCheck2,
+              title: 'Verifikasi Sekretariat',
+              desc: 'Berkas kami periksa, lalu Anda diundang ke sesi verifikasi dokumen asli di sekretariat TPQ.',
+            },
+            {
+              icon: BadgeCheck,
+              title: 'Keputusan & NIS',
+              desc: 'Hasil diumumkan lewat WhatsApp; santri diterima langsung mendapat NIS dan akun wali.',
+            },
+          ].map((step, i) => {
+            const Icon = step.icon
+            return (
+              <li key={step.title} className="ppdb-step relative z-10 flex flex-col items-center gap-2 text-center">
+                <span className="relative flex size-12 items-center justify-center rounded-full border-2 border-emerald-200 bg-white shadow-sm">
+                  <Icon className="size-5 text-emerald-700" />
+                  <span className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-emerald-950">
+                    {i + 1}
+                  </span>
+                </span>
+                <span className="text-sm font-bold text-stone-800">{step.title}</span>
+                <span className="text-xs leading-relaxed text-stone-500">{step.desc}</span>
+              </li>
+            )
+          })}
+        </ol>
+
         {/* ================= PANEL CEK STATUS (collapsible) ================= */}
         {checkOpen && (
           <div
@@ -670,7 +717,7 @@ export function PpdbSection() {
               type="submit"
               size="lg"
               disabled={submitting}
-              className="mt-6 w-full bg-emerald-700 font-semibold shadow-md hover:bg-emerald-800"
+              className="mt-6 w-full bg-emerald-700 font-semibold shadow-md transition-all hover:bg-emerald-800 hover:glow-soft"
             >
               {submitting ? (
                 <>
