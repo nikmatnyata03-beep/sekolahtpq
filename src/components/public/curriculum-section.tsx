@@ -79,7 +79,10 @@ export function CurriculumSection() {
     try {
       const [curriculaData, classesData] = await Promise.all([
         apiGet<CurriculumItem[]>('/api/curriculum'),
-        apiGet<ClassRoom[]>('/api/classes'),
+        // Endpoint publik (id/nama/jadwal/ruang saja) — /api/classes kini
+        // terkunci autentikasi (pentest F-09). .catch: gagal muat jadwal
+        // tidak boleh menggagalkan seluruh section kurikulum.
+        apiGet<ClassRoom[]>('/api/classes/public').catch(() => []),
       ])
       setCurricula(Array.isArray(curriculaData) ? curriculaData : [])
       setClasses(Array.isArray(classesData) ? classesData : [])

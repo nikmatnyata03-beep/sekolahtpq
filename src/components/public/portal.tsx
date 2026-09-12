@@ -33,7 +33,6 @@ import { FaqSection } from './faq-section'
 import { PpdbSection } from './ppdb-section'
 import { CheckinSection } from './checkin-section'
 import { Footer } from './footer'
-import { HijriDate } from './hijri-date'
 import { ScrollTopFab } from './motion-primitives'
 
 const NAV_ITEMS = [
@@ -156,11 +155,6 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
               <span className="block text-[11px] font-medium text-stone-500">TPQ Darul Jinan</span>
             </span>
           </button>
-
-          {/* Tanggal Hijriah — hanya di layar lebar agar header tetap lega */}
-          <div className="hidden xl:block">
-            <HijriDate variant="light" />
-          </div>
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Navigasi utama">

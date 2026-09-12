@@ -67,7 +67,10 @@ export function MaterialsSection() {
     try {
       const [materialData, classData] = await Promise.all([
         apiGet<Material[]>('/api/materials'),
-        apiGet<ClassRoom[]>('/api/classes'),
+        // Endpoint publik (id/nama/jadwal/ruang saja) — /api/classes kini
+        // terkunci autentikasi (pentest F-09). .catch: gagal muat daftar
+        // kelas tidak boleh menggagalkan seluruh section materi.
+        apiGet<ClassRoom[]>('/api/classes/public').catch(() => []),
       ])
       setMaterials(Array.isArray(materialData) ? materialData : [])
       setClasses(Array.isArray(classData) ? classData : [])

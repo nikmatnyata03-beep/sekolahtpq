@@ -368,9 +368,11 @@
    GELOMBANG 1 UI/UX (riset UIUX-RESEARCH-01) — utilitas desain
    ============================================================ */
 @layer utilities {
-  /* Liquid glass — sadar tema (var card/border) → cocok light & dark */
+  /* Liquid glass — sadar tema (var card/border) → cocok light & dark.
+     78% card + blur 20px: tekstur kaca terasa, teks yang bergulir di
+     bawahnya tidak tembus cukup untuk mengganggu keterbacaan (QA mobile). */
   .glass {
-    background: color-mix(in oklab, var(--card) 62%, transparent);
+    background: color-mix(in oklab, var(--card) 78%, transparent);
     backdrop-filter: blur(20px) saturate(1.4);
     -webkit-backdrop-filter: blur(20px) saturate(1.4);
     border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
