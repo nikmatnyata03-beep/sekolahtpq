@@ -8,7 +8,8 @@
 // Konten (bismillah, badge, judul, tagline, logo, latar, statistik) dibaca
 // dari /api/settings via usePortalSettings — aman hidrasi (paint awal = default).
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import dynamic from 'next/dynamic'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, BookOpen, GraduationCap, LogIn, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,13 @@ import { HijriDate } from './hijri-date'
 
 // Re-export: about-section & footer masih mengimpor StarLattice dari './hero'.
 export { StarLattice } from './ornaments'
+
+// Scene 3D (three.js/R3F) dimuat lazy — three.js (~150KB gzip) HANYA diunduh
+// setelah hero ter-render; tak pernah masuk chunk awal, tak mengenai dashboard.
+const HeroScene3d = dynamic(() => import('./hero-scene-3d'), {
+  ssr: false,
+  loading: () => null,
+})
 
 /** Angka statistik menghitung naik dari 0 (ease-out ~1.2s), berakhir tepat pada nilai. */
 function useCountUp(target: number, duration = 1200): number {
@@ -55,6 +63,9 @@ const riseIn = (delay: number) => ({
   transition: { duration: 0.6, delay, ease: 'easeOut' as const },
 })
 
+/** no-op subscribe — pola aman-hidrasi untuk membaca media query klien. */
+const emptySubscribe = () => () => {}
+
 export function Hero({
   onOpenLogin,
   onNavigate,
@@ -68,6 +79,22 @@ export function Hero({
 
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  // Gelombang 3D: mount scene setelah hero selesai melukis (idle) — hanya bila
+  // pengguna tidak reduce-motion; pointer kasar tetap dapat scene versi hemat.
+  const [mount3d, setMount3d] = useState(false)
+  const finePointer = useSyncExternalStore(
+    emptySubscribe,
+    () => window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+    () => true,
+  )
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 350))
+    const cancel = window.cancelIdleCallback ?? ((id: number) => window.clearTimeout(id))
+    const id = idle(() => setMount3d(true))
+    return () => cancel(id)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -204,6 +231,14 @@ export function Hero({
           aria-hidden="true"
         />
       </div>
+
+      {/* ===== Layer 1.5 — scene 3D WebGL (bulan sabit, bintang, lentera) =====
+          Di bawah konten (z), di atas siluet; kamera ber-parallax pointer. */}
+      {mount3d && (
+        <div className="absolute inset-0 z-[5] transition-opacity duration-1000">
+          <HeroScene3d dense={!finePointer} />
+        </div>
+      )}
 
       {/* ===== Layer konten — slide-scroll 3D (fade + scale) + parallax lambat ===== */}
       <motion.div

@@ -10,6 +10,7 @@ import { Camera, ChevronLeft, ChevronRight, Images, X } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { cn } from '@/lib/utils'
 import { ScrollReveal } from './ornaments'
+import { TiltCard } from './tilt-card'
 
 export function GallerySection() {
   const { settings } = usePortalSettings()
@@ -73,6 +74,8 @@ export function GallerySection() {
           <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
             {items.map((g, i) => (
               <ScrollReveal key={`${g.imageUrl}-${i}`} delay={i * 0.06} y={40} className="h-full">
+                {/* Tilt 3D: kartu miring mengikuti kursor + kilau (mouse saja) */}
+                <TiltCard className="h-full rounded-2xl" max={8} lift={5}>
                 <button
                   type="button"
                   onClick={() => setOpenIndex(i)}
@@ -106,6 +109,7 @@ export function GallerySection() {
                     </span>
                   )}
                 </button>
+                </TiltCard>
               </ScrollReveal>
             ))}
           </div>

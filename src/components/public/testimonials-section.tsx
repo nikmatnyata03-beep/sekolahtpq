@@ -8,6 +8,7 @@ import { Quote, Star } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { cn } from '@/lib/utils'
 import { ScrollReveal } from './ornaments'
+import { TiltCard } from './tilt-card'
 
 /** Inisial nama: huruf pertama dari dua kata pertama (mis. "Ibu Ratna Sari" → "IR"). */
 function initialsOf(name: string): string {
@@ -62,12 +63,14 @@ export function TestimonialsSection() {
                 rotate={9}
                 className="h-full"
               >
+                {/* Tilt 3D + kilau (mouse) — rotasi statis bergantian tetap dipertahankan */}
+                <TiltCard className="h-full rounded-2xl" max={6} lift={3}>
                 <figure
                   className={cn(
                     'relative flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-all duration-300',
-                    // rotasi halus bergantian + angkat saat hover
+                    // rotasi halus bergantian + luruh saat hover
                     i % 2 === 0 ? 'md:-rotate-1' : 'md:rotate-1',
-                    'hover:-translate-y-1 hover:rotate-0 hover:shadow-lg',
+                    'hover:rotate-0 hover:shadow-lg',
                   )}
                 >
                   <Quote
@@ -101,6 +104,7 @@ export function TestimonialsSection() {
                     </span>
                   </figcaption>
                 </figure>
+                </TiltCard>
               </ScrollReveal>
             ))}
           </div>

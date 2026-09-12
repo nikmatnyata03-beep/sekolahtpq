@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiGet } from '@/lib/api-client'
 import type { ClassRoom, CurriculumItem } from '@/lib/types'
+import { TiltCard } from './tilt-card'
 
 const SUBJECT_STYLES: Record<string, { badge: string; chip: string; icon: typeof BookOpen }> = {
   TAJWID: {
@@ -163,9 +164,9 @@ export function CurriculumSection() {
                   </div>
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {items.map((item) => (
+                      <TiltCard key={item.id} className="rounded-2xl" max={7} lift={4}>
                       <div
-                        key={item.id}
-                        className="flex flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                        className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                       >
                         <div className="mb-3 flex flex-wrap items-center gap-2">
                           <Badge variant="outline" className={style.badge}>
@@ -184,6 +185,7 @@ export function CurriculumSection() {
                           </span>
                         </div>
                       </div>
+                      </TiltCard>
                     ))}
                   </div>
                 </div>
