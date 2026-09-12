@@ -42,6 +42,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { InsightToday } from './insight-today'
+import { SetupChecklist } from './setup-checklist'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RotatingQr } from './rotating-qr'
@@ -292,7 +293,7 @@ function buildWeekBuckets(regs: Registration[]): WeekBucket[] {
   return buckets
 }
 
-export function OverviewSection() {
+export function OverviewSection({ onNavigate, showSetup = false }: { onNavigate?: (key: string) => void; showSetup?: boolean }) {
   const { toast } = useToast()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [regs, setRegs] = useState<Registration[]>([])
@@ -381,6 +382,9 @@ export function OverviewSection() {
 
   return (
     <div className="space-y-5">
+      {/* Gelombang 10 (#13): onboarding checklist berjenjang — hanya ADMIN, hilang saat 100% */}
+      {showSetup && <SetupChecklist stats={stats} onNavigate={onNavigate} />}
+
       {/* KPI bento — Gelombang 2 (riset UIUX-RESEARCH-01): hero 5 + 4 + 3 lalu 4/4/4 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-12 lg:gap-4">
         <Reveal className="col-span-2 lg:col-span-5">

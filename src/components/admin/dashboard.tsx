@@ -179,7 +179,10 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
             onNavigate={(section: GuruOverviewSection) => withViewTransition(() => setActive(section))}
           />
         ) : (
-          <OverviewSection />
+          <OverviewSection
+            showSetup={isAdmin}
+            onNavigate={(k) => withViewTransition(() => setActive(k as SectionKey))}
+          />
         )
       case 'registrations':
         return <RegistrationsAdmin />
