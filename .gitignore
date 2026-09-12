@@ -85,3 +85,4 @@ scripts/seed-qa-suspicious.ts
 # runtime lokal (berubah tiap sandbox)
 .zscripts/dev.pid
 pentest-evidence/
+scripts/.qa-cookies.txt
