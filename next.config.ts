@@ -24,11 +24,7 @@ const SECURITY_HEADERS = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      // blob: di connect-src — GLTFLoader (Studio Model 3D) memuat file
-      // .glb lewat blob URL hasil createObjectURL; img-src & frame-src
-      // sudah mengizinkan blob:, connect-src kini menyusul (blob tetap
-      // same-origin & hanya bisa dibuat kode aplikasi).
-      "connect-src 'self' blob: https://challenges.cloudflare.com",
+      "connect-src 'self' https://challenges.cloudflare.com",
       "frame-src 'self' blob: data: https://challenges.cloudflare.com",
       "object-src 'none'",
       "base-uri 'self'",

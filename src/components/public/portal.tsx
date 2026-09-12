@@ -28,7 +28,6 @@ import { MaterialsSection } from './materials-section'
 import { NewsSection } from './news-section'
 import { AnnouncementsSection } from './announcements-section'
 import { GallerySection } from './gallery-section'
-import { Model3dSection } from './model-3d-section'
 import { TestimonialsSection } from './testimonials-section'
 import { FaqSection } from './faq-section'
 import { PpdbSection } from './ppdb-section'
@@ -44,7 +43,6 @@ const NAV_ITEMS = [
   { id: 'berita', label: 'Berita' },
   { id: 'pengumuman', label: 'Pengumuman' },
   { id: 'galeri', label: 'Galeri' },
-  { id: 'model3d', label: '3D' },
   { id: 'ppdb', label: 'PPDB' },
 ]
 
@@ -245,8 +243,6 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
         {sectionOrder.map((key) => (
           <Fragment key={key}>{sectionMap[key]}</Fragment>
         ))}
-        {/* Studio Model 3D — section tetap (di luar urutan CMS), sebelum footer */}
-        <Model3dSection />
       </main>
 
       <Footer onNavigate={scrollToSection} />
