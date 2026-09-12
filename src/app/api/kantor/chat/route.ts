@@ -2,6 +2,8 @@
 //
 // Task 52: akses ADMIN & DEVELOPER. Task 55: balasan GLM sinkron.
 // Task 57: chat kini ASINKRON & tersimpan di D1 —
+// Task 58: akses diperluas ke GURU — chat muncul sebagai bubble di dashboard
+// (guru/admin/developer) selain panel Head Office di /kantor.
 //   POST  → pesan user disimpan berstatus 'pending' (TANPA memanggil AI).
 //           Balasan disusun agen AI di sandbox (cron 5 menit) lewat
 //           /api/kantor/chat/agent — protokol: docs/KANTOR-CHAT-AGENT.md.
@@ -49,7 +51,7 @@ function rateLimited(key: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard(req, ['ADMIN', 'DEVELOPER'])
+  const g = await guard(req, ['ADMIN', 'DEVELOPER', 'GURU'])
   if ('res' in g) return g.res
   const session = g.session
 
@@ -118,7 +120,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const g = await guard(req, ['ADMIN', 'DEVELOPER'])
+  const g = await guard(req, ['ADMIN', 'DEVELOPER', 'GURU'])
   if ('res' in g) return g.res
   const session = g.session
 

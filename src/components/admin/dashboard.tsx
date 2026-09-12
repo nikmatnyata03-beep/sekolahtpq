@@ -54,6 +54,7 @@ import { WhatsAppLog } from './whatsapp-log'
 import { PentestAdmin } from './pentest-admin'
 import { DevConsole } from './dev-console'
 import { AiAssistant } from './ai-assistant'
+import { ChatBubble } from './chat-bubble'
 
 type SectionKey =
   | 'ringkasan'
@@ -342,6 +343,9 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
           </div>
         </main>
       </div>
+
+      {/* Task 58: bubble chat AI (Head Office) — tersedia untuk guru/admin/developer */}
+      <ChatBubble userName={user.name} />
     </div>
   )
 }

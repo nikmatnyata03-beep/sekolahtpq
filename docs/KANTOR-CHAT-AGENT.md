@@ -1,19 +1,25 @@
-# Protokol KANTOR CHAT AGENT (Task 57)
+# Protokol KANTOR CHAT AGENT (Task 57, diperluas Task 58)
 
 Agen AI sandbox (Z.ai Code) adalah "otak" di balik chat Head Office pada
-halaman `/kantor`. Pesan pengguna **tidak** dijawab langsung oleh server —
-pesannya masuk antrian di D1, lalu agen menjawabnya saat cron poller 5 menit
-berjalan (Job 377378).
+halaman `/kantor` **dan bubble chat di dashboard SIMADJI** (Task 58 — tombol
+melayang kanan-bawah untuk role GURU, ADMIN, dan DEVELOPER). Pesan pengguna
+**tidak** dijawab langsung oleh server — pesannya masuk antrian di D1, lalu
+agen menjawabnya saat cron poller 5 menit berjalan.
 
 ## Alur data
 
 ```
-User (ADMIN/DEVELOPER) → POST /api/kantor/chat  → D1: KantorChatMessage (pending)
+User (ADMIN/DEVELOPER/GURU) → POST /api/kantor/chat  → D1: KantorChatMessage (pending)
 UI tampil: "Sedang di proses sistem, silahkan tunggu…"
 Cron 5 mnt (sandbox) → scripts/kantor-chat-agent.sh pending → baca + klaim + jawab
                      → POST reply → D1: bubble assistant + status answered
 UI polling GET /api/kantor/chat (tiap 5 dtk saat ada pending) → jawaban tampil
 ```
+
+Dua antarmuka user memakai backend yang sama:
+- Panel Head Office di halaman 3D `/kantor` (ADMIN & DEVELOPER).
+- Bubble chat dashboard (Task 58) di dashboard Guru/Admin/Developer — FAB
+  kanan-bawah, badge jumlah pesan pending/belum dibaca.
 
 ## Perintah (jalankan dari /home/z/my-project)
 
@@ -57,6 +63,10 @@ bash scripts/kantor-chat-agent.sh error <messageId> "alasan tidak bisa dijawab"
 - **ADMIN** — informasional: cara pakai fitur SIMADJI, status umum, informasi
   TPQ. TIDAK mengubah kode. Pertanyaan data operasional santri/keuangan →
   arahkan ke dashboard SIMADJI (agen tidak menampilkan data sensitif via chat).
+- **GURU** (Task 58) — sama dengan ADMIN: informasional & dukungan penggunaan
+  (fitur dashboard, absensi, hafalan, materi). TIDAK mengubah kode, tidak
+  menampilkan data santri sensitif via chat; pertanyaan operasional →
+  arahkan ke dashboard/admin.
 
 ### Larangan mutlak (berlaku semua role)
 
