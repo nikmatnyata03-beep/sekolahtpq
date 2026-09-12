@@ -45,7 +45,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RotatingQr } from './rotating-qr'
 import { motion, useReducedMotion, useSpring } from 'framer-motion'
-import { motion, useReducedMotion, useSpring } from 'framer-motion'
 import type { ReactNode } from 'react'
 
 /**
