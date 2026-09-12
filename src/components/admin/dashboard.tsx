@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Toaster } from 'sonner'
 import {
   LayoutDashboard,
@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   TerminalSquare,
   Sparkles,
+  Search,
   type LucideIcon,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/types'
@@ -36,6 +37,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { OverviewSection } from './overview'
+import { CommandPalette } from './command-palette'
 import { GuruOverview, type GuruOverviewSection } from './guru-overview'
 import { SettingsSection } from './settings-section'
 import { RegistrationsAdmin } from './registrations-admin'
@@ -146,6 +148,19 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
   })
   const [active, setActive] = useState<SectionKey>(isDeveloper ? 'pentest' : 'ringkasan')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
+  // Gelombang 4.5 — ⌘K / Ctrl+K membuka command palette (navigasi + cari santri)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const current: SectionDef = visible.find((s) => s.key === active) ?? visible[0]
   // Role-aware header copy: guru Ringkasan is a personal teaching digest, not the institution overview
@@ -253,6 +268,14 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
       {/* Sonner toast — chat-bubble (AI assistant) memanggil toast.error dari sonner;
           tanpa mount ini feedback error tertelan diam (bug ditemukan Gelombang 4) */}
       <Toaster position="bottom-right" toastOptions={{ className: 'toast-spring' }} />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        sections={visible}
+        onNavigate={(k) => setActive(k as SectionKey)}
+        canSearchStudents={isAdmin || user.role === 'GURU'}
+        studentTargetKey={isAdmin ? 'students' : 'hafalan'}
+      />
       {/* Sidebar desktop */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-stone-200 bg-white md:flex">
         {brand}
@@ -303,6 +326,17 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
             <h1 className="truncate text-base font-bold text-stone-900 md:text-lg">{headerDef.label}</h1>
             <p className="hidden truncate text-xs text-stone-500 sm:block">{headerDef.description}</p>
           </div>
+
+          {/* Gelombang 4.5 — pembuka command palette (⌘K) */}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Buka palette perintah (Ctrl+K)"
+            className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white/60 px-2.5 py-1.5 text-xs font-medium text-stone-500 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <Search className="size-3.5" />
+            <kbd className="hidden font-sans text-[10px] font-semibold text-stone-400 md:inline">⌘K</kbd>
+          </button>
 
           {/* Task 48: pengalih tema Terang/Gelap/Sistem */}
           <ThemeToggle />
