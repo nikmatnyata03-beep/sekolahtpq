@@ -3,9 +3,9 @@
 import { useMemo } from 'react'
 import { Check, CheckCircle2, Inbox, Target } from 'lucide-react'
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -86,6 +86,21 @@ export function HafalanProgress({ hafalans, target }: { hafalans: Hafalan[]; tar
         : avg >= KKM
           ? 'bg-amber-100 text-amber-800'
           : 'bg-red-100 text-red-700'
+
+  // Gelombang 11 (#14): titik terakhir grafik "menyala" — halo berlapis di sekeliling dot
+  // (pola riset: glow pada titik terakhir = fokus mata ke capaian terbaru).
+  const renderDot = (props: { cx?: number; cy?: number; index?: number }) => {
+    const { cx, cy, index = 0 } = props
+    if (cx == null || cy == null) return <g />
+    if (index !== trend.length - 1) return <circle cx={cx} cy={cy} r={3} fill="#047857" />
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={9} fill="#047857" opacity={0.16} />
+        <circle cx={cx} cy={cy} r={5.5} fill="#047857" opacity={0.32} />
+        <circle cx={cx} cy={cy} r={3.5} fill="#047857" stroke="#ffffff" strokeWidth={1.5} />
+      </g>
+    )
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -224,11 +239,19 @@ export function HafalanProgress({ hafalans, target }: { hafalans: Hafalan[]; tar
             <>
               <div
                 role="img"
-                aria-label={`Grafik garis tren ${trend.length} nilai hafalan dari waktu ke waktu; garis putus-putus amber menandai batas minimal nilai ${KKM}.`}
+                aria-label={`Grafik area tren ${trend.length} nilai hafalan dari waktu ke waktu; area bergradasi zamrud, titik terakhir menyala menandai capaian terbaru, garis putus-putus amber menandai batas minimal nilai ${KKM}.`}
                 className="h-56 w-full"
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trend} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}>
+                  {/* Gelombang 11 (#14): grafik hafalan bercahaya — area bergradasi
+                      zamrud→transparan di bawah garis, titik terakhir ber-halo. */}
+                  <AreaChart data={trend} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}>
+                    <defs>
+                      <linearGradient id="hafalanAreaGlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#047857" stopOpacity={0.32} />
+                        <stop offset="100%" stopColor="#047857" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
                     <XAxis
                       dataKey="date"
@@ -252,15 +275,16 @@ export function HafalanProgress({ hafalans, target }: { hafalans: Hafalan[]; tar
                       contentStyle={{ borderRadius: 12, borderColor: '#e7e5e4', fontSize: 12 }}
                     />
                     <ReferenceLine y={KKM} stroke="#d97706" strokeDasharray="4 4" />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="nilai"
                       stroke="#047857"
                       strokeWidth={2.5}
-                      dot={{ r: 3, fill: '#047857' }}
+                      fill="url(#hafalanAreaGlow)"
+                      dot={renderDot}
                       activeDot={{ r: 5 }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
               <p className="flex items-center gap-2 text-[11px] text-stone-500">
