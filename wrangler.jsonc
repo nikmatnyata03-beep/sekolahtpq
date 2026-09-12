@@ -31,13 +31,17 @@
   // Paid ($5/bln, 30s CPU) bila ingin menaikkan nilai ini ke 10-12.
   "vars": {
     "BCRYPT_ROUNDS": "5",
-    // Secret untuk memicu /api/cron/daily dari scheduled handler (repo privat;
-    // bila repo jadi publik, pindahkan ke Worker Secret via dashboard).
-    "CRON_SECRET": "d086576c5cc5541cbb25f28cb8bb438b81461ad6e6fb33dd",
-    // Kunci layanan utk agen non-browser (AI Fix Bridge) melewati Turnstile pada login.
-    // Kunci hanya mem-bypass cek bot — email+password tetap wajib. Repo privat;
-    // bila repo jadi publik, pindahkan ke Worker Secret via dashboard.
-    "AGENT_API_KEY": "0ec95d1666aa735ca8cb3782f12e5105f736981728f52b31"
+    // ⚠️ PENTEST 2026-09-12 (KRITIS): repo GitHub ini PUBLIK — kedua nilai di
+    // bawah BISA DIBACA SIAPAPUN lewat git history/repo. Nilai lama sudah
+    // DIROTASI pada 2026-09-12 agar kunci bocoran mati, TAPI nilai baru juga
+    // akan terbaca publik. Langkah permanen WAJIB oleh owner:
+    //   1. npx wrangler secret put CRON_SECRET   (nilai dari .env)
+    //   2. npx wrangler secret put AGENT_API_KEY (nilai dari .env)
+    //   3. HAPUS kedua baris secret ini dari file, commit & push.
+    //   (atau set via dashboard Cloudflare → Workers → Settings → Variables)
+    "CRON_SECRET": "bdc429063d4c82f557463c71c67d4abe7111b7f2e7d2a803",
+    // Lihat peringatan di atas — sama.
+    "AGENT_API_KEY": "fe1763beb0649362ce6476bf423660f8c843de2f9864f707"
   },
   // Durable Object "PresenceHub" — panel presensi real-time (WebSocket
   // hibernation). Kelas SQLite-backed → tersedia di tier gratis Workers.

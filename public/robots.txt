@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tpqdarussolah.nikmatnyata03.workers.dev/sitemap.xml
+Sitemap: https://tpq.darussolah.workers.dev/sitemap.xml

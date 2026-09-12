@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { db, ok, bad, sendWhatsApp } from '@/lib/api'
 import { hashPassword } from '@/lib/password'
 import { guard } from '@/lib/session'
-import { clientIp } from '@/lib/rate-limit'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 import { verifyTurnstileToken } from '@/lib/turnstile-server'
 
 function temporaryPassword(): string {
@@ -19,6 +19,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Defense-in-depth anti-spam PPDB (pentest 2026-09-12): meski Turnstile
+    // menghalangi bot, kuota per-IP membatasi banjir pendaftaran darisolver
+    // Captcha komersial.
+    if (!rateLimit(`ppdb:${clientIp(req)}`, 5, 60 * 60 * 1000)) {
+      return bad('Terlalu banyak pendaftaran dari perangkat ini. Coba lagi nanti.', 429)
+    }
     const b = await req.json()
     if (!b.childName || !b.parentName || !b.phone || !b.birthDate) {
       return bad('Nama anak, nama orang tua, nomor HP, dan tanggal lahir wajib diisi')

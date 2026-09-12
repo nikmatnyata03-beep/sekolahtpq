@@ -4,6 +4,7 @@ import { verifyPassword } from '@/lib/password'
 import { createSessionToken, sessionCookieHeader, isSecureRequest, type SessionUser } from '@/lib/session'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { verifyTurnstileToken } from '@/lib/turnstile-server'
+import { recordLoginAttempt, isLoginLocked } from '@/lib/login-audit'
 
 /** Bandingkan string constant-time (anti timing attack) untuk kunci layanan. */
 function safeEqual(a: string, b: string): boolean {
@@ -31,6 +32,17 @@ export async function POST(req: NextRequest) {
     const { email, password } = body
     if (!email || !password) return bad('Email dan password wajib diisi')
 
+    // Pelajaran Pentest 2026-09-12 (P-01): rate limit memori hanya per-isolate.
+    // Lapisan kedua GLOBAL di D1: kunci email setelah 10 kegagalan / 15 menit
+    // (tercatat lintas isolate, tahan rotasi koneksi attacker).
+    const emailNorm = String(email).toLowerCase().trim()
+    if (await isLoginLocked(emailNorm)) {
+      return NextResponse.json(
+        { error: 'Akun terkunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam 15 menit.' },
+        { status: 429, headers: { 'Retry-After': '900' } },
+      )
+    }
+
     // Turnstile wajib untuk login manusia. Pengecualian NARROW: agen layanan
     // (AI Fix Bridge, non-browser) membawa kunci layanan — tanpa itu bot
     // tetap terblokir. Kunci HANYA melewati cek bot, email+password tetap wajib.
@@ -49,6 +61,8 @@ export async function POST(req: NextRequest) {
       include: { teacherProfile: { select: { id: true, fullName: true } } },
     })
     const valid = user ? await verifyPassword(String(password), user.password) : false
+    // Audit GLOBAL (sukses & gagal) — bahan analisis Serangan + basis lockout.
+    await recordLoginAttempt(emailNorm, ip, Boolean(user && valid))
     if (!user || !valid) return bad('Email atau password salah', 401)
 
     // Sesi httpOnly — sumber kebenaran otorisasi di sisi server.
