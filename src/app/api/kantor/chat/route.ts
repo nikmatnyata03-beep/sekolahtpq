@@ -33,13 +33,13 @@ const chatSchema = z.object({
 })
 
 // ---- Task 61: deteksi agen Head Office aktif vs timeout (heartbeat D1) ----
-// Misi owner 2026-09-12: "ai chat agent jangan sampai offline".
-// Denyut tercepat dari sandbox adalah cron 5 menit (batas minimum scheduler),
-// jadi window aktif 11 menit memastikan denyut cron selalu dianggap hidup —
-// chat tampil 'aktif' selama agen jaga 24 jam, bukan notice offline menakutkan.
-// Saat agen mengerjakan task panjang (>11 mnt tanpa denyut), notice statis
-// muncul 1×/sesi namun pesan TETAP masuk antrian dan dijawab saat bangun.
-const ACTIVE_WINDOW_MS = 660_000
+// Misi owner 2026-09-12: "ai chat agent jangan sampai offline" + insiden 16:11
+// (denyut cron terpakai utk pekerjaan lain → gap 20 mnt → status sempat OFF).
+// Pelajarannya: denyut bisa 'telat' bukan cuma hilang — sesi sandbox kadang
+// dipakai pekerjaan panjang / bangunan cron terlewati. Jadi window aktif 25
+// menit: sanggup menoleransi sampai 4 denyut cron 5 mnt yang bolong berturut,
+// sementara scripts/agent-ping.sh dijalankan PALENG AWAL di setiap bangun.
+const ACTIVE_WINDOW_MS = 1_500_000
 const HEARTBEAT_AGENT = 'head-office'
 
 const AGENT_AWAY_NOTICE =
