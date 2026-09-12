@@ -117,6 +117,9 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
   const [error, setError] = useState<string | null>(null)
   const [markingRead, setMarkingRead] = useState(false)
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([])
+  // Gelombang 12 (#14): tab santri terkontrol — bottom tab bar mobile & TabsList atas
+  // berbagi satu sumber state (null = ikut santri pertama, deterministik untuk SSR).
+  const [activeStudentId, setActiveStudentId] = useState<string | null>(null)
 
   const load = useCallback(
     async (initial = false) => {
@@ -299,7 +302,7 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6">
+      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:pb-16">
         {/* ==== Greeting hero + announcements ==== */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-600 p-6 text-white shadow-sm sm:p-7">
           <MoonStar className="pointer-events-none absolute -bottom-8 -right-4 size-40 text-white/10" aria-hidden />
@@ -409,8 +412,8 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
           </Card>
         ) : (
           <div className="mt-6">
-            <div className="overflow-x-auto pb-1">
-              <Tabs defaultValue={data.students[0]?.id}>
+            <div className="hidden overflow-x-auto pb-1 md:block">
+              <Tabs value={activeStudentId ?? data.students[0]?.id} onValueChange={setActiveStudentId}>
                 <TabsList className="h-auto w-fit bg-white p-1 shadow-sm ring-1 ring-stone-200">
                   {data.students.map((s) => (
                     <TabsTrigger
@@ -500,6 +503,55 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
           </Card>
         )}
       </main>
+
+      {/* ==== Bottom tab bar kaca (mobile, #14) — pindah pemilih santri ke ibu jari ==== */}
+      {data && data.students.length > 0 && (
+        <nav
+          aria-label="Pilih santri"
+          className="glass fixed inset-x-0 bottom-0 z-40 shadow-[0_-8px_24px_-16px_rgb(0,0,0,0.25)] md:hidden"
+        >
+          <div className="mx-auto flex w-full max-w-6xl items-stretch gap-1.5 overflow-x-auto px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {data.students.map((s) => {
+              const active = (activeStudentId ?? data.students[0]?.id) === s.id
+              const initials = s.fullName
+                .split(' ')
+                .slice(0, 2)
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setActiveStudentId(s.id)}
+                  className={
+                    'flex min-w-20 flex-1 cursor-pointer flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ' +
+                    (active
+                      ? 'bg-emerald-700 text-white shadow-sm glow-soft'
+                      : 'text-stone-500 hover:bg-stone-100 hover:text-emerald-700')
+                  }
+                >
+                  <span
+                    className={`relative grid size-7 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+                      active ? 'bg-white/20 text-white' : 'bg-stone-200 text-stone-600'
+                    }`}
+                  >
+                    {initials || '?'}
+                    {s.billing.pendingCount > 0 && (
+                      <span
+                        className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-white"
+                        title="Ada tagihan pending"
+                      />
+                    )}
+                  </span>
+                  <span className="max-w-full truncate">{s.fullName.split(' ')[0]}</span>
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   )
 }

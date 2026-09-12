@@ -1059,7 +1059,7 @@ export function ChildPanel({
       <Card className="rounded-2xl lg:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-3 text-base">
-            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800">
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-800 text-sm font-bold text-white shadow-sm ring-2 ring-emerald-100">
               {initials || '?'}
             </span>
             <span className="min-w-0">
