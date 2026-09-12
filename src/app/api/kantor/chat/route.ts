@@ -33,11 +33,17 @@ const chatSchema = z.object({
 })
 
 // ---- Task 61: deteksi agen Head Office aktif vs timeout (heartbeat D1) ----
-const ACTIVE_WINDOW_MS = 120_000 // denyut <2 menit = agen masih online (live-watch ±5 dtk)
+// Misi owner 2026-09-12: "ai chat agent jangan sampai offline".
+// Denyut tercepat dari sandbox adalah cron 5 menit (batas minimum scheduler),
+// jadi window aktif 11 menit memastikan denyut cron selalu dianggap hidup —
+// chat tampil 'aktif' selama agen jaga 24 jam, bukan notice offline menakutkan.
+// Saat agen mengerjakan task panjang (>11 mnt tanpa denyut), notice statis
+// muncul 1×/sesi namun pesan TETAP masuk antrian dan dijawab saat bangun.
+const ACTIVE_WINDOW_MS = 660_000
 const HEARTBEAT_AGENT = 'head-office'
 
 const AGENT_AWAY_NOTICE =
-  '🛰️ Head Office sedang tidak aktif sesaat — sistem mencoba pulih. Pesan Anda sudah masuk antrian dan akan dibalas segera setelah Head Office kembali online.'
+  '🛰️ Head Office sedang fokus mengerjakan sebuah tugas besar — pesan Anda sudah masuk antrian dan pasti dijawab begitu giliran kerja selesai (maksimal beberapa menit).'
 
 /** Baca denyut terakhir agen; true bila masih dalam window aktif. */
 async function agentOnline(): Promise<boolean> {
@@ -184,8 +190,8 @@ export async function POST(req: NextRequest) {
       agentOnline: agentIsOnline,
       noticed,
       waitHint: agentIsOnline
-        ? 'Head Office sedang aktif — balasan segera…'
-        : 'Head Office tidak aktif — pesan masuk antrian…',
+        ? 'Head Office aktif (jaga 24 jam) — balasan segera, ≤5 menit…'
+        : 'Head Office sedang sibuk mengerjakan tugas — pesan masuk antrian & akan dijawab…',
     })
   } catch (e) {
     console.error('[kantor/chat POST]', e)

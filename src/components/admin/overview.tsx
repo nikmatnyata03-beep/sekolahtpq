@@ -44,6 +44,8 @@ import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RotatingQr } from './rotating-qr'
+import { motion, useReducedMotion, useSpring } from 'framer-motion'
+import { motion, useReducedMotion, useSpring } from 'framer-motion'
 import type { ReactNode } from 'react'
 
 /**
@@ -113,31 +115,97 @@ export function downloadCsv(filename: string, rows: string[][]): void {
   URL.revokeObjectURL(url)
 }
 
+// ==== Gelombang 2 UI/UX (riset UIUX-RESEARCH-01): Bento + motion ====
+
+/** Angka count-up berbasis spring — hormati prefers-reduced-motion (WCAG 2.2). */
+function AnimatedNumber({ value, format }: { value: number; format?: (n: number) => string }) {
+  const reduce = useReducedMotion()
+  const spring = useSpring(0, { stiffness: 90, damping: 22, mass: 0.8 })
+  const [text, setText] = useState('0')
+  useEffect(() => {
+    const render = (v: number) => setText(format ? format(Math.round(v)) : String(Math.round(v)))
+    if (reduce) {
+      render(value)
+      return
+    }
+    spring.set(value)
+    const unsub = spring.on('change', render)
+    return unsub
+  }, [value, reduce, format, spring])
+  return <span className="tabular-nums">{text}</span>
+}
+
+/** Entrance halus fade+rise — dimatikan bila pengguna memilih gerakan minimum. */
+function Reveal({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  const reduce = useReducedMotion()
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: 'easeOut', delay }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 // Mobile-polished KPI card: tighter padding/icon/value on <sm, muted hint hidden on
 // very small screens to avoid tall cards with dead space. Desktop (sm+) unchanged.
+// Gelombang 2: dukungan hero bento (gradient emerald + glow) & angka count-up.
 function KpiCard({
   icon: Icon,
   label,
   value,
   hint,
   iconClass,
+  hero = false,
+  numeric,
+  format,
+  className,
 }: {
   icon: LucideIcon
   label: string
   value: string
   hint: string
   iconClass: string
+  hero?: boolean
+  numeric?: number
+  format?: (n: number) => string
+  className?: string
 }) {
   return (
-    <Card className="rounded-2xl border-stone-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-md">
-      <CardContent className="flex items-start gap-2.5 p-3 sm:gap-3 sm:p-4">
-        <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-10', iconClass)}>
-          <Icon className="size-4 sm:size-5" />
+    <Card
+      className={cn(
+        'h-full rounded-2xl transition-all duration-200 hover:-translate-y-0.5',
+        hero
+          ? 'glow-emerald border-0 bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 text-white shadow-tier hover:from-emerald-500 hover:to-teal-600'
+          : 'border-stone-200 shadow-tier hover:border-stone-300 hover:shadow-md',
+        className,
+      )}
+    >
+      <CardContent className={cn('flex h-full items-start gap-2.5 p-3 sm:gap-3 sm:p-4', hero && 'sm:gap-4 sm:p-6')}>
+        <div
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-10',
+            hero ? 'bg-white/15 text-white sm:size-12' : iconClass,
+          )}
+        >
+          <Icon className={cn('size-4 sm:size-5', hero && 'sm:size-6')} />
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-stone-500">{label}</p>
-          <p className="break-words text-base font-bold text-stone-900 tabular-nums sm:text-xl">{value}</p>
-          <p className="mt-0.5 hidden text-[11px] text-stone-400 sm:block">{hint}</p>
+          <p className={cn('text-xs font-medium', hero ? 'text-emerald-50/90' : 'text-stone-500')}>{label}</p>
+          <div
+            className={cn(
+              'break-words font-bold tabular-nums',
+              hero ? 'text-3xl text-white sm:text-4xl' : 'text-base text-stone-900 sm:text-xl',
+            )}
+          >
+            {numeric !== undefined ? <AnimatedNumber value={numeric} format={format} /> : value}
+          </div>
+          <p className={cn('mt-0.5 hidden text-[11px] sm:block', hero ? 'text-emerald-50/70' : 'text-stone-400')}>
+            {hint}
+          </p>
         </div>
       </CardContent>
     </Card>
