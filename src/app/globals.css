@@ -281,6 +281,13 @@
     box-shadow: 0 0 64px -12px oklch(0.596 0.145 163.225 / 0.35);
   }
 
+  /* Gelombang 4 — toast spring: easing back-out (sedikit overshoot)
+     untuk animasi masuk/keluar & gesek (swipe) toast, terasa fisik */
+  .toast-spring {
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+
   /* Shadow bertingkat (dua lapis: kontak + ambient) */
   .shadow-tier {
     box-shadow:

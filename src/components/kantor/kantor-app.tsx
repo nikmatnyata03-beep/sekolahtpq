@@ -70,7 +70,7 @@ export function KantorApp({ access = 'full', userName }: { access?: 'full' | 'vi
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-100">
-      <Toaster position="top-center" richColors />
+      <Toaster position="top-center" richColors toastOptions={{ className: 'toast-spring' }} />
 
       {/* Header */}
       <header className="glass sticky top-0 z-30 shadow-sm">

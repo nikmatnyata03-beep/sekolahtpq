@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Toaster } from 'sonner'
 import {
   LayoutDashboard,
   ClipboardList,
@@ -249,6 +250,9 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
 
   return (
     <div className="flex h-dvh overflow-hidden bg-stone-50">
+      {/* Sonner toast — chat-bubble (AI assistant) memanggil toast.error dari sonner;
+          tanpa mount ini feedback error tertelan diam (bug ditemukan Gelombang 4) */}
+      <Toaster position="bottom-right" toastOptions={{ className: 'toast-spring' }} />
       {/* Sidebar desktop */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-stone-200 bg-white md:flex">
         {brand}
