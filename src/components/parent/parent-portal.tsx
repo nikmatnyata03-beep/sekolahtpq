@@ -416,7 +416,7 @@ export function ParentPortal({ user, onLogout, onOpenPublic }: { user: AuthUser;
                     <TabsTrigger
                       key={s.id}
                       value={s.id}
-                      className="gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm data-[state=active]:bg-emerald-700 data-[state=active]:text-white"
+                      className="gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm data-[state=active]:bg-emerald-700 data-[state=active]:text-white data-[state=active]:glow-soft"
                     >
                       <User className="size-3.5" />
                       {s.fullName.split(' ')[0]}

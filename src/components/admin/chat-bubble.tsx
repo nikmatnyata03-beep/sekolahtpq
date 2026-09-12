@@ -228,7 +228,7 @@ export function ChatBubble({ userName }: { userName: string }) {
           <div className="flex items-center gap-2.5 border-b border-stone-100 bg-stone-50/80 px-3 py-2.5">
             <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-700 text-white">
               <Bot className="h-5 w-5" />
-              <span className="absolute -end-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" aria-hidden />
+              <span className="absolute -end-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 presence-pulse" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold text-stone-900">Asisten AI</p>

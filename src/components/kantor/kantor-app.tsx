@@ -101,7 +101,7 @@ export function KantorApp({ access = 'full', userName }: { access?: 'full' | 'vi
               <Button
                 variant="outline"
                 size="sm"
-                className={`h-8 gap-1.5 text-xs ${chatOpen ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : ''}`}
+                className={`h-8 gap-1.5 text-xs ${chatOpen ? 'border-emerald-600 bg-emerald-50 text-emerald-800 glow-soft' : ''}`}
                 onClick={() => setChatOpen((v) => !v)}
                 aria-expanded={chatOpen}
                 data-testid="tombol-chat-head"

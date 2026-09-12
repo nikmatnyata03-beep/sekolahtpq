@@ -265,6 +265,49 @@
 }
 
 /* ============================================================
+   GELOMBANG 8 UI/UX (#11 matriks riset) — presence glow
+   @utility (bukan @layer) agar varian Tailwind (mis. data-[state=active]:)
+   tetap ter-generate. Warna emerald brand, sadar light & dark.
+   ============================================================ */
+
+/* Glow lembut utk ELEMEN AKTIF: ring tipis + sebaran cahaya emerald
+   (pola riset: 0 0 0 1px rgba(16,185,129,.25) + ambient glow) */
+@utility glow-soft {
+  box-shadow:
+    0 0 0 1px oklch(0.596 0.145 163.225 / 0.28),
+    0 8px 24px -8px oklch(0.596 0.145 163.225 / 0.45);
+}
+
+/* Ring denyut "hidup" utk indikator status (presence): ::after membesar
+   & memudar dari elemen induk (border-radius ikon inherit).
+   Terapkan pada titik/ikon status emerald. Reduce-motion: mati total
+   (ditangkap blok global animation-duration 0.01ms). */
+@utility presence-pulse {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: var(--color-emerald-500);
+    animation: presence-pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+@keyframes presence-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  70%,
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+/* ============================================================
    GELOMBANG 1 UI/UX (riset UIUX-RESEARCH-01) — utilitas desain
    ============================================================ */
 @layer utilities {
@@ -280,7 +323,6 @@
   .glow-emerald {
     box-shadow: 0 0 64px -12px oklch(0.596 0.145 163.225 / 0.35);
   }
-
   /* Gelombang 4 — toast spring: easing back-out (sedikit overshoot)
      untuk animasi masuk/keluar & gesek (swipe) toast, terasa fisik */
   .toast-spring {

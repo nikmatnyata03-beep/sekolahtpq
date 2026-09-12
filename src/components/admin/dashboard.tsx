@@ -245,7 +245,7 @@ export function AdminDashboard({ user, onLogout, onOpenPublic }: { user: AuthUse
               'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all duration-150',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-1 active:scale-[0.98]',
               isActive
-                ? 'bg-emerald-700 text-white shadow-sm'
+                ? 'bg-emerald-700 text-white shadow-sm glow-soft'
                 : 'text-stone-600 hover:bg-emerald-50 hover:text-emerald-800'
             )}
             aria-current={isActive ? 'page' : undefined}
