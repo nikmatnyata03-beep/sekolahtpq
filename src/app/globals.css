@@ -552,3 +552,95 @@
     }
   }
 }
+
+/* ===== Gelombang MAGIC-01 — animasi ambient portal publik ===== */
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-18px) scale(1.05);
+  }
+}
+
+/* Bola cahaya melayang (AmbientOrbs) — lambat & lembut, murni dekoratif */
+.float-slow {
+  animation: float-slow 11s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-slow {
+    animation: none;
+  }
+}
+
+/* Garis bawah menyapu pada tautan nav (hover) — scaleX dari kiri */
+.nav-underline {
+  position: relative;
+}
+
+.nav-underline::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, var(--brand, #047857), var(--brand-accent, #d97706));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-underline:hover::after,
+.nav-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ===== MAGIC-01 — garis pemindai (scanline) kartu kode sesi cek-in =====
+   Garis cahaya amber turun-naik pelan pada bingkai kartu — kesan "scanner" hidup.
+   Dekoratif; reduce-motion tidak beranimasi. */
+@keyframes scanline-y {
+  0% {
+    top: 6%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    top: 92%;
+    opacity: 0;
+  }
+}
+
+.scanline-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline-card::before {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, transparent, rgba(217, 119, 6, 0.75), transparent);
+  box-shadow: 0 0 12px 2px rgba(217, 119, 6, 0.35);
+  animation: scanline-y 3.6s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanline-card::before {
+    animation: none;
+    opacity: 0;
+  }
+}

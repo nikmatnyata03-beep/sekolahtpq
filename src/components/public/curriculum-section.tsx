@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiGet } from '@/lib/api-client'
 import type { ClassRoom, CurriculumItem } from '@/lib/types'
+import { AmbientOrbs, SectionHeading, StaggerGroup, StaggerItem } from './motion-primitives'
 import { TiltCard } from './tilt-card'
 
 const SUBJECT_STYLES: Record<string, { badge: string; chip: string; icon: typeof BookOpen }> = {
@@ -101,19 +102,21 @@ export function CurriculumSection() {
   }
 
   return (
-    <section id="kurikulum" className="scroll-mt-20 bg-stone-50 py-16">
-      <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-            Kurikulum
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Kurikulum Pembelajaran</h2>
-          <p className="mt-3 text-muted-foreground">
-            Materi pelajaran TPQ Darul Jinan mengacu pada kurikulum standar Kemenag RI — dibimbing
-            bertahap dari Iqra hingga hafalan Al-Qur&apos;an.
-          </p>
-        </div>
+    <section id="kurikulum" className="relative scroll-mt-20 overflow-hidden bg-stone-50 py-16">
+      {/* MAGIC-01 — bola cahaya melayang (dekorasi latar) */}
+      <AmbientOrbs />
+      <div className="relative mx-auto max-w-6xl px-4">
+        {/* Heading — kaskade badge → judul → garis emas → subjudul */}
+        <SectionHeading
+          badge="Kurikulum"
+          title="Kurikulum Pembelajaran"
+          subtitle={
+            <>
+              Materi pelajaran TPQ Darul Jinan mengacu pada kurikulum standar Kemenag RI — dibimbing
+              bertahap dari Iqra hingga hafalan Al-Qur&apos;an.
+            </>
+          }
+        />
 
         {/* Error */}
         {error && (
@@ -162,32 +165,34 @@ export function CurriculumSection() {
                       {items.length} materi
                     </Badge>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <StaggerGroup className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {items.map((item) => (
-                      <TiltCard key={item.id} className="rounded-2xl" max={7} lift={4}>
-                      <div
-                        className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                      >
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className={style.badge}>
-                            {item.subject}
-                          </Badge>
-                          <Badge variant="outline" className="border-stone-200 bg-stone-50 text-stone-600">
-                            {levelLabel(item.level)}
-                          </Badge>
-                        </div>
-                        <p className="flex-1 text-sm leading-relaxed text-stone-600">{item.description}</p>
-                        <div className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-xs leading-relaxed ${style.chip}`}>
-                          <Target className="mt-0.5 size-3.5 shrink-0" />
-                          <span>
-                            <span className="font-semibold">Capaian: </span>
-                            {item.target}
-                          </span>
-                        </div>
-                      </div>
-                      </TiltCard>
+                      <StaggerItem key={item.id}>
+                        <TiltCard className="rounded-2xl" max={7} lift={4}>
+                          <div
+                            className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                          >
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className={style.badge}>
+                                {item.subject}
+                              </Badge>
+                              <Badge variant="outline" className="border-stone-200 bg-stone-50 text-stone-600">
+                                {levelLabel(item.level)}
+                              </Badge>
+                            </div>
+                            <p className="flex-1 text-sm leading-relaxed text-stone-600">{item.description}</p>
+                            <div className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-xs leading-relaxed ${style.chip}`}>
+                              <Target className="mt-0.5 size-3.5 shrink-0" />
+                              <span>
+                                <span className="font-semibold">Capaian: </span>
+                                {item.target}
+                              </span>
+                            </div>
+                          </div>
+                        </TiltCard>
+                      </StaggerItem>
                     ))}
-                  </div>
+                  </StaggerGroup>
                 </div>
               )
             })}
@@ -198,30 +203,31 @@ export function CurriculumSection() {
         {!loading && !error && classes.length > 0 && (
           <div className="mt-12">
             <h3 className="mb-4 text-center text-lg font-bold text-stone-800">Jadwal Kelas Belajar</h3>
-            <div className="flex flex-wrap items-stretch justify-center gap-3">
+            <StaggerGroup className="flex flex-wrap items-stretch justify-center gap-3" amount={0.1}>
               {classes.map((cls) => (
-                <div
-                  key={cls.id}
-                  className="flex flex-col gap-1 rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg"
-                >
-                  <span className="flex items-center gap-2 text-sm font-bold text-emerald-900">
-                    <BookOpen className="size-3.5 text-emerald-600" />
-                    {cls.name}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-stone-500">
-                    <Clock className="size-3 shrink-0 text-amber-500" />
-                    {cls.schedule || 'Jadwal menyusul'}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-stone-500">
-                    <MapPin className="size-3 shrink-0 text-rose-400" />
-                    {cls.room || 'Ruang fleksibel'}
-                    {typeof cls.studentCount === 'number' && (
-                      <span className="ml-1 text-emerald-700">• {cls.studentCount} santri</span>
-                    )}
-                  </span>
-                </div>
+                <StaggerItem key={cls.id}>
+                  <div
+                    className="flex h-full flex-col gap-1 rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-bold text-emerald-900">
+                      <BookOpen className="size-3.5 text-emerald-600" />
+                      {cls.name}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                      <Clock className="size-3 shrink-0 text-amber-500" />
+                      {cls.schedule || 'Jadwal menyusul'}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                      <MapPin className="size-3 shrink-0 text-rose-400" />
+                      {cls.room || 'Ruang fleksibel'}
+                      {typeof cls.studentCount === 'number' && (
+                        <span className="ml-1 text-emerald-700">• {cls.studentCount} santri</span>
+                      )}
+                    </span>
+                  </div>
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerGroup>
           </div>
         )}
       </div>

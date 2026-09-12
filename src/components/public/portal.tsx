@@ -3,7 +3,7 @@
 // Public portal composition — header, sections, footer.
 // Consumed by the root SPA view switcher: <PublicPortal onOpenLogin={...} />
 
-import { Fragment, useState, type CSSProperties, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { LogIn, Menu, MoonStar, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -34,6 +34,7 @@ import { PpdbSection } from './ppdb-section'
 import { CheckinSection } from './checkin-section'
 import { Footer } from './footer'
 import { HijriDate } from './hijri-date'
+import { ScrollTopFab } from './motion-primitives'
 
 const NAV_ITEMS = [
   { id: 'tentang', label: 'Tentang' },
@@ -50,6 +51,36 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { settings, previewing } = usePortalSettings()
   const logoUrl = settings.hero.logoUrl
+
+  // MAGIC-01 — scroll-spy: section yang sedang terlihat menandai nav aktif.
+  // IntersectionObserver dengan pita tengah viewport (rootMargin negatif) agar
+  // hanya satu section yang "menang" pada satu waktu.
+  const [activeSection, setActiveSection] = useState<string | null>(null)
+  useEffect(() => {
+    const ids = NAV_ITEMS.map((item) => item.id)
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) setActiveSection(entry.target.id)
+        }
+      },
+      { rootMargin: '-40% 0px -55% 0px' },
+    )
+    for (const id of ids) {
+      const el = document.getElementById(id)
+      if (el) observer.observe(el)
+    }
+    // Di paling atas (hero terlihat) tidak ada nav yang aktif — bersihkan pill.
+    const onScroll = () => {
+      if (window.scrollY < 200) setActiveSection(null)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', onScroll)
+    }
+  }, [])
 
   // Task 62 — tema CMS: warna merek dipasang sebagai CSS variables di akar
   // portal sehingga seluruh section turunan bisa memakai var(--brand).
@@ -133,16 +164,30 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Navigasi utama">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => scrollToSection(item.id)}
-                className="rounded-md px-3 py-2 text-sm font-medium text-stone-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800"
-              >
-                {item.label}
-              </button>
-            ))}
+            {NAV_ITEMS.map((item) => {
+              const active = activeSection === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => scrollToSection(item.id)}
+                  aria-current={active ? 'true' : undefined}
+                  className={cnNavButton(active)}
+                >
+                  {/* MAGIC-01 — pill aktif: satu elemen shared layoutId yang berpindah
+                      antar tombol dengan spring (indikator menggelinding, bukan muncul-hilang) */}
+                  {active && (
+                    <motion.span
+                      layoutId="nav-active-pill"
+                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                      className="absolute inset-0 rounded-md bg-emerald-100/80"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="relative">{item.label}</span>
+                </button>
+              )
+            })}
           </nav>
 
           {/* Desktop actions */}
@@ -246,6 +291,19 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
       </main>
 
       <Footer onNavigate={scrollToSection} />
+
+      {/* MAGIC-01 — FAB kembali ke atas dgn cincin progres scroll */}
+      <ScrollTopFab />
     </div>
   )
+}
+
+/** Kelas tombol nav — dasar underline menyapu + variasi warna saat aktif. */
+function cnNavButton(active: boolean): string {
+  return [
+    'nav-underline relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
+    active
+      ? 'font-semibold text-emerald-800'
+      : 'text-stone-600 hover:bg-emerald-50 hover:text-emerald-800',
+  ].join(' ')
 }

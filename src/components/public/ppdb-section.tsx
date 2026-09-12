@@ -55,6 +55,8 @@ import { TurnstileWidget } from '@/components/security/turnstile-widget'
 import { AnimatedGradientText } from '@/components/velora/animated-gradient-text'
 import { BorderBeam } from '@/components/velora/border-beam'
 import { Meteors } from '@/components/velora/meteors'
+import { ScrollReveal } from './ornaments'
+import { StaggerGroup, StaggerItem } from './motion-primitives'
 
 const DOC_OPTIONS = ['KTP Orang Tua', 'Kartu Keluarga', 'Akta Kelahiran']
 
@@ -274,7 +276,7 @@ export function PpdbSection() {
     <section id="ppdb" className="scroll-mt-20 bg-stone-50 py-16">
       <div className="mx-auto max-w-6xl px-4">
         {/* Heading + affordance cek status — panel Velora: meteor jatuh + badge gradien brand */}
-        <div className="relative mx-auto mb-8 max-w-2xl overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/90 to-white px-6 py-8 text-center shadow-sm">
+        <ScrollReveal className="relative mx-auto mb-8 max-w-2xl overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/90 to-white px-6 py-8 text-center shadow-sm">
           <Meteors number={9} className="opacity-35" />
           <div className="relative">
             <span className="mb-3 inline-block rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-widest">
@@ -301,7 +303,7 @@ export function PpdbSection() {
               </Button>
             </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Gelombang 16 — stepper alur PPDB (riset 6.1.5): tiga langkah dengan garis
             progres terisi mengikuti scroll (murni CSS animation-timeline — nol JS;
@@ -556,12 +558,13 @@ export function PpdbSection() {
           </div>
         )}
 
-        <div className="grid gap-8 lg:grid-cols-5">
+        <StaggerGroup className="grid gap-8 lg:grid-cols-5">
           {/* ================= FORMULIR ================= */}
+          <StaggerItem className="lg:col-span-3">
           <form
             onSubmit={handleSubmit}
             noValidate
-            className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm md:p-8 lg:col-span-3"
+            className="h-full rounded-2xl border border-stone-200 bg-white p-6 shadow-sm md:p-8"
           >
             <h3 className="flex items-center gap-2 text-lg font-bold text-stone-800">
               <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
@@ -740,9 +743,10 @@ export function PpdbSection() {
               )}
             </Button>
           </form>
+          </StaggerItem>
 
           {/* ================= KOLOM KANAN ================= */}
-          <div className="flex flex-col gap-6 lg:col-span-2">
+          <StaggerItem className="flex flex-col gap-6 lg:col-span-2">
             {/* Cek status kini berupa panel collapsible di bawah judul seksi (aman via /api/registrations/check) */}
 
             {/* Bantuan */}
@@ -767,8 +771,8 @@ export function PpdbSection() {
                 0812-3456-7890 (Sekretariat)
               </a>
             </div>
-          </div>
-        </div>
+          </StaggerItem>
+        </StaggerGroup>
       </div>
 
       {/* ================= DIALOG SUKSES ================= */}

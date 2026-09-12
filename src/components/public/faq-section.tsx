@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { CircleHelp, MessageCircle, Phone } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { ScrollReveal } from './ornaments'
+import { SectionHeading } from './motion-primitives'
 
 export function FaqSection() {
   const { settings } = usePortalSettings()
@@ -19,17 +20,18 @@ export function FaqSection() {
           {/* Kolom intro — sticky di desktop */}
           <div className="lg:col-span-2">
             <div className="lg:sticky lg:top-24">
+              <SectionHeading
+                align="left"
+                badge="FAQ"
+                title="Pertanyaan yang Sering Diajukan"
+                subtitle={
+                  <>
+                    Ringkasan jawaban seputar pendaftaran, biaya, jadwal belajar, dan layanan Portal
+                    Wali. Klik pertanyaan untuk melihat jawabannya.
+                  </>
+                }
+              />
               <ScrollReveal>
-                <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-                  FAQ
-                </span>
-                <h2 className="text-3xl font-bold tracking-tight text-stone-800">
-                  Pertanyaan yang Sering Diajukan
-                </h2>
-                <p className="mt-3 leading-relaxed text-muted-foreground">
-                  Ringkasan jawaban seputar pendaftaran, biaya, jadwal belajar, dan layanan Portal
-                  Wali. Klik pertanyaan untuk melihat jawabannya.
-                </p>
 
                 {/* Kartu kontak */}
                 <div className="relative mt-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-800 to-emerald-950 p-6 text-white shadow-md">

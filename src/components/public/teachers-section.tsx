@@ -32,6 +32,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SpotlightCard } from '@/components/velora/spotlight-card'
+import { AmbientOrbs, SectionHeading, StaggerGroup, StaggerItem } from './motion-primitives'
 import { apiGet, formatShortDate } from '@/lib/api-client'
 import type { Teacher } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -198,19 +199,21 @@ export function TeachersSection() {
   }, [load])
 
   return (
-    <section id="guru" className="scroll-mt-20 bg-white py-16">
-      <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-            Biodata Guru
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Ustadz &amp; Ustadzah Kami</h2>
-          <p className="mt-3 text-muted-foreground">
-            Pengajar bersanad dan tersertifikasi yang berpengalaman membimbing santri dengan penuh
-            kelembutan.
-          </p>
-        </div>
+    <section id="guru" className="relative scroll-mt-20 overflow-hidden bg-white py-16">
+      {/* MAGIC-01 — bola cahaya melayang tone amber (selingan dgn section zamrud lain) */}
+      <AmbientOrbs tone="amber" />
+      <div className="relative mx-auto max-w-6xl px-4">
+        {/* Heading — kaskade Velora-style */}
+        <SectionHeading
+          badge="Biodata Guru"
+          title="Ustadz & Ustadzah Kami"
+          subtitle={
+            <>
+              Pengajar bersanad dan tersertifikasi yang berpengalaman membimbing santri dengan penuh
+              kelembutan.
+            </>
+          }
+        />
 
         {/* Error */}
         {error && (
@@ -243,34 +246,35 @@ export function TeachersSection() {
 
         {/* Grid guru */}
         {!loading && !error && teachers.length > 0 && (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <StaggerGroup className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {teachers.map((teacher) => (
               // Velora SpotlightCard — kilau radial mengikuti kursor (warna --brand)
-              <SpotlightCard
-                key={teacher.id}
-                className="transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg"
-              >
-                <div className="flex flex-col items-center p-6 text-center">
-                  <TeacherAvatar key={`${teacher.id}-${teacher.photoUrl}`} teacher={teacher} className="size-16" />
-                  <h3 className="mt-3 text-sm font-bold leading-snug text-stone-800">{teacher.fullName}</h3>
-                  <p className="mt-1 text-xs text-emerald-700">{teacher.expertise}</p>
-                  <Badge variant="outline" className="mt-3 border-amber-200 bg-amber-50 text-amber-700">
-                    <Award className="size-3" />
-                    {yearsLabel(teacher.joinDate)}
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4 w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                    onClick={() => setSelected(teacher)}
-                  >
-                    <Eye className="size-4" />
-                    Lihat Profil
-                  </Button>
-                </div>
-              </SpotlightCard>
+              <StaggerItem key={teacher.id}>
+                <SpotlightCard
+                  className="transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg"
+                >
+                  <div className="flex flex-col items-center p-6 text-center">
+                    <TeacherAvatar key={`${teacher.id}-${teacher.photoUrl}`} teacher={teacher} className="size-16" />
+                    <h3 className="mt-3 text-sm font-bold leading-snug text-stone-800">{teacher.fullName}</h3>
+                    <p className="mt-1 text-xs text-emerald-700">{teacher.expertise}</p>
+                    <Badge variant="outline" className="mt-3 border-amber-200 bg-amber-50 text-amber-700">
+                      <Award className="size-3" />
+                      {yearsLabel(teacher.joinDate)}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                      onClick={() => setSelected(teacher)}
+                    >
+                      <Eye className="size-4" />
+                      Lihat Profil
+                    </Button>
+                  </div>
+                </SpotlightCard>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerGroup>
         )}
       </div>
 

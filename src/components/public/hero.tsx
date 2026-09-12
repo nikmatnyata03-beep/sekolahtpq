@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NumberTicker } from '@/components/velora/number-ticker'
 import { ShimmerButton } from '@/components/velora/shimmer-button'
+import { FlipWords } from '@/components/velora/flip-words'
 import { apiGet } from '@/lib/api-client'
 import type { DashboardStats } from '@/lib/types'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
@@ -272,6 +273,21 @@ export function Hero({
               className="mt-5 max-w-2xl text-base leading-relaxed text-emerald-50/90 md:text-lg"
             >
               {hero.tagline}
+            </motion.p>
+
+            {/* MAGIC-01 — FlipWords (Velora): kata khas TPQ berganti dgn transisi
+                blur-flip spring; teks statis di depan agar konteks tetap jelas */}
+            <motion.p
+              {...riseIn(0.4)}
+              className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100/75 md:text-base"
+              data-testid="hero-flipwords"
+            >
+              Program unggulan{' '}
+              <FlipWords
+                words={['Tahsin & Tajwid', 'Hafalan Juz 30', 'Adab & Akhlak', 'Iqra Cepat']}
+                duration={2800}
+                className="text-amber-300"
+              />
             </motion.p>
 
             <motion.div

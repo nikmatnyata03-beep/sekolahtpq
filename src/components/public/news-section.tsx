@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { apiGet, formatDate } from '@/lib/api-client'
 import type { Post } from '@/lib/types'
+import { SectionHeading, StaggerGroup, StaggerItem } from './motion-primitives'
 
 const CATEGORY_BADGE: Record<string, string> = {
   BERITA: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -398,18 +399,18 @@ export function NewsSection() {
   const rest = filtered.slice(1)
 
   return (
-    <section id="berita" className="scroll-mt-20 bg-white py-16">
-      <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <div className="mx-auto mb-10 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-            Berita &amp; Kegiatan
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Kabar Darul Jinan</h2>
-          <p className="mt-3 text-muted-foreground">
-            Ikuti kabar terbaru, kegiatan santri, dan artikel seputar pendidikan Al-Qur&apos;an.
-          </p>
-        </div>
+    <section id="berita" className="relative scroll-mt-20 overflow-hidden bg-white py-16">
+      <div className="relative mx-auto max-w-6xl px-4">
+        {/* Heading — kaskade */}
+        <SectionHeading
+          badge="Berita & Kegiatan"
+          title="Kabar Darul Jinan"
+          subtitle={
+            <>
+              Ikuti kabar terbaru, kegiatan santri, dan artikel seputar pendidikan Al-Qur&apos;an.
+            </>
+          }
+        />
 
         {/* Tabs kategori */}
         <div className="mb-8 flex justify-center">
@@ -515,45 +516,46 @@ export function NewsSection() {
 
             {/* Grid artikel lainnya */}
             {rest.length > 0 && (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <StaggerGroup className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {rest.map((post) => (
-                  <article
-                    key={post.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelected(post)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setSelected(post)
-                      }
-                    }}
-                    className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-600"
-                  >
-                    <CoverImage src={post.coverImage} alt={post.title} className="h-44" />
-                    <div className="flex flex-1 flex-col gap-2 p-5">
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge variant="outline" className={categoryBadge(post.category)}>
-                          {post.category}
-                        </Badge>
-                        <span className="text-[11px] text-stone-400">{formatDate(post.createdAt)}</span>
+                  <StaggerItem key={post.id}>
+                    <article
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelected(post)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelected(post)
+                        }
+                      }}
+                      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-600"
+                    >
+                      <CoverImage src={post.coverImage} alt={post.title} className="h-44" />
+                      <div className="flex flex-1 flex-col gap-2 p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="outline" className={categoryBadge(post.category)}>
+                            {post.category}
+                          </Badge>
+                          <span className="text-[11px] text-stone-400">{formatDate(post.createdAt)}</span>
+                        </div>
+                        <h3 className="line-clamp-2 font-semibold leading-snug text-stone-800 transition-colors group-hover:text-emerald-800">
+                          {post.title}
+                        </h3>
+                        <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-stone-500">{excerpt(post.content)}</p>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                          Baca Artikel
+                          <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                        {/* Task 66 — like ala sosial media */}
+                        <span className="mt-1">
+                          <LikeButton post={post} onToggled={patchPost} />
+                        </span>
                       </div>
-                      <h3 className="line-clamp-2 font-semibold leading-snug text-stone-800 transition-colors group-hover:text-emerald-800">
-                        {post.title}
-                      </h3>
-                      <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-stone-500">{excerpt(post.content)}</p>
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                        Baca Artikel
-                        <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-                      </span>
-                      {/* Task 66 — like ala sosial media */}
-                      <span className="mt-1">
-                        <LikeButton post={post} onToggled={patchPost} />
-                      </span>
-                    </div>
-                  </article>
+                    </article>
+                  </StaggerItem>
                 ))}
-              </div>
+              </StaggerGroup>
             )}
           </div>
         )}

@@ -10,6 +10,7 @@ import { Camera, ChevronLeft, ChevronRight, Images, X } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { cn } from '@/lib/utils'
 import { ScrollReveal } from './ornaments'
+import { SectionHeading, StaggerGroup, StaggerItem } from './motion-primitives'
 import { TiltCard } from './tilt-card'
 
 export function GallerySection() {
@@ -43,19 +44,19 @@ export function GallerySection() {
   }, [openIndex, close, step])
 
   return (
-    <section id="galeri" className="scroll-mt-20 bg-white py-16">
-      <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <ScrollReveal className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-            Galeri
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Galeri Kegiatan</h2>
-          <p className="mt-3 text-muted-foreground">
-            Sekilas suasana belajar dan bermain di TPQ Darul Jinan — halaqah Al-Qur&apos;an, latihan
-            shalat berjamaah, hingga kegiatan luar kelas yang penuh kegembiraan.
-          </p>
-        </ScrollReveal>
+    <section id="galeri" className="relative scroll-mt-20 overflow-hidden bg-white py-16">
+      <div className="relative mx-auto max-w-6xl px-4">
+        {/* Heading — kaskade */}
+        <SectionHeading
+          badge="Galeri"
+          title="Galeri Kegiatan"
+          subtitle={
+            <>
+              Sekilas suasana belajar dan bermain di TPQ Darul Jinan — halaqah Al-Qur&apos;an, latihan
+              shalat berjamaah, hingga kegiatan luar kelas yang penuh kegembiraan.
+            </>
+          }
+        />
 
         {items.length === 0 ? (
           /* Edge case: admin menghapus semua foto → kartu kosong yang ramah */
@@ -71,9 +72,9 @@ export function GallerySection() {
             </div>
           </ScrollReveal>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+          <StaggerGroup className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
             {items.map((g, i) => (
-              <ScrollReveal key={`${g.imageUrl}-${i}`} delay={i * 0.06} y={40} className="h-full">
+              <StaggerItem key={`${g.imageUrl}-${i}`} className="h-full">
                 {/* Tilt 3D: kartu miring mengikuti kursor + kilau (mouse saja) */}
                 <TiltCard className="h-full rounded-2xl" max={8} lift={5}>
                 <button
@@ -110,9 +111,9 @@ export function GallerySection() {
                   )}
                 </button>
                 </TiltCard>
-              </ScrollReveal>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerGroup>
         )}
       </div>
 

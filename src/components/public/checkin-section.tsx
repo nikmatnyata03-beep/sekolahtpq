@@ -53,6 +53,7 @@ import { apiGet, apiSendFull, formatShortDate } from '@/lib/api-client'
 import { collectDeviceSignal } from '@/lib/device-fingerprint'
 import { type GpsFix } from '@/lib/gps-client'
 import type { SessionItem } from '@/lib/types'
+import { SectionHeading } from './motion-primitives'
 
 type CheckinResult = { success?: boolean; already?: boolean; message?: string; sharedDevice?: boolean }
 type DupDevicePayload = { code?: string; otherName?: string; error?: string }
@@ -246,19 +247,20 @@ export function CheckinSection() {
   }
 
   return (
-    <section id="checkin" className="scroll-mt-20 bg-white py-16">
-      <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-700">
-            Absensi Digital
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Cek-in Absensi Santri</h2>
-          <p className="mt-3 text-muted-foreground">
-            Rekam kehadiran santri dengan kode sesi — otomatis tercatat dan wali santri menerima
-            notifikasi WhatsApp.
-          </p>
-        </div>
+    <section id="checkin" className="relative scroll-mt-20 overflow-hidden bg-white py-16">
+      <div className="relative mx-auto max-w-6xl px-4">
+        {/* Heading — kaskade */}
+        <SectionHeading
+          badge="Absensi Digital"
+          tone="amber"
+          title="Cek-in Absensi Santri"
+          subtitle={
+            <>
+              Rekam kehadiran santri dengan kode sesi — otomatis tercatat dan wali santri menerima
+              notifikasi WhatsApp.
+            </>
+          }
+        />
 
         {/* Info box QR */}
         <Alert className="mx-auto mb-8 max-w-3xl rounded-2xl border-emerald-200 bg-emerald-50/70 text-emerald-900">
@@ -292,8 +294,8 @@ export function CheckinSection() {
 
         {!loading && !error && (
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* ===== Form check-in ===== */}
-            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm md:p-8">
+            {/* ===== Form check-in — scanline "scanner" hidup di bingkai kartu ===== */}
+            <div className="scanline-card rounded-2xl border border-stone-200 bg-white p-6 shadow-sm md:p-8">
               <h3 className="flex items-center gap-2 text-lg font-bold text-stone-800">
                 <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
                   <ScanLine className="size-4.5" />

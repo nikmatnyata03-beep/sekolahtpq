@@ -18,6 +18,7 @@ import {
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { AuroraBackground } from '@/components/velora/aurora-background'
 import { KhatamStar, OrnamentDivider, ParallaxY, ScrollReveal, StarLattice } from './ornaments'
+import { SectionHeading } from './motion-primitives'
 
 const SEJARAH = [
   {
@@ -101,14 +102,13 @@ export function AboutSection() {
       {/* Velora AuroraBackground (subtle) — kabut emerald melayang di belakang konten */}
       <AuroraBackground intensity="subtle" />
       <div className="relative mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <ScrollReveal className="mx-auto max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-            {settings.about.badge}
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">{settings.about.heading}</h2>
-          <p className="mt-3 text-muted-foreground">{settings.about.tagline}</p>
-        </ScrollReveal>
+        {/* Heading — kaskade per kata (Konten CMS) */}
+        <SectionHeading
+          badge={settings.about.badge}
+          title={settings.about.heading}
+          subtitle={settings.about.tagline}
+          className="mb-0"
+        />
 
         <OrnamentDivider className="my-12" />
 

@@ -9,7 +9,7 @@ import { Quote, Star } from 'lucide-react'
 import { usePortalSettings } from '@/hooks/use-portal-settings'
 import { cn } from '@/lib/utils'
 import { Marquee } from '@/components/velora/marquee'
-import { ScrollReveal } from './ornaments'
+import { SectionHeading } from './motion-primitives'
 
 /** Inisial nama: huruf pertama dari dua kata pertama (mis. "Ibu Ratna Sari" → "IR"). */
 function initialsOf(name: string): string {
@@ -75,31 +75,30 @@ export function TestimonialsSection() {
   return (
     <section id="testimoni" className="scroll-mt-20 bg-stone-50 py-16">
       <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <ScrollReveal className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-700">
-            Testimoni
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Kata Wali Santri</h2>
-          <p className="mt-3 text-muted-foreground">
-            Kepercayaan orang tua adalah amanah — inilah pengalaman wali santri yang mempercayakan
-            pendidikan Al-Qur&apos;an anaknya kepada TPQ Darul Jinan.
-          </p>
-        </ScrollReveal>
+        {/* Heading — kaskade */}
+        <SectionHeading
+          badge="Testimoni"
+          tone="amber"
+          title="Kata Wali Santri"
+          subtitle={
+            <>
+              Kepercayaan orang tua adalah amanah — inilah pengalaman wali santri yang mempercayakan
+              pendidikan Al-Qur&apos;an anaknya kepada TPQ Darul Jinan.
+            </>
+          }
+        />
 
         {items.length === 0 ? (
           /* Edge case: admin menghapus semua testimoni → kartu kosong yang ramah */
-          <ScrollReveal>
-            <div className="mx-auto max-w-md rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center shadow-sm">
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-                <Quote className="size-6" aria-hidden="true" />
-              </span>
-              <p className="mt-4 font-semibold text-stone-700">Belum ada testimoni yang dipublikasikan.</p>
-              <p className="mt-1 text-sm text-stone-500">
-                Daftar testimoni dikelola oleh admin melalui menu Pengaturan — silakan periksa kembali nanti.
-              </p>
-            </div>
-          </ScrollReveal>
+          <div className="mx-auto max-w-md rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center shadow-sm">
+            <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <Quote className="size-6" aria-hidden="true" />
+            </span>
+            <p className="mt-4 font-semibold text-stone-700">Belum ada testimoni yang dipublikasikan.</p>
+            <p className="mt-1 text-sm text-stone-500">
+              Daftar testimoni dikelola oleh admin melalui menu Pengaturan — silakan periksa kembali nanti.
+            </p>
+          </div>
         ) : (
           /* Aliran marquee Velora — baris kedua muncul hanya jika konten cukup */
           <div className="space-y-5">

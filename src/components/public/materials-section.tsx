@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/select'
 import { apiGet } from '@/lib/api-client'
 import type { ClassRoom, Material } from '@/lib/types'
+import { AmbientOrbs, SectionHeading, StaggerGroup, StaggerItem } from './motion-primitives'
 
 const CATEGORIES = ['TAJWID', 'HAFALAN', 'IBADAH', 'AKHLAK'] as const
 
@@ -123,19 +124,21 @@ export function MaterialsSection() {
   }
 
   return (
-    <section id="materi" className="scroll-mt-20 bg-stone-50 py-16">
-      <div className="mx-auto max-w-6xl px-4">
-        {/* Heading */}
-        <div className="mx-auto mb-10 max-w-2xl text-center">
-          <span className="mb-3 inline-block rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-emerald-700">
-            Materi Ajar
-          </span>
-          <h2 className="text-3xl font-bold tracking-tight text-stone-800">Perpustakaan Materi Belajar</h2>
-          <p className="mt-3 text-muted-foreground">
-            Unduh modul, tayangan, video, dan audio pembelajaran Al-Qur&apos;an untuk menemani belajar
-            santri di rumah.
-          </p>
-        </div>
+    <section id="materi" className="relative scroll-mt-20 overflow-hidden bg-stone-50 py-16">
+      {/* MAGIC-01 — bola cahaya melayang */}
+      <AmbientOrbs />
+      <div className="relative mx-auto max-w-6xl px-4">
+        {/* Heading — kaskade */}
+        <SectionHeading
+          badge="Materi Ajar"
+          title="Perpustakaan Materi Belajar"
+          subtitle={
+            <>
+              Unduh modul, tayangan, video, dan audio pembelajaran Al-Qur&apos;an untuk menemani belajar
+              santri di rumah.
+            </>
+          }
+        />
 
         {/* Filter: kategori (chips) + pencarian + urutan + kelas */}
         <div className="mb-6 flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap lg:justify-between">
@@ -281,51 +284,52 @@ export function MaterialsSection() {
         {/* Grid materi */}
         {!loading && !error && filtered.length > 0 && (
           <div className="max-h-[38rem] overflow-y-auto pb-2 pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-emerald-200 [&::-webkit-scrollbar-track]:bg-transparent">
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <StaggerGroup className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" amount={0.05}>
               {filtered.map((m) => {
                 const meta = TYPE_META[m.type] ?? TYPE_META.PDF
                 const TypeIcon = meta.icon
                 return (
-                  <div
-                    key={m.id}
-                    className="flex flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                  >
-                    <div className="mb-3 flex items-start justify-between gap-2">
-                      <span className={`flex size-11 items-center justify-center rounded-xl ${meta.box}`} aria-hidden="true">
-                        <TypeIcon className="size-5" />
-                      </span>
-                      <Badge variant="outline" className={CATEGORY_STYLES[(m.category ?? '').toUpperCase()] ?? 'border-stone-200 bg-stone-50 text-stone-600'}>
-                        {m.category}
-                      </Badge>
-                    </div>
-                    <h3 className="font-semibold leading-snug text-stone-800">{m.title}</h3>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500">
-                      <User className="size-3 shrink-0 text-emerald-600" />
-                      {m.teacher?.fullName ?? 'Tim Pengajar'}
-                      {m.class?.name && (
-                        <span className="ml-1 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-600">
-                          {m.class.name}
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-stone-500">
-                      {m.description || 'Belum ada deskripsi untuk materi ini.'}
-                    </p>
-                    <p className="mt-2 text-[11px] uppercase tracking-wide text-stone-400">{meta.label}</p>
-                    <Button
-                      asChild
-                      size="sm"
-                      className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800"
+                  <StaggerItem key={m.id}>
+                    <div
+                      className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
-                      <a href={m.url} target="_blank" rel="noopener noreferrer">
-                        <Download className="size-4" />
-                        Unduh Materi
-                      </a>
-                    </Button>
-                  </div>
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <span className={`flex size-11 items-center justify-center rounded-xl ${meta.box}`} aria-hidden="true">
+                          <TypeIcon className="size-5" />
+                        </span>
+                        <Badge variant="outline" className={CATEGORY_STYLES[(m.category ?? '').toUpperCase()] ?? 'border-stone-200 bg-stone-50 text-stone-600'}>
+                          {m.category}
+                        </Badge>
+                      </div>
+                      <h3 className="font-semibold leading-snug text-stone-800">{m.title}</h3>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500">
+                        <User className="size-3 shrink-0 text-emerald-600" />
+                        {m.teacher?.fullName ?? 'Tim Pengajar'}
+                        {m.class?.name && (
+                          <span className="ml-1 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-600">
+                            {m.class.name}
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-stone-500">
+                        {m.description || 'Belum ada deskripsi untuk materi ini.'}
+                      </p>
+                      <p className="mt-2 text-[11px] uppercase tracking-wide text-stone-400">{meta.label}</p>
+                      <Button
+                        asChild
+                        size="sm"
+                        className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800"
+                      >
+                        <a href={m.url} target="_blank" rel="noopener noreferrer">
+                          <Download className="size-4" />
+                          Unduh Materi
+                        </a>
+                      </Button>
+                    </div>
+                  </StaggerItem>
                 )
               })}
-            </div>
+            </StaggerGroup>
           </div>
         )}
 
