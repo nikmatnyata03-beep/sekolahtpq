@@ -13,10 +13,14 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  FileText,
+  Headphones,
   ImageOff,
   Link2,
   MoonStar,
   Newspaper,
+  PlayCircle,
+  Presentation,
   Search,
   User,
 } from 'lucide-react'
@@ -26,7 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { apiGet, formatDate } from '@/lib/api-client'
-import type { Post } from '@/lib/types'
+import type { Material, Post } from '@/lib/types'
 import { DEFAULT_PORTAL_SETTINGS } from '@/lib/portal-settings'
 
 const CATEGORY_BADGE: Record<string, string> = {
@@ -36,6 +40,15 @@ const CATEGORY_BADGE: Record<string, string> = {
 }
 
 const CATEGORIES = ['SEMUA', 'BERITA', 'KEGIATAN', 'ARTIKEL'] as const
+const M_CATEGORIES = ['SEMUA', 'TAJWID', 'HAFALAN', 'IBADAH', 'AKHLAK'] as const
+
+/** Ikon & label tipe materi ajar. */
+const TYPE_META: Record<string, { icon: typeof FileText; label: string; badge: string }> = {
+  PDF: { icon: FileText, label: 'PDF', badge: 'border-red-200 bg-red-50 text-red-700' },
+  SLIDE: { icon: Presentation, label: 'Slide', badge: 'border-amber-200 bg-amber-50 text-amber-700' },
+  VIDEO: { icon: PlayCircle, label: 'Video', badge: 'border-teal-200 bg-teal-50 text-teal-700' },
+  AUDIO: { icon: Headphones, label: 'Audio', badge: 'border-stone-200 bg-stone-50 text-stone-600' },
+}
 
 function excerpt(content: string | null | undefined, max = 160): string {
   if (!content) return ''
@@ -114,6 +127,13 @@ export function BlogView() {
     return params.get('page') === 'blog' ? params.get('slug') : null
   })
   const [copied, setCopied] = useState(false)
+  // Task 63b — mode konten kedua: materi ajar (deep-link /?page=blog&media=materi).
+  const [media, setMedia] = useState<'ARTIKEL' | 'MATERI'>(() => {
+    if (typeof window === 'undefined') return 'ARTIKEL'
+    return new URLSearchParams(window.location.search).get('media') === 'materi' ? 'MATERI' : 'ARTIKEL'
+  })
+  const [materials, setMaterials] = useState<Material[]>([])
+  const [mLoaded, setMLoaded] = useState(false)
 
   /** Sinkronkan detail/daftar saat tombol back/forward browser (popstate). */
   useEffect(() => {
@@ -142,6 +162,25 @@ export function BlogView() {
     }
   }, [])
 
+  /** Muat materi ajar saat pertama kali dibutuhkan (lazy). */
+  useEffect(() => {
+    if (media !== 'MATERI' || mLoaded) return
+    let cancelled = false
+    apiGet<Material[]>('/api/materials')
+      .then((data) => {
+        if (!cancelled) setMaterials(Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        // materi gagal dimuat — daftar kosong, tidak fatal
+      })
+      .finally(() => {
+        if (!cancelled) setMLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [media, mLoaded])
+
   /** Navigasi detail/daftar — pushState agar tombol back browser bekerja. */
   function openArticle(targetSlug: string) {
     const url = `/?page=blog&slug=${encodeURIComponent(targetSlug)}`
@@ -166,6 +205,18 @@ export function BlogView() {
       )
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
   }, [posts, category, query])
+
+  /** Materi ajar ter-filter (mode MATERI). */
+  const filteredMaterials = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return materials
+      .filter((m) => (category === 'SEMUA' ? true : m.category === category))
+      .filter((m) =>
+        !q
+          ? true
+          : m.title.toLowerCase().includes(q) || (m.description ?? '').toLowerCase().includes(q),
+      )
+  }, [materials, category, query])
 
   const selected = useMemo(
     () => (slug ? posts.find((p) => p.slug === slug) ?? null : null),
@@ -297,16 +348,18 @@ export function BlogView() {
             )}
           </article>
         ) : (
-          /* ============ DAFTAR ARTIKEL ============ */
+          /* ============ DAFTAR (ARTIKEL / MATERI) ============ */
           <>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-stone-900 sm:text-3xl">
                   <Newspaper className="size-6" style={{ color: brand.primary }} />
-                  Berita & Artikel
+                  {media === 'MATERI' ? 'Materi Ajar' : 'Berita & Artikel'}
                 </h1>
                 <p className="mt-1 text-sm text-stone-500">
-                  {posts.length} artikel terbit — kabar kegiatan, tulisan ustadz, dan informasi TPQ.
+                  {media === 'MATERI'
+                    ? `${materials.length} materi ajar — modul PDF, slide, video, dan audio pembelajaran.`
+                    : `${posts.length} artikel terbit — kabar kegiatan, tulisan ustadz, dan informasi TPQ.`}
                 </p>
               </div>
               <div className="relative w-full max-w-xs">
@@ -315,16 +368,31 @@ export function BlogView() {
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Cari artikel…"
+                  placeholder={media === 'MATERI' ? 'Cari materi…' : 'Cari artikel…'}
                   className="pl-9"
-                  aria-label="Cari artikel"
+                  aria-label={media === 'MATERI' ? 'Cari materi' : 'Cari artikel'}
                 />
               </div>
             </div>
 
-            <Tabs value={category} onValueChange={setCategory} className="mt-5">
+            {/* Pilihan jenis konten: Artikel | Materi Ajar (Task 63b) */}
+            <Tabs
+              value={media}
+              onValueChange={(v) => {
+                setMedia(v === 'MATERI' ? 'MATERI' : 'ARTIKEL')
+                setCategory('SEMUA')
+              }}
+              className="mt-5"
+            >
+              <TabsList>
+                <TabsTrigger value="ARTIKEL">Artikel</TabsTrigger>
+                <TabsTrigger value="MATERI">Materi Ajar</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <Tabs key={media} value={category} onValueChange={setCategory} className="mt-3">
               <TabsList className="h-auto min-h-9 flex-wrap justify-start">
-                {CATEGORIES.map((c) => (
+                {(media === 'MATERI' ? M_CATEGORIES : CATEGORIES).map((c) => (
                   <TabsTrigger key={c} value={c}>
                     {c === 'SEMUA' ? 'Semua' : c.charAt(0) + c.slice(1).toLowerCase()}
                   </TabsTrigger>
@@ -332,7 +400,62 @@ export function BlogView() {
               </TabsList>
             </Tabs>
 
-            {filtered.length === 0 ? (
+            {media === 'MATERI' ? (
+              /* ======== DAFTAR MATERI AJAR ======== */
+              filteredMaterials.length === 0 ? (
+                <p className="mt-10 rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-10 text-center text-sm text-stone-400">
+                  Belum ada materi yang cocok. Materi dikelola ustadz/ustadzah lewat dashboard.
+                </p>
+              ) : (
+                <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredMaterials.map((m) => {
+                    const meta = TYPE_META[m.type] ?? TYPE_META.PDF
+                    const Icon = meta.icon
+                    return (
+                      <a
+                        key={m.id}
+                        href={m.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                      >
+                        <span
+                          className="flex h-24 items-center justify-center gap-2 text-white"
+                          style={{ backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${brand.primary} 80%, black), ${brand.primary})` }}
+                        >
+                          <Icon className="size-8 opacity-90 transition-transform group-hover:scale-110" />
+                          <span className="text-xs font-bold uppercase tracking-widest">{meta.label}</span>
+                        </span>
+                        <span className="flex flex-1 flex-col gap-2 p-4">
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline" className={meta.badge}>
+                              {m.category}
+                            </Badge>
+                            {m.class?.name && (
+                              <Badge variant="outline" className="border-stone-200 bg-stone-50 text-stone-600">
+                                {m.class.name}
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="line-clamp-2 text-sm font-bold leading-snug text-stone-800 group-hover:underline">{m.title}</span>
+                          {m.description && (
+                            <span className="line-clamp-2 text-xs leading-relaxed text-stone-500">{m.description}</span>
+                          )}
+                          <span className="mt-auto inline-flex items-center gap-1 pt-2 text-[11px] text-stone-400">
+                            <User className="size-3" />
+                            {m.teacher?.fullName ?? 'Ustadz TPQ'}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: brand.primary }}>
+                            Buka materi
+                            <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                          </span>
+                        </span>
+                      </a>
+                    )
+                  })}
+                </div>
+              )
+            ) : filtered.length === 0 ? (
               <p className="mt-10 rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-10 text-center text-sm text-stone-400">
                 Tidak ada artikel yang cocok dengan pencarian.
               </p>
