@@ -214,6 +214,13 @@ export function CheckinSection() {
           description: result.message ?? 'Santri ini sudah tercatat pada sesi ini.',
         })
       } else {
+        // Gelombang 17 (riset 6.4.2): haptic halus saat check-in terkirim — perangkat
+        // tanpa Navigator.vibrate mengabaikan diam-diam (aman di dalam try/catch).
+        try {
+          if (typeof navigator.vibrate === 'function') navigator.vibrate([30, 45, 60])
+        } catch {
+          /* sebagian browser membatasi vibrate — abaikan */
+        }
         toast({
           title: result?.sharedDevice ? 'Check-in Terkirim — Menunggu Verifikasi' : 'Check-in Berhasil',
           description: result?.message ?? 'Kehadiran santri tercatat HADIR.',
@@ -461,7 +468,7 @@ export function CheckinSection() {
                   <Button
                     type="button"
                     size="lg"
-                    className="w-full bg-emerald-700 font-semibold shadow-md hover:bg-emerald-800"
+                    className="w-full bg-emerald-700 font-semibold shadow-md transition-all hover:bg-emerald-800 hover:glow-soft"
                     disabled={checking || !studentId || gpsState !== 'ok'}
                     onClick={() => void handleCheckin()}
                   >
@@ -548,7 +555,7 @@ export function CheckinSection() {
                             : 'Sesi absensi berjalan'}
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
-                          <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                          <span className="presence-pulse size-1.5 rounded-full bg-emerald-500" />
                           Sesi Terbuka
                         </span>
                       </div>
