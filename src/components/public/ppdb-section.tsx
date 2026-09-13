@@ -276,7 +276,7 @@ export function PpdbSection() {
     <section id="ppdb" className="scroll-mt-20 bg-stone-50 py-16">
       <div className="mx-auto max-w-6xl px-4">
         {/* Heading + affordance cek status — panel Velora: meteor jatuh + badge gradien brand */}
-        <ScrollReveal className="relative mx-auto mb-8 max-w-2xl overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/90 to-white px-6 py-8 text-center shadow-sm">
+        <ScrollReveal className="ppdb-hero-card relative mx-auto mb-8 max-w-2xl overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/90 to-white px-6 py-8 text-center shadow-sm">
           <Meteors number={9} className="opacity-35" />
           <div className="relative">
             <span className="mb-3 inline-block rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-widest">
@@ -750,7 +750,7 @@ export function PpdbSection() {
             {/* Cek status kini berupa panel collapsible di bawah judul seksi (aman via /api/registrations/check) */}
 
             {/* Bantuan */}
-            <div className="relative rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-6 shadow-sm">
+            <div className="ppdb-help-card relative rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-6 shadow-sm">
               {/* Velora BorderBeam — berkas cahaya mengelilingi tepi kartu */}
               <BorderBeam size={56} duration={7} colorFrom="#f59e0b" colorTo="#047857" />
               <h3 className="flex items-center gap-2 text-base font-bold text-stone-800">

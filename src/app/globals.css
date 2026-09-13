@@ -365,6 +365,25 @@
 }
 
 /* ============================================================
+   DARK-MODE compat kartu PPDB (QA dark 2026-09-13)
+   ============================================================
+   Dua kartu PPDB memakai gradien terang hardcode (from-emerald-50/90
+   to-white & from-amber-50 to-white). Compat layer `.dark .text-stone-800`
+   menerangkan teksnya, tapi gradien tidak ikut → judul putih di atas
+   kartu putih (kontras gagal). Override deterministik di sini — tidak
+   bergantung pada Tailwind yang mem-whitelist utilitas baru hasil scan. */
+.dark .ppdb-hero-card {
+  background-image: none;
+  background-color: color-mix(in srgb, var(--card) 92%, transparent);
+  border-color: oklch(0.36 0.04 165);
+}
+.dark .ppdb-help-card {
+  background-image: none;
+  background-color: color-mix(in srgb, var(--card) 92%, transparent);
+  border-color: oklch(0.4 0.05 70);
+}
+
+/* ============================================================
    GELOMBANG 1 UI/UX (riset UIUX-RESEARCH-01) — utilitas desain
    ============================================================ */
 @layer utilities {
