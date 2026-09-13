@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
 import "@fontsource-variable/plus-jakarta-sans";
 import "@fontsource/amiri/400.css";
@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+// Viewport — bilah browser ponsel ikut warna brand zamrud (melengkapi manifest
+// PWA; iOS Safari & Chrome Android membaca theme-color ini).
+export const viewport: Viewport = {
+  themeColor: "#047857",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tpq.darussolah.workers.dev"),
