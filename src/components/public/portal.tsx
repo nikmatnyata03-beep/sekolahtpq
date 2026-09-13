@@ -174,7 +174,7 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
                     <motion.span
                       layoutId="nav-active-pill"
                       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                      className="absolute inset-0 rounded-md bg-emerald-100/80"
+                      className="absolute inset-0 rounded-md bg-emerald-100/80 dark:bg-[oklch(0.32_0.04_165)]"
                       aria-hidden="true"
                     />
                   )}

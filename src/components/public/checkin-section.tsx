@@ -266,7 +266,10 @@ export function CheckinSection() {
         <Alert className="mx-auto mb-8 max-w-3xl rounded-2xl border-emerald-200 bg-emerald-50/70 text-emerald-900">
           <Info className="size-4 text-emerald-700" />
           <AlertTitle className="text-emerald-900">Absensi QR + Validasi GPS</AlertTitle>
-          <AlertDescription className="text-emerald-800/80">
+          <AlertDescription className="text-emerald-800/80 dark:text-emerald-100">
+            {/* dark:text-emerald-100 — compat layer hanya menimpa teks emerald
+                700/800/900 (tanpa 100); versi /80 tak tercakup apa pun sehingga
+                teks hijau gelap di kartu gelap (QA dark mode) */}
             Ustadz menayangkan QR sesi — santri memindainya dengan kamera ponsel dan halaman ini
             terbuka dengan kode terisi otomatis. Kehadiran hanya sah bila perangkat berada
             <span className="font-semibold"> maksimal 20 meter dari titik kelas</span> (anti absen palsu).
