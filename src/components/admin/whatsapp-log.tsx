@@ -20,6 +20,8 @@ import {
   PlugZap,
   CircleCheck,
   ExternalLink,
+  Globe,
+  Layers,
 } from 'lucide-react'
 import type { AppUser, AuthUser, NotificationLog } from '@/lib/types'
 import { apiGet, apiSend } from '@/lib/api-client'
@@ -43,10 +45,15 @@ import {
 } from '@/components/ui/dialog'
 
 interface GatewayInfo {
-  provider: 'OFF' | 'FONNTE'
+  provider: 'OFF' | 'FONNTE' | 'CUSTOM'
   tokenMasked: string
   configured: boolean
+  baseUrl?: string
+  session?: string
 }
+
+/** Pilihan penyedia saat konfigurasi (OFF = lewat tombol Nonaktifkan). */
+type GwChoice = 'FONNTE' | 'CUSTOM'
 
 function statusBadgeClass(status: string): string {
   if (status === 'SENT') return 'border-emerald-200 bg-emerald-100 text-emerald-800'
@@ -104,9 +111,13 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
   const [sendOpen, setSendOpen] = useState(false)
   const [phone, setPhone] = useState('')
   const [message, setMessage] = useState('')
-  // Gateway Fonnte — status, input token, hasil tes koneksi
+  // Gateway WhatsApp — status, pilihan provider, input kredensial, hasil tes koneksi
   const [gw, setGw] = useState<GatewayInfo | null>(null)
+  const [gwChoice, setGwChoice] = useState<GwChoice>('FONNTE')
   const [gwToken, setGwToken] = useState('')
+  const [gwBaseUrl, setGwBaseUrl] = useState('')
+  const [gwApiKey, setGwApiKey] = useState('')
+  const [gwSession, setGwSession] = useState('default')
   const [gwSaving, setGwSaving] = useState(false)
   const [gwTesting, setGwTesting] = useState(false)
   const [gwTest, setGwTest] = useState<{
@@ -119,6 +130,9 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
   } | null>(null)
 
   const gwActive = gw?.provider === 'FONNTE' && gw.configured
+  const wahaActive = gw?.provider === 'CUSTOM' && gw.configured
+  const gwReal = gwActive || wahaActive
+  const gwLabel = gwActive ? 'Fonnte Aktif' : wahaActive ? 'WAHA Aktif' : 'Simulasi'
 
   const isAdmin = user?.role === 'ADMIN'
 
@@ -176,27 +190,43 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
     setStatusFilter('SEMUA')
   }
 
-  /** Simpan gateway: aktifkan FONNTE dengan token, atau nonaktifkan. */
-  async function saveGateway(provider: 'OFF' | 'FONNTE') {
+  /** Simpan gateway: aktifkan FONNTE (token) / CUSTOM-WAHA (URL+key), atau nonaktifkan. */
+  async function saveGateway(provider: 'OFF' | GwChoice) {
     if (provider === 'FONNTE' && gwToken.trim().length < 8) {
       toast({ title: 'Token belum diisi', description: 'Tempel token perangkat dari dashboard Fonnte (minimal 8 karakter).' })
+      return
+    }
+    if (provider === 'CUSTOM' && !/^https?:\/\/.+/i.test(gwBaseUrl.trim())) {
+      toast({
+        title: 'URL server belum benar',
+        description: 'Isi alamat publik server WAHA, mis. https://wa-sekolah.example.com',
+      })
       return
     }
     setGwSaving(true)
     try {
       const saved = await apiSend<GatewayInfo>('/api/whatsapp/gateway', 'PUT', {
         provider,
-        token: provider === 'FONNTE' ? gwToken.trim() : '',
+        token: provider === 'FONNTE' ? gwToken.trim() : provider === 'CUSTOM' ? gwApiKey.trim() : '',
+        ...(provider === 'CUSTOM' ? { baseUrl: gwBaseUrl.trim(), session: gwSession.trim() || 'default' } : {}),
       })
       setGw(saved)
       if (provider === 'FONNTE') setGwToken('')
+      if (provider === 'CUSTOM') setGwApiKey('')
       setGwTest(null)
       toast({
-        title: provider === 'FONNTE' ? 'Gateway Fonnte diaktifkan' : 'Gateway dinonaktifkan',
+        title:
+          provider === 'FONNTE'
+            ? 'Gateway Fonnte diaktifkan'
+            : provider === 'CUSTOM'
+              ? 'Gateway WAHA diaktifkan'
+              : 'Gateway dinonaktifkan',
         description:
           provider === 'FONNTE'
             ? 'Semua notifikasi (absensi, tagihan, PPDB) kini dikirim nyata via Fonnte.'
-            : 'Pesan kembali ke mode simulasi — hanya tercatat di log.',
+            : provider === 'CUSTOM'
+              ? 'Semua notifikasi kini dikirim nyata via server WAHA sekolah — tanpa watermark.'
+              : 'Pesan kembali ke mode simulasi — hanya tercatat di log.',
       })
     } catch (e) {
       toast({ title: 'Gagal menyimpan gateway', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
@@ -252,9 +282,9 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
     try {
       await apiSend('/api/notifications', 'POST', { phone: phone.trim(), message: message.trim() })
       toast({
-        title: gwActive ? 'Pesan dikirim via Fonnte' : 'Pesan terkirim (simulasi)',
-        description: gwActive
-          ? `Pesan ke ${phone.trim()} dikirim nyata melalui gateway Fonnte.`
+        title: gwReal ? `Pesan dikirim via ${gwActive ? 'Fonnte' : 'WAHA'}` : 'Pesan terkirim (simulasi)',
+        description: gwReal
+          ? `Pesan ke ${phone.trim()} dikirim nyata melalui gateway ${gwActive ? 'Fonnte' : 'WAHA'}.`
           : `Pesan ke ${phone.trim()} tercatat pada log notifikasi.`,
       })
       setSendOpen(false)
@@ -308,7 +338,9 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
                     ? 'Memuat status gateway…'
                     : gwActive
                       ? `Pesan dikirim nyata via Fonnte — token ${gw.tokenMasked}.`
-                      : 'Mode simulasi — pesan hanya tercatat di log. Aktifkan Fonnte untuk kirim nyata.'}
+                      : wahaActive
+                        ? `Pesan dikirim nyata via WAHA (${gw.baseUrl}) — tanpa watermark.`
+                        : 'Mode simulasi — pesan hanya tercatat di log. Pilih Fonnte atau WAHA untuk kirim nyata.'}
                 </p>
               </div>
             </div>
@@ -317,68 +349,172 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
             ) : (
               <Badge
                 className={
-                  gwActive
+                  gwReal
                     ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
                     : 'border-stone-200 bg-stone-100 text-stone-600'
                 }
               >
                 <PlugZap className="size-3" />
-                {gwActive ? 'Fonnte Aktif' : 'Simulasi'}
+                {gwLabel}
               </Badge>
             )}
           </div>
 
-          {!gwActive && (
-            <ol className="space-y-1.5 rounded-xl bg-stone-50 p-3.5 text-xs leading-relaxed text-stone-600">
-              <li>
-                <strong className="text-stone-800">1.</strong> Siapkan nomor WhatsApp khusus sekolah (mis.
-                0881-6917-774) — jangan pakai nomor pribadi.
-              </li>
-              <li>
-                <strong className="text-stone-800">2.</strong> Buka{' '}
-                <a
-                  href="https://fonnte.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-800"
-                >
-                  fonnte.com <ExternalLink className="size-3" />
-                </a>{' '}
-                → daftar → scan QR dengan nomor sekolah tersebut.
-              </li>
-              <li>
-                <strong className="text-stone-800">3.</strong> Di dashboard Fonnte, salin token perangkat.
-              </li>
-              <li>
-                <strong className="text-stone-800">4.</strong> Tempel di bawah → <em>Simpan &amp; Aktifkan</em> →{' '}
-                <em>Tes Koneksi</em>.
-              </li>
-            </ol>
-          )}
-
-          {!gwActive && (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative flex-1">
-                <KeyRound className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
-                <Input
-                  type="password"
-                  value={gwToken}
-                  onChange={(e) => setGwToken(e.target.value)}
-                  placeholder="Token perangkat Fonnte (mis. F3NCCTB4…)"
-                  aria-label="Token perangkat Fonnte"
-                  autoComplete="off"
-                  className="h-11 rounded-xl border-stone-200 bg-white pl-9"
-                />
-              </div>
-              <Button
-                onClick={() => void saveGateway('FONNTE')}
-                disabled={gwSaving}
-                className="h-11 bg-emerald-700 hover:bg-emerald-800"
+          {!gwReal && (
+            <>
+              {/* Pilihan penyedia gateway */}
+              <div
+                className="inline-flex overflow-hidden rounded-xl border border-stone-200 bg-stone-100 p-1"
+                role="tablist"
+                aria-label="Pilih penyedia gateway"
               >
-                {gwSaving ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-                Simpan &amp; Aktifkan
-              </Button>
-            </div>
+                {(
+                  [
+                    { id: 'FONNTE', label: 'Fonnte', hint: 'Pihak ketiga, gratis (ada footer iklan)' },
+                    { id: 'CUSTOM', label: 'WAHA Self-Hosted', hint: 'Open source di server sekolah — tanpa iklan' },
+                  ] as { id: GwChoice; label: string; hint: string }[]
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={gwChoice === opt.id}
+                    onClick={() => setGwChoice(opt.id)}
+                    title={opt.hint}
+                    className={
+                      'rounded-lg px-3.5 py-2 text-sm font-semibold transition-all outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40 ' +
+                      (gwChoice === opt.id
+                        ? 'bg-white text-emerald-800 shadow-sm'
+                        : 'text-stone-500 hover:text-stone-800')
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {gwChoice === 'FONNTE' ? (
+                <ol className="space-y-1.5 rounded-xl bg-stone-50 p-3.5 text-xs leading-relaxed text-stone-600">
+                  <li>
+                    <strong className="text-stone-800">1.</strong> Siapkan nomor WhatsApp khusus sekolah (mis.
+                    0881-6917-774) — jangan pakai nomor pribadi.
+                  </li>
+                  <li>
+                    <strong className="text-stone-800">2.</strong> Buka{' '}
+                    <a
+                      href="https://fonnte.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-0.5 font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-800"
+                    >
+                      fonnte.com <ExternalLink className="size-3" />
+                    </a>{' '}
+                    → daftar → scan QR dengan nomor sekolah tersebut.
+                  </li>
+                  <li>
+                    <strong className="text-stone-800">3.</strong> Di dashboard Fonnte, salin token perangkat.
+                  </li>
+                  <li>
+                    <strong className="text-stone-800">4.</strong> Tempel di bawah → <em>Simpan &amp; Aktifkan</em> →{' '}
+                    <em>Tes Koneksi</em>. Catatan: paket gratis Fonnte menambah footer iklan di tiap pesan.
+                  </li>
+                </ol>
+              ) : (
+                <ol className="space-y-1.5 rounded-xl bg-stone-50 p-3.5 text-xs leading-relaxed text-stone-600">
+                  <li>
+                    <strong className="text-stone-800">1.</strong> Siapkan PC/laptop Ubuntu yang menyala 24 jam di
+                    sekolah — ikuti panduan lengkap{' '}
+                    <code className="rounded bg-stone-200 px-1 py-0.5 font-mono text-[10px]">
+                      docs/PANDUAN-WA-SERVER-UBUNTU.md
+                    </code>{' '}
+                    (Docker + WAHA + tunnel).
+                  </li>
+                  <li>
+                    <strong className="text-stone-800">2.</strong> Scan QR WhatsApp sekolah di dashboard WAHA
+                    (http://localhost:3000 pada server).
+                  </li>
+                  <li>
+                    <strong className="text-stone-800">3.</strong> Salin URL publik server (mis.
+                    https://wa-sekolah.example.com) yang dihasilkan tunnel.
+                  </li>
+                  <li>
+                    <strong className="text-stone-800">4.</strong> Isi di bawah → <em>Simpan &amp; Aktifkan</em> →{' '}
+                    <em>Tes Koneksi</em>. Pesan tanpa footer iklan dan tanpa batas kuota.
+                  </li>
+                </ol>
+              )}
+
+              {gwChoice === 'FONNTE' ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <KeyRound className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+                    <Input
+                      type="password"
+                      value={gwToken}
+                      onChange={(e) => setGwToken(e.target.value)}
+                      placeholder="Token perangkat Fonnte (mis. F3NCCTB4…)"
+                      aria-label="Token perangkat Fonnte"
+                      autoComplete="off"
+                      className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => void saveGateway('FONNTE')}
+                    disabled={gwSaving}
+                    className="h-11 bg-emerald-700 hover:bg-emerald-800"
+                  >
+                    {gwSaving ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+                    Simpan &amp; Aktifkan
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-2.5">
+                  <div className="relative">
+                    <Globe className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+                    <Input
+                      value={gwBaseUrl}
+                      onChange={(e) => setGwBaseUrl(e.target.value)}
+                      placeholder="URL server WAHA — https://wa-sekolah.example.com"
+                      aria-label="URL server WAHA"
+                      autoComplete="url"
+                      className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+                    />
+                  </div>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <div className="relative">
+                      <KeyRound className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+                      <Input
+                        type="password"
+                        value={gwApiKey}
+                        onChange={(e) => setGwApiKey(e.target.value)}
+                        placeholder="API key WAHA (kosongkan bila tidak dipakai)"
+                        aria-label="API key WAHA"
+                        autoComplete="off"
+                        className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Layers className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+                      <Input
+                        value={gwSession}
+                        onChange={(e) => setGwSession(e.target.value)}
+                        placeholder="Nama sesi (default)"
+                        aria-label="Nama sesi WAHA"
+                        className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => void saveGateway('CUSTOM')}
+                    disabled={gwSaving}
+                    className="h-11 bg-emerald-700 hover:bg-emerald-800"
+                  >
+                    {gwSaving ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+                    Simpan &amp; Aktifkan
+                  </Button>
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -386,13 +522,13 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
               variant="outline"
               size="sm"
               onClick={() => void testGateway()}
-              disabled={gwTesting || !gwActive}
-              title={gwActive ? 'Cek perangkat Fonnte yang ter-scan' : 'Aktifkan gateway terlebih dahulu'}
+              disabled={gwTesting || !gwReal}
+              title={gwReal ? 'Cek koneksi gateway aktif' : 'Aktifkan gateway terlebih dahulu'}
             >
               {gwTesting ? <Loader2 className="size-4 animate-spin" /> : <CircleCheck className="size-4" />}
               Tes Koneksi
             </Button>
-            {gwActive && (
+            {gwReal && (
               <Button
                 variant="outline"
                 size="sm"
