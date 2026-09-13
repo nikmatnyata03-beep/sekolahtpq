@@ -54,6 +54,33 @@ export default function RootLayout({
       <body
         className={`${geistMono.variable} antialiased bg-background text-foreground`}
       >
+        {/* JSON-LD — data terstruktur lembaga (SEO): membantu Google memahami
+            entitas sekolah/TPQ (nama, alamat, kontak) utk knowledge panel &
+            hasil pencarian lokal. Data mengikuti kontak default footer. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'EducationalOrganization',
+              name: 'TPQ Darul Jinan',
+              alternateName: 'Yayasan Darul Jinan',
+              url: 'https://tpq.darussolah.workers.dev',
+              logo: 'https://tpq.darussolah.workers.dev/logo.svg',
+              description:
+                "Lembaga pendidikan Al-Qur'an untuk anak dan remaja di Cibubur, Jakarta Timur — membina generasi Qur'ani yang hafal, paham, dan berakhlak mulia.",
+              telephone: '+6281234567890',
+              email: 'info@daruljinan.sch.id',
+              address: {
+                '@type': 'PostalAddress',
+                streetAddress: 'Jl. Merpati Raya No. 25, Cibubur',
+                addressLocality: 'Jakarta Timur',
+                addressRegion: 'DKI Jakarta',
+                addressCountry: 'ID',
+              },
+            }),
+          }}
+        />
         <ThemeProvider>
           {children}
           <Toaster />
