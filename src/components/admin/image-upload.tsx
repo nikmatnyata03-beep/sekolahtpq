@@ -7,6 +7,7 @@ import { useRef, useState } from 'react'
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { apiSend } from '@/lib/api-client'
+import { compressImageToDataUrl } from '@/lib/image-compress'
 import { cn } from '@/lib/utils'
 
 export function ImageUpload({
@@ -40,12 +41,10 @@ export function ImageUpload({
     }
     setBusy(true)
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result))
-        reader.onerror = () => reject(new Error('Gagal membaca berkas'))
-        reader.readAsDataURL(file)
-      })
+      // Kompres dulu di klien (WebP maks 1600px) — foto kamera/PNG besar
+      // bisa 2-3 MB; tanpa ini R2 menampung berkas berat yang dibaca ulang
+      // pengunjung baru meski cache immutable.
+      const dataUrl = await compressImageToDataUrl(file)
       const res = await apiSend<{ url: string }>('/api/upload', 'POST', { dataUrl })
       onChange(res.url)
     } catch (e) {
@@ -114,7 +113,7 @@ export function ImageUpload({
             Hapus
           </Button>
         )}
-        <span className="text-xs text-stone-400">PNG/JPG/WEBP/GIF/SVG · maks 5 MB</span>
+        <span className="text-xs text-stone-400">PNG/JPG/WEBP/GIF/SVG · maks 5 MB · dikompres otomatis</span>
       </div>
       {error && (
         <p className="text-xs text-red-600" role="alert">
