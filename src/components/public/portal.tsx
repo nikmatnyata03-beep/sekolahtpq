@@ -34,6 +34,7 @@ import { PpdbSection } from './ppdb-section'
 import { CheckinSection } from './checkin-section'
 import { Footer } from './footer'
 import { ScrollTopFab } from './motion-primitives'
+import { WhatsAppFab } from './whatsapp-fab'
 
 const NAV_ITEMS = [
   { id: 'tentang', label: 'Tentang' },
@@ -285,6 +286,9 @@ export function PublicPortal({ onOpenLogin }: { onOpenLogin: () => void }) {
       </main>
 
       <Footer onNavigate={scrollToSection} />
+
+      {/* FAB WhatsApp — chat langsung ke sekretariat (wa.me, CMS contact) */}
+      <WhatsAppFab />
 
       {/* MAGIC-01 — FAB kembali ke atas dgn cincin progres scroll */}
       <ScrollTopFab />

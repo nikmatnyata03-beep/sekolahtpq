@@ -15,16 +15,23 @@ export async function GET(req: NextRequest) {
   return ok(notifications)
 }
 
+/**
+ * POST /api/notifications — kirim pesan manual (ADMIN).
+ * Nomor dinormalisasi ke 62xxx lalu dikirim via gateway:
+ * FONNTE aktif → kirim nyata; OFF → simulasi (log saja).
+ */
 export async function POST(req: NextRequest) {
   try {
     const g = await guard(req, ['ADMIN'])
     if ('res' in g) return g.res
     const b = await req.json()
     if (!b.phone || !b.message) return bad('Nomor tujuan dan pesan wajib')
-    const notification = await db.notification.create({
-      data: { phone: b.phone, message: b.message, userId: b.userId || undefined },
+    await sendWhatsApp({
+      phone: String(b.phone),
+      message: String(b.message),
+      userId: b.userId || undefined,
     })
-    return ok(notification)
+    return ok({ sent: true })
   } catch {
     return bad('Gagal mengirim notifikasi')
   }

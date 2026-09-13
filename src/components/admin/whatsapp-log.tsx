@@ -16,6 +16,10 @@ import {
   Download,
   RotateCcw,
   X,
+  KeyRound,
+  PlugZap,
+  CircleCheck,
+  ExternalLink,
 } from 'lucide-react'
 import type { AppUser, AuthUser, NotificationLog } from '@/lib/types'
 import { apiGet, apiSend } from '@/lib/api-client'
@@ -37,6 +41,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+
+interface GatewayInfo {
+  provider: 'OFF' | 'FONNTE'
+  tokenMasked: string
+  configured: boolean
+}
 
 function statusBadgeClass(status: string): string {
   if (status === 'SENT') return 'border-emerald-200 bg-emerald-100 text-emerald-800'
@@ -94,6 +104,14 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
   const [sendOpen, setSendOpen] = useState(false)
   const [phone, setPhone] = useState('')
   const [message, setMessage] = useState('')
+  // Gateway Fonnte — status, input token, hasil tes koneksi
+  const [gw, setGw] = useState<GatewayInfo | null>(null)
+  const [gwToken, setGwToken] = useState('')
+  const [gwSaving, setGwSaving] = useState(false)
+  const [gwTesting, setGwTesting] = useState(false)
+  const [gwTest, setGwTest] = useState<{ ok: boolean; device?: string; reason?: string } | null>(null)
+
+  const gwActive = gw?.provider === 'FONNTE' && gw.configured
 
   const isAdmin = user?.role === 'ADMIN'
 
@@ -109,13 +127,22 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
     }
   }, [])
 
+  const loadGateway = useCallback(async () => {
+    try {
+      setGw(await apiGet<GatewayInfo>('/api/whatsapp/gateway'))
+    } catch {
+      setGw({ provider: 'OFF', tokenMasked: '', configured: false })
+    }
+  }, [])
+
   useEffect(() => {
     if (isAdmin) {
       void load()
+      void loadGateway()
       // Nama penerima (untuk pencarian, tampilan kartu, dan kolom CSV) — gagal senyap agar log tetap tampil.
       apiGet<AppUser[]>('/api/users').then(setUsers).catch(() => setUsers([]))
     } else setLoading(false)
-  }, [isAdmin, load])
+  }, [isAdmin, load, loadGateway])
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
 
@@ -142,6 +169,53 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
     setStatusFilter('SEMUA')
   }
 
+  /** Simpan gateway: aktifkan FONNTE dengan token, atau nonaktifkan. */
+  async function saveGateway(provider: 'OFF' | 'FONNTE') {
+    if (provider === 'FONNTE' && gwToken.trim().length < 8) {
+      toast({ title: 'Token belum diisi', description: 'Tempel token perangkat dari dashboard Fonnte (minimal 8 karakter).' })
+      return
+    }
+    setGwSaving(true)
+    try {
+      const saved = await apiSend<GatewayInfo>('/api/whatsapp/gateway', 'PUT', {
+        provider,
+        token: provider === 'FONNTE' ? gwToken.trim() : '',
+      })
+      setGw(saved)
+      if (provider === 'FONNTE') setGwToken('')
+      setGwTest(null)
+      toast({
+        title: provider === 'FONNTE' ? 'Gateway Fonnte diaktifkan' : 'Gateway dinonaktifkan',
+        description:
+          provider === 'FONNTE'
+            ? 'Semua notifikasi (absensi, tagihan, PPDB) kini dikirim nyata via Fonnte.'
+            : 'Pesan kembali ke mode simulasi — hanya tercatat di log.',
+      })
+    } catch (e) {
+      toast({ title: 'Gagal menyimpan gateway', description: e instanceof Error ? e.message : 'Terjadi kesalahan' })
+    } finally {
+      setGwSaving(false)
+    }
+  }
+
+  /** Tes koneksi ke Fonnte — cek perangkat yang ter-scan. */
+  async function testGateway() {
+    setGwTesting(true)
+    setGwTest(null)
+    try {
+      const res = await apiSend<{ ok: boolean; device?: string; reason?: string }>('/api/whatsapp/test', 'POST', {})
+      setGwTest(res)
+      if (res.ok) {
+        toast({ title: 'Koneksi berhasil', description: `Perangkat terhubung: ${res.device || 'nomor Fonnte'}.` })
+        await load()
+      }
+    } catch (e) {
+      setGwTest({ ok: false, reason: e instanceof Error ? e.message : 'Gagal menghubungi server' })
+    } finally {
+      setGwTesting(false)
+    }
+  }
+
   if (!isAdmin) {
     return (
       <Alert variant="destructive" className="rounded-2xl">
@@ -160,7 +234,12 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
     setIsPending(true)
     try {
       await apiSend('/api/notifications', 'POST', { phone: phone.trim(), message: message.trim() })
-      toast({ title: 'Pesan terkirim (simulasi)', description: `Pesan ke ${phone.trim()} tercatat pada log notifikasi.` })
+      toast({
+        title: gwActive ? 'Pesan dikirim via Fonnte' : 'Pesan terkirim (simulasi)',
+        description: gwActive
+          ? `Pesan ke ${phone.trim()} dikirim nyata melalui gateway Fonnte.`
+          : `Pesan ke ${phone.trim()} tercatat pada log notifikasi.`,
+      })
       setSendOpen(false)
       setPhone('')
       setMessage('')
@@ -196,14 +275,138 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
 
   return (
     <div className="space-y-4">
-      <Alert className="rounded-2xl border-teal-200 bg-teal-50/70 text-teal-900 [&>svg]:text-teal-600">
-        <Info className="size-4" />
-        <AlertTitle>Simulasi WhatsApp Business API</AlertTitle>
-        <AlertDescription className="text-teal-800/90">
-          Semua notifikasi (absensi, tagihan, hafalan, pengumuman) dicatat di sini sebagai simulasi pengiriman
-          melalui WhatsApp Business Provider. Pada produksi, log ini digantikan kiriman nyata dari BSP.
-        </AlertDescription>
-      </Alert>
+      {/* ===== Kartu Gateway WhatsApp (Fonnte) ===== */}
+      <Card className="overflow-hidden rounded-2xl border-emerald-200 shadow-sm">
+        <div className="h-1 w-full bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600" />
+        <CardContent className="space-y-4 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                <MessageCircle className="size-5" />
+              </span>
+              <div>
+                <p className="font-bold text-stone-900">Gateway WhatsApp</p>
+                <p className="text-sm leading-relaxed text-stone-500">
+                  {gw === null
+                    ? 'Memuat status gateway…'
+                    : gwActive
+                      ? `Pesan dikirim nyata via Fonnte — token ${gw.tokenMasked}.`
+                      : 'Mode simulasi — pesan hanya tercatat di log. Aktifkan Fonnte untuk kirim nyata.'}
+                </p>
+              </div>
+            </div>
+            {gw === null ? (
+              <Skeleton className="h-6 w-24 rounded-full" />
+            ) : (
+              <Badge
+                className={
+                  gwActive
+                    ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                    : 'border-stone-200 bg-stone-100 text-stone-600'
+                }
+              >
+                <PlugZap className="size-3" />
+                {gwActive ? 'Fonnte Aktif' : 'Simulasi'}
+              </Badge>
+            )}
+          </div>
+
+          {!gwActive && (
+            <ol className="space-y-1.5 rounded-xl bg-stone-50 p-3.5 text-xs leading-relaxed text-stone-600">
+              <li>
+                <strong className="text-stone-800">1.</strong> Siapkan nomor WhatsApp khusus sekolah (mis.
+                0881-6917-774) — jangan pakai nomor pribadi.
+              </li>
+              <li>
+                <strong className="text-stone-800">2.</strong> Buka{' '}
+                <a
+                  href="https://fonnte.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-800"
+                >
+                  fonnte.com <ExternalLink className="size-3" />
+                </a>{' '}
+                → daftar → scan QR dengan nomor sekolah tersebut.
+              </li>
+              <li>
+                <strong className="text-stone-800">3.</strong> Di dashboard Fonnte, salin token perangkat.
+              </li>
+              <li>
+                <strong className="text-stone-800">4.</strong> Tempel di bawah → <em>Simpan &amp; Aktifkan</em> →{' '}
+                <em>Tes Koneksi</em>.
+              </li>
+            </ol>
+          )}
+
+          {!gwActive && (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <KeyRound className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+                <Input
+                  type="password"
+                  value={gwToken}
+                  onChange={(e) => setGwToken(e.target.value)}
+                  placeholder="Token perangkat Fonnte (mis. F3NCCTB4…)"
+                  aria-label="Token perangkat Fonnte"
+                  autoComplete="off"
+                  className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+                />
+              </div>
+              <Button
+                onClick={() => void saveGateway('FONNTE')}
+                disabled={gwSaving}
+                className="h-11 bg-emerald-700 hover:bg-emerald-800"
+              >
+                {gwSaving ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+                Simpan &amp; Aktifkan
+              </Button>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void testGateway()}
+              disabled={gwTesting || !gwActive}
+              title={gwActive ? 'Cek perangkat Fonnte yang ter-scan' : 'Aktifkan gateway terlebih dahulu'}
+            >
+              {gwTesting ? <Loader2 className="size-4 animate-spin" /> : <CircleCheck className="size-4" />}
+              Tes Koneksi
+            </Button>
+            {gwActive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void saveGateway('OFF')}
+                disabled={gwSaving}
+                className="text-stone-500 hover:text-red-600"
+              >
+                Nonaktifkan
+              </Button>
+            )}
+            {gwTest && (
+              <p
+                className={`text-xs font-medium ${gwTest.ok ? 'text-emerald-700' : 'text-red-600'}`}
+                role="status"
+              >
+                {gwTest.ok
+                  ? `✓ Terhubung${gwTest.device ? ` — perangkat ${gwTest.device}` : ''}`
+                  : `✕ ${gwTest.reason ?? 'Koneksi gagal'}`}
+              </p>
+            )}
+          </div>
+
+          <Alert className="rounded-xl border-teal-200 bg-teal-50/70 text-teal-900 [&>svg]:text-teal-600">
+            <Info className="size-4" />
+            <AlertDescription className="text-teal-800/90">
+              Semua notifikasi otomatis (absensi, tagihan, hafalan, PPDB, pengumuman) mengalir lewat gateway
+              ini dan tercatat pada log di bawah — termasuk pesan yang gagal terkirim.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
 
       {/* Toolbar: pencarian + filter status */}
       <div className="flex flex-wrap items-center gap-2">

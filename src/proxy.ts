@@ -63,9 +63,14 @@ function deny(): NextResponse {
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1) Patroli path — hanya method GET/HEAD/POST yang wajar; sisanya ditolak.
+  // 1) Patroli method — blokir method eksotis (TRACE/CONNECT/PATCH…).
+  //    GET/HEAD/POST/PUT/DELETE/OPTIONS dibolehkan: API admin memakai
+  //    PUT (simpan pengaturan, gateway WA) dan DELETE (hapus komentar/user).
+  //    Regresi 2026-09-13: PUT+DELETE sempat diblokir di sini sehingga
+  //    editor landing & aksi hapus admin gagal 403 di produksi.
   const method = request.method.toUpperCase();
-  if (method !== "GET" && method !== "HEAD" && method !== "POST" && method !== "OPTIONS") {
+  const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]);
+  if (!ALLOWED_METHODS.has(method)) {
     return deny();
   }
 

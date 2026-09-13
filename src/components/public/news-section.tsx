@@ -14,6 +14,7 @@ import {
   Newspaper,
   RefreshCw,
   Send,
+  Share2,
   Trash2,
   User,
 } from 'lucide-react'
@@ -139,6 +140,30 @@ function LikeButton({
       />
       <span className="font-semibold tabular-nums">{post.likes}</span>
     </button>
+  )
+}
+
+/**
+ * Bagikan artikel via WhatsApp — link wa.me/?text membuka daftar chat/kontak
+ * WA pengunjung (tanpa API, tanpa login). Klik TIDAK membuka dialog artikel.
+ */
+function ShareWaButton({ post, size = 'sm' }: { post: Post; size?: 'sm' | 'md' }) {
+  const text = `*${post.title}*\n\n${excerpt(post.content)}\n\n— dibagikan dari portal TPQ Darul Jinan`
+  const href = `https://wa.me/?text=${encodeURIComponent(text)}`
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Bagikan artikel ${post.title} via WhatsApp`}
+      onClick={(e) => e.stopPropagation()}
+      className={`inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white font-semibold text-stone-500 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 ${
+        size === 'md' ? 'px-4 py-2 text-sm' : 'px-2.5 py-1 text-xs'
+      }`}
+    >
+      <Share2 className={size === 'md' ? 'size-4' : 'size-3.5'} />
+      Bagikan
+    </a>
   )
 }
 
@@ -506,9 +531,10 @@ export function NewsSection() {
                     Baca Selengkapnya
                     <ChevronRight className="size-4" />
                   </span>
-                  {/* Task 66 — like ala sosial media */}
+                  {/* Task 66 — like ala sosial media + share WA */}
                   <div className="mt-1 flex items-center gap-2">
                     <LikeButton post={featured} onToggled={patchPost} size="md" />
+                    <ShareWaButton post={featured} size="md" />
                   </div>
                 </div>
               </article>
@@ -547,9 +573,10 @@ export function NewsSection() {
                           Baca Artikel
                           <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
                         </span>
-                        {/* Task 66 — like ala sosial media */}
-                        <span className="mt-1">
+                        {/* Task 66 — like ala sosial media + share WA */}
+                        <span className="mt-1 flex items-center gap-1.5">
                           <LikeButton post={post} onToggled={patchPost} />
+                          <ShareWaButton post={post} />
                         </span>
                       </div>
                     </article>
@@ -604,10 +631,11 @@ export function NewsSection() {
                 <p className="mt-6 text-center font-serif text-emerald-800" dir="rtl" lang="ar">
                   وَقُل رَّبِّ زِدْنِي عِلْمًا
                 </p>
-                {/* Task 66 — like di dialog baca artikel */}
+                {/* Task 66 — like + share di dialog baca artikel */}
                 {selected && (
-                  <div className="mt-4 flex justify-center">
+                  <div className="mt-4 flex justify-center gap-2">
                     <LikeButton post={selected} onToggled={patchPost} size="md" />
+                    <ShareWaButton post={selected} size="md" />
                   </div>
                 )}
                 {/* Task 67 — komentar ala sosial media */}

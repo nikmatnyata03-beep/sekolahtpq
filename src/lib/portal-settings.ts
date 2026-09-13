@@ -151,7 +151,7 @@ export const DEFAULT_PORTAL_SETTINGS: PortalSettings = {
   contact: {
     address: 'Jl. Merpati Raya No. 25, Cibubur, Jakarta Timur',
     phone: '0812-3456-7890',
-    whatsapp: '6281234567890',
+    whatsapp: '628816917774',
     email: 'info@daruljinan.sch.id',
     hoursNote: 'Senin – Sabtu 15.00 – 18.00 WIB · Ahad libur',
   },
@@ -288,6 +288,18 @@ function strArray(v: unknown, fallback: string[]): string[] {
 }
 
 /**
+ * Nomor WA bawaan dulu adalah placeholder dummy 6281234567890 — nilai itu
+ * terlanjur tersimpan di DB produksi, jadi saat merge kita migrasikan ke
+ * nomor WA resmi sekretariat. Nilai kustom lain tidak tersentuh.
+ */
+const WA_PLACEHOLDER_LAMA = '6281234567890'
+const WA_SEKRETARIAT = '628816917774'
+
+function migrateWaPlaceholder(v: string): string {
+  return v === WA_PLACEHOLDER_LAMA ? WA_SEKRETARIAT : v
+}
+
+/**
  * Sanitasi urutan section (Task 59-b): validasi string, dedupe, buang kunci
  * tak dikenal, lalu APPEND kunci yang hilang sesuai urutan default —
  * data lama tanpa sectionOrder otomatis mendapat urutan default penuh.
@@ -390,7 +402,7 @@ export function mergePortalSettings(raw: unknown): PortalSettings {
     contact: {
       address: str(contactRaw.address, d.contact.address),
       phone: str(contactRaw.phone, d.contact.phone),
-      whatsapp: str(contactRaw.whatsapp, d.contact.whatsapp),
+      whatsapp: migrateWaPlaceholder(str(contactRaw.whatsapp, d.contact.whatsapp)),
       email: str(contactRaw.email, d.contact.email),
       hoursNote: str(contactRaw.hoursNote, d.contact.hoursNote),
     },
