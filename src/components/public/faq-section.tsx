@@ -109,6 +109,25 @@ export function FaqSection() {
           </div>
         </div>
       </div>
+
+      {/* SEO — FAQPage structured data: membantu Google menampilkan pertanyaan
+          sebagai rich result. Dirender dari data CMS yang sama dengan UI. */}
+      {settings.faqs.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: settings.faqs.map((f) => ({
+                '@type': 'Question',
+                name: f.question,
+                acceptedAnswer: { '@type': 'Answer', text: f.answer },
+              })),
+            }),
+          }}
+        />
+      )}
     </section>
   )
 }
