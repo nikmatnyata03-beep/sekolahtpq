@@ -109,7 +109,14 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
   const [gwToken, setGwToken] = useState('')
   const [gwSaving, setGwSaving] = useState(false)
   const [gwTesting, setGwTesting] = useState(false)
-  const [gwTest, setGwTest] = useState<{ ok: boolean; device?: string; reason?: string } | null>(null)
+  const [gwTest, setGwTest] = useState<{
+    ok: boolean
+    device?: string
+    deviceStatus?: string
+    name?: string
+    quota?: number | null
+    reason?: string
+  } | null>(null)
 
   const gwActive = gw?.provider === 'FONNTE' && gw.configured
 
@@ -203,10 +210,20 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
     setGwTesting(true)
     setGwTest(null)
     try {
-      const res = await apiSend<{ ok: boolean; device?: string; reason?: string }>('/api/whatsapp/test', 'POST', {})
+      const res = await apiSend<{
+        ok: boolean
+        device?: string
+        deviceStatus?: string
+        name?: string
+        quota?: number | null
+        reason?: string
+      }>('/api/whatsapp/device', 'POST', {})
       setGwTest(res)
       if (res.ok) {
-        toast({ title: 'Koneksi berhasil', description: `Perangkat terhubung: ${res.device || 'nomor Fonnte'}.` })
+        toast({
+          title: 'Koneksi berhasil',
+          description: `Perangkat terhubung: ${res.device || 'nomor Fonnte'}${res.name ? ` (${res.name})` : ''}.`,
+        })
         await load()
       }
     } catch (e) {
@@ -392,7 +409,11 @@ export function WhatsAppLog({ user }: { user?: AuthUser }) {
                 role="status"
               >
                 {gwTest.ok
-                  ? `✓ Terhubung${gwTest.device ? ` — perangkat ${gwTest.device}` : ''}`
+                  ? `✓ Terhubung${gwTest.device ? ` — ${gwTest.device}` : ''}${
+                      gwTest.name ? ` (${gwTest.name})` : ''
+                    }${gwTest.deviceStatus ? ` · ${gwTest.deviceStatus}` : ''}${
+                      typeof gwTest.quota === 'number' ? ` · kuota ${gwTest.quota}` : ''
+                    }`
                   : `✕ ${gwTest.reason ?? 'Koneksi gagal'}`}
               </p>
             )}
