@@ -155,6 +155,10 @@ function TeacherAvatar({
           key={`${teacher.id}-${teacher.photoUrl}`}
           src={teacher.photoUrl}
           alt={`Foto ${teacher.fullName}`}
+          // Perf: foto guru di bawah lipatan — lazy + decode async memangkas
+          // bobot awal halaman (foto lama 2.6MB pernah membebani load awal).
+          loading="lazy"
+          decoding="async"
           className="size-full object-cover"
           onError={() => setBroken(true)}
         />
