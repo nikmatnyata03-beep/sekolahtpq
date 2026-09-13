@@ -70,7 +70,12 @@ export function NumberTicker({
       className={cn("inline-block tabular-nums", className)}
       {...props}
     >
-      {format(startValue)}
+      {/* Render nilai AKHIR sejak awal — bukan 0. Bila elemen belum melewati
+          garis pemicu viewport (mis. chip statistik hero terlihat sebagian di
+          tepi bawah layar), pengunjung tetap membaca angka yang benar, bukan
+          "0 santri" yang menyesatkan. Saat pemicu tercapai, spring menganimasikan
+          0 → value dan teks ikut berubah via langganan "change" di atas. */}
+      {format(value)}
     </span>
   );
 }
