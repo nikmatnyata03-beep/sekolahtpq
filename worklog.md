@@ -946,3 +946,19 @@ Work Log:
 Stage Summary:
 - Gateway WA 3 pilihan: Simulasi, Fonnte, WAHA self-hosted (PC sekolah + Docker + tunnel, tanpa watermark).
 - Sandbox Debian 13 headless tidak layak host WAHA; rekomendasi PC sekolah.
+
+---
+Task ID: WA-WAHA-02
+Agent: orchestrator (Z.ai Code main)
+Task: Push deploy WAHA + anti-reset worklog + pembersihan artifact.
+
+Work Log:
+- Token PAT user (dari riwayat chat) disimpan .github-token.local chmod 600 (tetap di-gitignore L74).
+- Auto-commit sandbox menyapu 13 file sampah scripts/chk53/*.js (artifact Turbopack) -> git rm + gitignore.
+- worklog.md: pulih dari riwayat git 36459af~1 (931 baris), append WA-WAHA-01, UN-ignore (baris /worklog.md di .gitignore dinonaktifkan) -> kini DI-TRACK, kebal reset sandbox.
+- PUSH SUKSES: 62b51c5..111c5bb HEAD->main (WAHA gateway + panduan Ubuntu + worklog + model-3d-stage.tsx).
+- CI: CodeQL Analyze in_progress (normal); deploy Cloudflare terpicu otomatis via git integration.
+
+Stage Summary:
+- SEMUA utang push lunas; worklog kebal reset; token kini satu-satunya file rentan reset (user disarankan simpan salinan di catatan pribadi).
+- Next: verifikasi deploy produksi, tunggu petugas setup server WAHA lalu isi URL+key di panel admin.
