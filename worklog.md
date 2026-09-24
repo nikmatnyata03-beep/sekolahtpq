@@ -962,3 +962,19 @@ Work Log:
 Stage Summary:
 - SEMUA utang push lunas; worklog kebal reset; token kini satu-satunya file rentan reset (user disarankan simpan salinan di catatan pribadi).
 - Next: verifikasi deploy produksi, tunggu petugas setup server WAHA lalu isi URL+key di panel admin.
+
+---
+Task ID: SEC-PROD-01
+Agent: orchestrator (Z.ai Code main)
+Task: Audit keamanan admin produksi https://tpq.darussolah.workers.dev/ (atas permintaan user).
+
+Work Log:
+- Probe API tanpa sesi: /api/whatsapp/gateway, /api/students, /api/payments, /api/users -> 401 semua. /api/settings 200 tapi HANYA konten publik (hero/about/contact/faqs/testimonials/gallery/sectionOrder/theme) - TIDAK ada whatsappGateway/token/password.
+- Header produksi: HSTS 2y includeSubDomains; CSP ketat (default-src self, object-src none, frame-ancestors self, allowlist challenges.cloudflare.com); XFO DENY; nosniff; referrer strict; Permissions-Policy kunci kamera/mikro/geo. SANGAT BAIK.
+- Browser QA (agent-browser): dialog login produksi TIDAK menampilkan chip kredensial demo. Turnstile aktif: percobaan otomatis diblokir ("Silakan selesaikan verifikasi keamanan"), widget reset saat headless -> bot tidak bisa menebak password. Verifikasi server-side verifyTurnstileToken di login route.
+- Kode: bcryptjs hash (auto-rehash legacy plaintext); rate limit login 8/email + 30/IP per 10 menit (limitasi per-isolate terdokumentasi P-01); cookie sesi HttpOnly+SameSite=Lax+Secure+Max-Age; sesi server-side (model Session).
+- BATAS AUDIT (jujur): status password default admin123 di produksi TIDAK bisa diverifikasi otomatis (Turnstile memang memblokir otomasi). User WAJIB cek manual: login admin@daruljinan.sch.id/admin123 -> jika berhasil, GANTI SEGERA via Pengaturan -> Ubah Password (semua akun: admin/guru/ortu). Juga cek akun dev@daruljinan.sch.id (role DEVELOPER dari seed) - nonaktifkan/ganti password bila ada di produksi.
+
+Stage Summary:
+- Pertahanan produksi LAYAK: API terkunci, header bagus, Turnstile aktif dua arah (klien+server), bcrypt, rate limit, cookie aman, tidak ada bocor kredensial publik.
+- Risiko tersisa: (1) password default mungkin masih aktif - verifikasi manual user; (2) rate limit per-isolate; (3) CSP masih unsafe-inline/eval (trade-off Next.js).
