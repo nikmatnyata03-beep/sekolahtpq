@@ -57,7 +57,7 @@ server.log
 /tool-results/
 /download/
 /upload/
-/worklog.md
+# /worklog.md di-track agar kebal reset sandbox
 /agent-ctx/
 /examples/
 /tests/
@@ -86,3 +86,4 @@ scripts/seed-qa-suspicious.ts
 .zscripts/dev.pid
 pentest-evidence/
 scripts/.qa-cookies.txt
+scripts/chk53/
